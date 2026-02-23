@@ -1,0 +1,5 @@
+// Config.xcconfig
+// Keep this file out of version control — add it to .gitignore.
+// Add API keys here as needed; reference them in Info.plist via $(KEY_NAME).
+
+#include "Secrets.xcconfig"

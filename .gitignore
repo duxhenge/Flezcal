@@ -1,0 +1,24 @@
+# Secrets — never commit
+Secrets.xcconfig
+scripts/serviceAccountKey.json
+scripts/*.json
+GoogleService-Info.plist
+
+# Xcode
+build/
+**/xcuserdata/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.pbxproj.backup
+xcuserdata/
+
+# macOS
+.DS_Store

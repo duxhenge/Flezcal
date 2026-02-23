@@ -1,0 +1,704 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1B519847CE56C3A05B91F87B /* ExploreSearchUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */; };
+		AEEA3812748D3BDFDA62D68D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4A8B31AA11DC786E5093A4F /* Foundation.framework */; };
+		B10000010000000000000001 /* FlezcalApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* FlezcalApp.swift */; };
+		B10000010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000002 /* ContentView.swift */; };
+		B10000010000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000003 /* Assets.xcassets */; };
+		B10000010000000000000004 /* Spot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000004 /* Spot.swift */; };
+		B10000010000000000000005 /* Review.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000005 /* Review.swift */; };
+		B10000010000000000000006 /* AppUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* AppUser.swift */; };
+		B10000010000000000000007 /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000007 /* MapTabView.swift */; };
+		B10000010000000000000008 /* AddSpotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000008 /* AddSpotView.swift */; };
+		B10000010000000000000009 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000009 /* ProfileView.swift */; };
+		B1000001000000000000000A /* SpotCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000A /* SpotCategory.swift */; };
+		B1000001000000000000000B /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000B /* Constants.swift */; };
+		B1000001000000000000000C /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000D /* GoogleService-Info.plist */; };
+		B1000001000000000000000D /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BD0000010000000000000001 /* FirebaseAuth */; };
+		B1000001000000000000000E /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = BD0000010000000000000002 /* FirebaseFirestore */; };
+		B1000001000000000000000F /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000E /* AuthService.swift */; };
+		B1000001000000000000000F2 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BD0000010000000000000003 /* FirebaseStorage */; };
+		B10000010000000000000012 /* LocationSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000011 /* LocationSearchService.swift */; };
+		B10000010000000000000013 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000012 /* LocationManager.swift */; };
+		B10000010000000000000014 /* SpotDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000013 /* SpotDetailView.swift */; };
+		B10000010000000000000015 /* BusinessSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000014 /* BusinessSearchView.swift */; };
+		B10000010000000000000016 /* ReviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000015 /* ReviewService.swift */; };
+		B10000010000000000000017 /* StarRatingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000016 /* StarRatingView.swift */; };
+		B10000010000000000000018 /* WriteReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000017 /* WriteReviewView.swift */; };
+		B10000010000000000000019 /* MezcalBrands.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000018 /* MezcalBrands.swift */; };
+		B1000001000000000000001A /* MezcalInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000019 /* MezcalInputField.swift */; };
+		B1000001000000000000001B /* ContributorStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001A /* ContributorStats.swift */; };
+		B1000001000000000000001C /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001B /* LeaderboardView.swift */; };
+		B1000001000000000000001D /* VeladoraIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001C /* VeladoraIcon.swift */; };
+		B1000001000000000000001E /* SuggestionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001D /* SuggestionService.swift */; };
+		B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001E /* SuggestedSpotSheet.swift */; };
+		B10000010000000000000020 /* WelcomeContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001F /* WelcomeContent.swift */; };
+		B10000010000000000000021 /* WelcomeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000020 /* WelcomeService.swift */; };
+		B10000010000000000000022 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000021 /* WelcomeView.swift */; };
+		B10000010000000000000023 /* SpotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000022 /* SpotService.swift */; };
+		B10000010000000000000024 /* EmailAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000023 /* EmailAuthView.swift */; };
+		B10000010000000000000026 /* ListTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000025 /* ListTabView.swift */; };
+		B10000010000000000000027 /* PhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000026 /* PhotoService.swift */; };
+		B100000100000000000000A1 /* WebsiteCheckService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000A1 /* WebsiteCheckService.swift */; };
+		B100000100000000000000B1 /* FoodCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B1 /* FoodCategory.swift */; };
+		B100000100000000000000B2 /* UserPicksService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B2 /* UserPicksService.swift */; };
+		B100000100000000000000B3 /* MyPicksTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B3 /* MyPicksTabView.swift */; };
+		B100000100000000000000B4 /* FoodCategoryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B4 /* FoodCategoryGridView.swift */; };
+		B853A5AFCE7241ADF4E8E09A /* LocationUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22355A4714E4831AF36DB21 /* LocationUtils.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		352E48C9B3B321F82D9037A9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BA0000010000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B60000010000000000000001;
+			remoteInfo = Flezcal;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		576765802F466666004D05B3 /* Flezcal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flezcal.entitlements; sourceTree = "<group>"; };
+		B20000010000000000000001 /* FlezcalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalApp.swift; sourceTree = "<group>"; };
+		B20000010000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B20000010000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B20000010000000000000004 /* Spot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spot.swift; sourceTree = "<group>"; };
+		B20000010000000000000005 /* Review.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Review.swift; sourceTree = "<group>"; };
+		B20000010000000000000006 /* AppUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUser.swift; sourceTree = "<group>"; };
+		B20000010000000000000007 /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
+		B20000010000000000000008 /* AddSpotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddSpotView.swift; sourceTree = "<group>"; };
+		B20000010000000000000009 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		B2000001000000000000000A /* SpotCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotCategory.swift; sourceTree = "<group>"; };
+		B2000001000000000000000B /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		B2000001000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B2000001000000000000000D /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		B2000001000000000000000E /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		B20000010000000000000011 /* LocationSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSearchService.swift; sourceTree = "<group>"; };
+		B20000010000000000000012 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		B20000010000000000000013 /* SpotDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotDetailView.swift; sourceTree = "<group>"; };
+		B20000010000000000000014 /* BusinessSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusinessSearchView.swift; sourceTree = "<group>"; };
+		B20000010000000000000015 /* ReviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewService.swift; sourceTree = "<group>"; };
+		B20000010000000000000016 /* StarRatingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRatingView.swift; sourceTree = "<group>"; };
+		B20000010000000000000017 /* WriteReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteReviewView.swift; sourceTree = "<group>"; };
+		B20000010000000000000018 /* MezcalBrands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalBrands.swift; sourceTree = "<group>"; };
+		B20000010000000000000019 /* MezcalInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalInputField.swift; sourceTree = "<group>"; };
+		B2000001000000000000001A /* ContributorStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContributorStats.swift; sourceTree = "<group>"; };
+		B2000001000000000000001B /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
+		B2000001000000000000001C /* VeladoraIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeladoraIcon.swift; sourceTree = "<group>"; };
+		B2000001000000000000001D /* SuggestionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionService.swift; sourceTree = "<group>"; };
+		B2000001000000000000001E /* SuggestedSpotSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestedSpotSheet.swift; sourceTree = "<group>"; };
+		B2000001000000000000001F /* WelcomeContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeContent.swift; sourceTree = "<group>"; };
+		B20000010000000000000020 /* WelcomeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeService.swift; sourceTree = "<group>"; };
+		B20000010000000000000021 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		B20000010000000000000022 /* SpotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotService.swift; sourceTree = "<group>"; };
+		B20000010000000000000023 /* EmailAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailAuthView.swift; sourceTree = "<group>"; };
+		B20000010000000000000025 /* ListTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListTabView.swift; sourceTree = "<group>"; };
+		B20000010000000000000026 /* PhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoService.swift; sourceTree = "<group>"; };
+		B200000100000000000000A1 /* WebsiteCheckService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteCheckService.swift; sourceTree = "<group>"; };
+		B200000100000000000000B1 /* FoodCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodCategory.swift; sourceTree = "<group>"; };
+		B200000100000000000000B2 /* UserPicksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPicksService.swift; sourceTree = "<group>"; };
+		B200000100000000000000B3 /* MyPicksTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyPicksTabView.swift; sourceTree = "<group>"; };
+		B200000100000000000000B4 /* FoodCategoryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodCategoryGridView.swift; sourceTree = "<group>"; };
+		B30000010000000000000001 /* Flezcal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flezcal.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF0000010000000000000001 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		C5D47E4635307A1F26126CC4 /* FlezcalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlezcalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D22355A4714E4831AF36DB21 /* LocationUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationUtils.swift; sourceTree = "<group>"; };
+		E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExploreSearchUITest.swift; sourceTree = "<group>"; };
+		F4A8B31AA11DC786E5093A4F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B2A89AF071740A72DC879905 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AEEA3812748D3BDFDA62D68D /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B40000010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000001000000000000000D /* FirebaseAuth in Frameworks */,
+				B1000001000000000000000E /* FirebaseFirestore in Frameworks */,
+				B1000001000000000000000F2 /* FirebaseStorage in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0D397E7CDE510F23394737C5 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				F4A8B31AA11DC786E5093A4F /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		B50000010000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				BF0000010000000000000001 /* Config.xcconfig */,
+				B50000010000000000000002 /* Flezcal */,
+				B50000010000000000000006 /* Products */,
+				D86E14961A5EB10D4BCBA270 /* Frameworks */,
+				D6D18F54313812844FB0EF0C /* FlezcalUITests */,
+			);
+			sourceTree = "<group>";
+		};
+		B50000010000000000000002 /* Flezcal */ = {
+			isa = PBXGroup;
+			children = (
+				576765802F466666004D05B3 /* Flezcal.entitlements */,
+				B20000010000000000000001 /* FlezcalApp.swift */,
+				B20000010000000000000002 /* ContentView.swift */,
+				B2000001000000000000000B /* Constants.swift */,
+				B50000010000000000000003 /* Models */,
+				B50000010000000000000004 /* Views */,
+				B50000010000000000000005 /* Services */,
+				B20000010000000000000003 /* Assets.xcassets */,
+				B2000001000000000000000C /* Info.plist */,
+				B2000001000000000000000D /* GoogleService-Info.plist */,
+			);
+			path = Flezcal;
+			sourceTree = "<group>";
+		};
+		B50000010000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B2000001000000000000000A /* SpotCategory.swift */,
+				B20000010000000000000004 /* Spot.swift */,
+				B20000010000000000000005 /* Review.swift */,
+				B20000010000000000000006 /* AppUser.swift */,
+				B20000010000000000000018 /* MezcalBrands.swift */,
+				B2000001000000000000001A /* ContributorStats.swift */,
+				B2000001000000000000001F /* WelcomeContent.swift */,
+				B200000100000000000000B1 /* FoodCategory.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		B50000010000000000000004 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B20000010000000000000007 /* MapTabView.swift */,
+				B20000010000000000000025 /* ListTabView.swift */,
+				B20000010000000000000008 /* AddSpotView.swift */,
+				B20000010000000000000009 /* ProfileView.swift */,
+				B20000010000000000000013 /* SpotDetailView.swift */,
+				B20000010000000000000014 /* BusinessSearchView.swift */,
+				B20000010000000000000016 /* StarRatingView.swift */,
+				B20000010000000000000017 /* WriteReviewView.swift */,
+				B20000010000000000000019 /* MezcalInputField.swift */,
+				B2000001000000000000001B /* LeaderboardView.swift */,
+				B2000001000000000000001C /* VeladoraIcon.swift */,
+				B2000001000000000000001E /* SuggestedSpotSheet.swift */,
+				B20000010000000000000021 /* WelcomeView.swift */,
+				B20000010000000000000023 /* EmailAuthView.swift */,
+				B200000100000000000000B3 /* MyPicksTabView.swift */,
+				B200000100000000000000B4 /* FoodCategoryGridView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B50000010000000000000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B2000001000000000000000E /* AuthService.swift */,
+				B20000010000000000000011 /* LocationSearchService.swift */,
+				B20000010000000000000012 /* LocationManager.swift */,
+				B20000010000000000000015 /* ReviewService.swift */,
+				B20000010000000000000026 /* PhotoService.swift */,
+				B2000001000000000000001D /* SuggestionService.swift */,
+				B200000100000000000000A1 /* WebsiteCheckService.swift */,
+				B200000100000000000000B2 /* UserPicksService.swift */,
+				B20000010000000000000020 /* WelcomeService.swift */,
+				B20000010000000000000022 /* SpotService.swift */,
+				D22355A4714E4831AF36DB21 /* LocationUtils.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		B50000010000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B30000010000000000000001 /* Flezcal.app */,
+				C5D47E4635307A1F26126CC4 /* FlezcalUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D6D18F54313812844FB0EF0C /* FlezcalUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */,
+			);
+			name = FlezcalUITests;
+			path = FlezcalUITests;
+			sourceTree = "<group>";
+		};
+		D86E14961A5EB10D4BCBA270 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0D397E7CDE510F23394737C5 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		29F2A53E6D91C5D116AEA92F /* FlezcalUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C609ABB57AF4534591E4412 /* Build configuration list for PBXNativeTarget "FlezcalUITests" */;
+			buildPhases = (
+				9F7AFC8713B488F046620A21 /* Sources */,
+				B2A89AF071740A72DC879905 /* Frameworks */,
+				7A589FB3D4B2149EDC42D586 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				778FC359D83689BB9297A844 /* PBXTargetDependency */,
+			);
+			name = FlezcalUITests;
+			productName = FlezcalUITests;
+			productReference = C5D47E4635307A1F26126CC4 /* FlezcalUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		B60000010000000000000001 /* Flezcal */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B80000010000000000000003 /* Build configuration list for PBXNativeTarget "Flezcal" */;
+			buildPhases = (
+				B70000010000000000000001 /* Sources */,
+				B40000010000000000000001 /* Frameworks */,
+				B90000010000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Flezcal;
+			packageProductDependencies = (
+				BD0000010000000000000001 /* FirebaseAuth */,
+				BD0000010000000000000002 /* FirebaseFirestore */,
+				BD0000010000000000000003 /* FirebaseStorage */,
+			);
+			productName = Flezcal;
+			productReference = B30000010000000000000001 /* Flezcal.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BA0000010000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					B60000010000000000000001 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
+			};
+			buildConfigurationList = B80000010000000000000001 /* Build configuration list for PBXProject "Flezcal" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B50000010000000000000001;
+			packageReferences = (
+				BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
+			productRefGroup = B50000010000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B60000010000000000000001 /* Flezcal */,
+				29F2A53E6D91C5D116AEA92F /* FlezcalUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7A589FB3D4B2149EDC42D586 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B90000010000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000010000000000000003 /* Assets.xcassets in Resources */,
+				B1000001000000000000000C /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9F7AFC8713B488F046620A21 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B519847CE56C3A05B91F87B /* ExploreSearchUITest.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B70000010000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000010000000000000001 /* FlezcalApp.swift in Sources */,
+				B10000010000000000000002 /* ContentView.swift in Sources */,
+				B1000001000000000000000B /* Constants.swift in Sources */,
+				B1000001000000000000000A /* SpotCategory.swift in Sources */,
+				B10000010000000000000004 /* Spot.swift in Sources */,
+				B10000010000000000000005 /* Review.swift in Sources */,
+				B10000010000000000000006 /* AppUser.swift in Sources */,
+				B10000010000000000000007 /* MapTabView.swift in Sources */,
+				B10000010000000000000026 /* ListTabView.swift in Sources */,
+				B10000010000000000000008 /* AddSpotView.swift in Sources */,
+				B10000010000000000000009 /* ProfileView.swift in Sources */,
+				B1000001000000000000000F /* AuthService.swift in Sources */,
+				B10000010000000000000012 /* LocationSearchService.swift in Sources */,
+				B10000010000000000000013 /* LocationManager.swift in Sources */,
+				B10000010000000000000014 /* SpotDetailView.swift in Sources */,
+				B10000010000000000000015 /* BusinessSearchView.swift in Sources */,
+				B10000010000000000000016 /* ReviewService.swift in Sources */,
+				B10000010000000000000017 /* StarRatingView.swift in Sources */,
+				B10000010000000000000018 /* WriteReviewView.swift in Sources */,
+				B10000010000000000000019 /* MezcalBrands.swift in Sources */,
+				B1000001000000000000001A /* MezcalInputField.swift in Sources */,
+				B1000001000000000000001B /* ContributorStats.swift in Sources */,
+				B1000001000000000000001C /* LeaderboardView.swift in Sources */,
+				B1000001000000000000001D /* VeladoraIcon.swift in Sources */,
+				B1000001000000000000001E /* SuggestionService.swift in Sources */,
+				B100000100000000000000A1 /* WebsiteCheckService.swift in Sources */,
+				B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */,
+				B10000010000000000000020 /* WelcomeContent.swift in Sources */,
+				B10000010000000000000021 /* WelcomeService.swift in Sources */,
+				B10000010000000000000022 /* WelcomeView.swift in Sources */,
+				B10000010000000000000023 /* SpotService.swift in Sources */,
+				B10000010000000000000024 /* EmailAuthView.swift in Sources */,
+				B10000010000000000000027 /* PhotoService.swift in Sources */,
+				B853A5AFCE7241ADF4E8E09A /* LocationUtils.swift in Sources */,
+				B100000100000000000000B1 /* FoodCategory.swift in Sources */,
+				B100000100000000000000B2 /* UserPicksService.swift in Sources */,
+				B100000100000000000000B3 /* MyPicksTabView.swift in Sources */,
+				B100000100000000000000B4 /* FoodCategoryGridView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		778FC359D83689BB9297A844 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Flezcal;
+			target = B60000010000000000000001 /* Flezcal */;
+			targetProxy = 352E48C9B3B321F82D9037A9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B3479C7466426A3AFF5C8D68 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flezcal.app.uitests;
+				PRODUCT_NAME = FlezcalUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Flezcal;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		BB0000010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		BB0000010000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		BC0000010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BF0000010000000000000001 /* Config.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W8WUWZ5DJU;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Flezcal/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Flezcal;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flezcal.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BC0000010000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BF0000010000000000000001 /* Config.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W8WUWZ5DJU;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Flezcal/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Flezcal;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flezcal.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		F87047BD5AF747CCF7AC5901 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flezcal.app.uitests;
+				PRODUCT_NAME = FlezcalUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Flezcal;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0C609ABB57AF4534591E4412 /* Build configuration list for PBXNativeTarget "FlezcalUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B3479C7466426A3AFF5C8D68 /* Release */,
+				F87047BD5AF747CCF7AC5901 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B80000010000000000000001 /* Build configuration list for PBXProject "Flezcal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB0000010000000000000001 /* Debug */,
+				BB0000010000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B80000010000000000000003 /* Build configuration list for PBXNativeTarget "Flezcal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC0000010000000000000001 /* Debug */,
+				BC0000010000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BD0000010000000000000001 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		BD0000010000000000000002 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		BD0000010000000000000003 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = BA0000010000000000000001 /* Project object */;
+}

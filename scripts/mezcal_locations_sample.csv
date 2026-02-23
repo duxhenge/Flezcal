@@ -1,0 +1,11 @@
+name,address,city,state,country,latitude,longitude,categories,mezcalOfferings,websiteURL
+Barra,1 Greenough Ave,Jamaica Plain,MA,US,,,mezcal,,https://barraboston.com
+Mayahuel,304 E 6th St,New York,NY,US,40.72607,-73.98304,mezcal,"Vago, Koch El Mezcal, Del Maguey",
+El Destilado,San Jeronimo 503,Oaxaca,,MX,17.06032,-96.72028,mezcal,"Vago, Siete Misterios, Los Amantes",https://eldestilado.com
+Madre Oaxacan Restaurant & Mezcaleria,90 E Union St,Pasadena,CA,US,34.14563,-118.14978,mezcal,"Montelobos, Wahaka, Koch El Mezcal",https://madrerestaurant.com
+Los Generales,4252 Melrose Ave,Los Angeles,CA,US,34.0836,-118.32427,mezcal,,
+Liholiho Yacht Club,871 Sutter St,San Francisco,CA,US,37.78769,-122.41699,mezcal,,
+Quixote Cantina,214 W 5th St,Austin,TX,US,30.26758,-97.74604,mezcal,,
+Bar Mezcal,1922 N Halsted St,Chicago,IL,US,41.91565,-87.64887,mezcal,,
+Mezcalería Las Flores,3201 W Armitage Ave,Chicago,IL,US,41.91821,-87.70502,mezcal,,
+Los Altos de Jalisco,350 Gansevoort St,New York,NY,US,40.73961,-74.00643,mezcal,,

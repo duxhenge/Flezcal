@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Spots collection
+    match /spots/{spotId} {
+      // Anyone can read spots (even non-authenticated users can browse)
+      allow read: if true;
+
+      // Only authenticated users can create spots
+      allow create: if request.auth != null
+                    && request.resource.data.addedByUserID == request.auth.uid;
+
+      // Only allow updates to specific safe fields
+      allow update: if request.auth != null
+                    && (
+                      // Allow rating updates (from review submissions)
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['averageRating', 'reviewCount']))
+                      ||
+                      // Allow mezcal offering updates by any authenticated user
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['mezcalOfferings']))
+                      ||
+                      // Allow reporting (isReported, reportCount, reportedByUserIDs, isHidden)
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['isReported', 'reportCount', 'reportedByUserIDs', 'isHidden']))
+                      ||
+                      // Allow community verification of imported spots:
+                      // sets communityVerified=true and clears any accumulated flags.
+                      // Only flips from false → true (can't un-verify from the client).
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['communityVerified', 'isReported', 'reportCount',
+                                  'reportedByUserIDs', 'isHidden'])
+                        && request.resource.data.communityVerified == true
+                        && resource.data.communityVerified == false)
+                      ||
+                      // Allow adding a new category to an existing spot
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['categories']))
+                    );
+
+      // No deleting spots (admin only via Firebase console)
+      allow delete: if false;
+    }
+
+    // Reviews collection
+    match /reviews/{reviewId} {
+      // Anyone can read reviews
+      allow read: if true;
+
+      // Only authenticated users can create reviews
+      allow create: if request.auth != null
+                    && request.resource.data.userID == request.auth.uid;
+
+      // Only allow reporting updates
+      allow update: if request.auth != null
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['isReported', 'reportCount', 'reportedByUserIDs', 'isHidden']);
+
+      // No deleting reviews (admin only)
+      allow delete: if false;
+    }
+  }
+}
