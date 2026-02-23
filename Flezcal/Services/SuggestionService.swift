@@ -90,11 +90,14 @@ class SuggestionService: ObservableObject {
     /// This prevents stale batches from burning through Apple's rate limit.
     private var fetchGeneration = 0
 
-    /// Maximum ghost pins shown at once — keeps MapKit annotation rendering smooth.
-    private static let maxTotalSuggestions = 20
+    /// Maximum ghost pins shown at once.
+    /// Raised from 20 to 40 to accommodate the broad Tier 0 pass — the batch
+    /// homepage pre-screen filters down to green/yellow pins so showing more
+    /// doesn't overwhelm the user.
+    private static let maxTotalSuggestions = 40
     /// Maximum results accepted from a single query/pass.
     /// Prevents one broad category pass from monopolising the total cap.
-    private static let maxPerQuery = 10
+    private static let maxPerQuery = 15
 
     /// Fetch suggestions near the given map region for the user's chosen picks.
     ///
@@ -112,6 +115,8 @@ class SuggestionService: ObservableObject {
         isLoading = true
         var found: [SuggestedSpot] = []
         var anyThrottled = false
+
+        print("[Suggestions] Fetching for region center (\(String(format: "%.4f", region.center.latitude)), \(String(format: "%.4f", region.center.longitude))) span (\(String(format: "%.4f", region.span.latitudeDelta)), \(String(format: "%.4f", region.span.longitudeDelta))), picks: \(picks.map(\.id))")
 
         // Build query lists from the active picks
         let activeCategoryPasses = picks.flatMap { tier1Passes(for: $0) }
@@ -151,6 +156,43 @@ class SuggestionService: ObservableObject {
             }
         }
 
+        // ── Tier 0: broad "all nearby food/drink" passes ────────────────────────
+        // Multiple text queries that cast the widest net. Apple Maps returns more
+        // results when a naturalLanguageQuery is provided alongside the POI filter.
+        // A POI-filter-only request (no text query) returns very few results in
+        // sparse areas.  Using broad terms like "restaurant", "cafe", "bar" finds
+        // venues that pick-specific Tier 1/2 queries miss.
+        if let defaultPick = picks.first {
+            let broadQueries = ["restaurant", "cafe", "bar", "food"]
+            let broadFilter = MKPointOfInterestFilter(including: [
+                .restaurant, .cafe, .bakery, .brewery, .winery,
+                .nightlife, .foodMarket, .store
+            ])
+            for query in broadQueries {
+                guard fetchGeneration == myGeneration else { break }
+                guard found.count < Self.maxTotalSuggestions else { break }
+                let request = MKLocalSearch.Request()
+                request.naturalLanguageQuery = query
+                request.region = region
+                request.resultTypes = .pointOfInterest
+                request.pointOfInterestFilter = broadFilter
+                do {
+                    let response = try await MKLocalSearch(request: request).start()
+                    let before = found.count
+                    absorb(response.mapItems, as: defaultPick)
+                    print("[Suggestions] Tier 0 \"\(query)\": \(response.mapItems.count) raw → \(found.count - before) new (total \(found.count))")
+                } catch {
+                    let nsErr = error as NSError
+                    if nsErr.domain == MKErrorDomain, nsErr.code == MKError.loadingThrottled.rawValue {
+                        anyThrottled = true
+                        print("[Suggestions] Tier 0 \"\(query)\": THROTTLED")
+                    } else {
+                        print("[Suggestions] Tier 0 \"\(query)\": error \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+
         // ── Tier 1: MKPointOfInterestCategory passes ──────────────────────────
         for (categories, pick) in activeCategoryPasses {
             guard fetchGeneration == myGeneration else { break }
@@ -161,11 +203,16 @@ class SuggestionService: ObservableObject {
             request.pointOfInterestFilter = MKPointOfInterestFilter(including: categories)
             do {
                 let response = try await MKLocalSearch(request: request).start()
+                let before = found.count
                 absorb(response.mapItems, as: pick)
+                print("[Suggestions] Tier 1 \(pick.id) \(categories.map(\.rawValue)): \(response.mapItems.count) raw → \(found.count - before) new (total \(found.count))")
             } catch {
                 let nsErr = error as NSError
                 if nsErr.domain == MKErrorDomain, nsErr.code == MKError.loadingThrottled.rawValue {
                     anyThrottled = true
+                    print("[Suggestions] Tier 1 \(pick.id): THROTTLED")
+                } else {
+                    print("[Suggestions] Tier 1 \(pick.id): error \(error.localizedDescription)")
                 }
             }
         }
@@ -180,14 +227,21 @@ class SuggestionService: ObservableObject {
             request.resultTypes = .pointOfInterest
             do {
                 let response = try await MKLocalSearch(request: request).start()
+                let before = found.count
                 absorb(response.mapItems, as: entry.category)
+                print("[Suggestions] Tier 2 \"\(entry.query)\": \(response.mapItems.count) raw → \(found.count - before) new (total \(found.count))")
             } catch {
                 let nsErr = error as NSError
                 if nsErr.domain == MKErrorDomain, nsErr.code == MKError.loadingThrottled.rawValue {
                     anyThrottled = true
+                    print("[Suggestions] Tier 2 \"\(entry.query)\": THROTTLED")
+                } else {
+                    print("[Suggestions] Tier 2 \"\(entry.query)\": error \(error.localizedDescription)")
                 }
             }
         }
+
+        print("[Suggestions] Total found: \(found.count) venues: \(found.map(\.name).joined(separator: ", "))")
 
         // A newer fetch started while we were running — discard our results entirely.
         guard fetchGeneration == myGeneration else { isLoading = false; return }

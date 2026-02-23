@@ -133,12 +133,13 @@ struct SuggestedSpotSheet: View {
                 message: "We found mentions of \(names) on their website."
             )
         }
-        // primaryResult was notFound (or unavailable with a URL present)
-        let primaryName = result.primaryPick.displayName.lowercased()
+        // Nothing confirmed — list all picks that were checked
+        let allNames = result.notFound.map { $0.displayName.lowercased() }
+        let nameList = allNames.joined(separator: " or ")
         return (
             icon: "questionmark.circle",
             color: .secondary,
-            message: "We checked their website but couldn't find a mention of \(primaryName)."
+            message: "We checked their website but couldn't find a mention of \(nameList)."
         )
     }
 
@@ -275,11 +276,11 @@ struct SuggestedSpotSheet: View {
                                 if !result.confirmed.isEmpty {
                                     Text("Know this place? If you've been here, add it so the community can find it.")
                                 } else if result.websiteUnavailable {
-                                    let primaryName = result.primaryPick.displayName.lowercased()
-                                    Text("Know this place? If they have \(primaryName), add it so the community can find it. If it doesn't belong, \(source == .exploreSearch ? "dismiss this." : "remove the pin.")")
+                                    let pickNames = result.notFound.map { $0.displayName.lowercased() }.joined(separator: " or ")
+                                    Text("Know this place? If they have \(pickNames), add it so the community can find it. If it doesn't belong, \(source == .exploreSearch ? "dismiss this." : "remove the pin.")")
                                 } else {
-                                    let primaryName = result.primaryPick.displayName.lowercased()
-                                    Text("The website didn't mention \(primaryName) — but menus aren't always online. Know this place? Add it if they have \(primaryName).")
+                                    let pickNames = result.notFound.map { $0.displayName.lowercased() }.joined(separator: " or ")
+                                    Text("The website didn't mention \(pickNames) — but menus aren't always online. Know this place? Add it if they have what you're looking for.")
                                 }
                             } else {
                                 let primaryName = suggestedCategory.displayName.lowercased()

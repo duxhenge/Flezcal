@@ -483,8 +483,18 @@ actor WebsiteCheckService {
     /// Fetches a single page. Returns (html, isValid) or nil on failure.
     /// isValid is false when the page is a captcha / bot wall.
     private func fetchPage(_ url: URL) async -> (String, Bool)? {
+        // Upgrade http → https to avoid ATS blocks.  Many Apple Maps URLs are
+        // stored as http:// even though the site supports https://.
+        var fetchURL = url
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           components.scheme == "http" {
+            components.scheme = "https"
+            if let upgraded = components.url {
+                fetchURL = upgraded
+            }
+        }
         do {
-            let (data, response) = try await webSession.data(from: url)
+            let (data, response) = try await webSession.data(from: fetchURL)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 return nil
             }

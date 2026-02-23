@@ -41,7 +41,7 @@ struct MapTabView: View {
 
     // Batch pre-screen — homepage-only scan triggered after ghost pin fetch
     @State private var preScreenTask: Task<Void, Never>? = nil
-    @State private var showNoMatchBanner = false
+    @State private var preScreenBannerMessage: String? = nil
     @State private var isPreScreening = false
 
     // MARK: - Helpers
@@ -77,7 +77,7 @@ struct MapTabView: View {
             )
             // Kick off batch homepage pre-screen after pins appear
             preScreenTask?.cancel()
-            showNoMatchBanner = false
+            preScreenBannerMessage = nil
             suggestionService.preScreenComplete = false
             isPreScreening = true
             let suggestions = suggestionService.suggestions
@@ -93,14 +93,20 @@ struct MapTabView: View {
                 suggestionService.applyPreScreenResults(results)
                 isPreScreening = false
                 // Show "no quick matches" banner if zero green pins
-                let hasAnyLikely = suggestionService.suggestions.contains {
+                let likelyCount = suggestionService.suggestions.filter {
                     $0.preScreenMatches?.isEmpty == false
-                }
-                if !hasAnyLikely && !suggestionService.suggestions.isEmpty {
-                    showNoMatchBanner = true
+                }.count
+                let totalCount = suggestionService.suggestions.count
+                print("[PreScreen] Done. \(likelyCount) likely out of \(totalCount) suggestions.")
+                if totalCount > 0 {
+                    if likelyCount == 0 {
+                        preScreenBannerMessage = "No quick matches — tap any pin to search deeper"
+                    } else {
+                        preScreenBannerMessage = "\(likelyCount) likely match\(likelyCount == 1 ? "" : "es") — tap green pins to review"
+                    }
                     Task {
-                        try? await Task.sleep(for: .seconds(5))
-                        showNoMatchBanner = false
+                        try? await Task.sleep(for: .seconds(8))
+                        preScreenBannerMessage = nil
                     }
                 }
             }
@@ -295,7 +301,15 @@ struct MapTabView: View {
                 if bootFetchesRemaining > 0 {
                     bootFetchesRemaining -= 1
                     lastFetchedCenter = context.region.center
-                    fetchAndPreScreen(in: context.region, picks: activePicks)
+                    // Boot auto-fetch: ghost pins only, no pre-screen.
+                    // Pre-screen runs only after user taps "Search This Area".
+                    Task {
+                        await suggestionService.fetchSuggestions(
+                            in: context.region,
+                            existingSpots: spotService.spots,
+                            picks: activePicks
+                        )
+                    }
                 } else {
                     showSearchHereButton = true
                 }
@@ -407,10 +421,13 @@ struct MapTabView: View {
                 .animation(.easeInOut(duration: 0.25), value: showSearchHereButton)
             }
 
-            // "No quick matches" banner — shown when pre-screen found zero green pins
-            if showNoMatchBanner {
+            // Pre-screen results banner — appears after batch scan completes.
+            // Positioned at bottom (same area as the spinner) so it's a natural
+            // visual transition: spinner disappears → banner appears.
+            if let message = preScreenBannerMessage {
                 VStack {
-                    Text("No quick matches yet — tap any pin to search deeper")
+                    Spacer()
+                    Text(message)
                         .font(.caption)
                         .fontWeight(.medium)
                         .padding(.horizontal, 16)
@@ -418,12 +435,11 @@ struct MapTabView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                        .onTapGesture { showNoMatchBanner = false }
-                    Spacer()
+                        .onTapGesture { preScreenBannerMessage = nil }
                 }
-                .padding(.top, 60)
+                .padding(.bottom, 24)
                 .transition(.opacity)
-                .animation(.easeInOut(duration: 0.3), value: showNoMatchBanner)
+                .animation(.easeInOut(duration: 0.3), value: preScreenBannerMessage)
             }
 
             // Pre-screen scanning indicator
