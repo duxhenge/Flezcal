@@ -54,15 +54,14 @@ enum FirestoreCollections {
 enum AppTab {
     static let explore     = 0
     static let myPicks     = 1
-    static let list        = 2
-    static let addSpot     = 3
-    static let leaderboard = 4
-    static let profile     = 5
+    static let spots       = 2
+    static let leaderboard = 3
+    static let profile     = 4
 }
 
 extension Notification.Name {
-    /// Post this to programmatically switch to the Add Spot tab from anywhere in the app.
-    static let switchToAddSpot = Notification.Name("switchToAddSpot")
+    /// Post to switch to the Spots tab (Explore mode) from anywhere in the app.
+    static let switchToSpots = Notification.Name("switchToSpots")
     /// Post with a `SuggestedSpot` as `object` to switch to the Map tab,
     /// center on the venue, and show the ghost pin sheet.
     static let showOnMap = Notification.Name("showOnMap")

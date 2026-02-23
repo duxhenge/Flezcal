@@ -640,7 +640,7 @@ struct ListTabView: View {
                     )
                 }
             }
-            .navigationTitle("Nearby")
+            .navigationTitle("Spots")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

@@ -439,9 +439,9 @@ struct MapTabView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                         Button {
-                            NotificationCenter.default.post(name: .switchToAddSpot, object: nil)
+                            NotificationCenter.default.post(name: .switchToSpots, object: nil)
                         } label: {
-                            Label("Add a Spot", systemImage: "plus.circle.fill")
+                            Label("Search for a Spot", systemImage: "magnifyingglass")
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)

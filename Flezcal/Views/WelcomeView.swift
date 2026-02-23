@@ -71,6 +71,34 @@ struct WelcomeView: View {
                         }
                         .padding(.horizontal, 24)
 
+                        // Feature walkthrough cards
+                        if !content.pages.isEmpty {
+                            VStack(spacing: 16) {
+                                ForEach(content.pages) { page in
+                                    WelcomePageCard(page: page)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                        }
+
+                        // Change note — shown when the welcome screen reappears after an update
+                        if !content.changeNote.isEmpty {
+                            VStack(spacing: 6) {
+                                if !content.changeDate.isEmpty {
+                                    Text("Updated \(content.changeDate)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.orange)
+                                }
+                                Text(content.changeNote)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
+                        }
+
                         // Footer — only shown when non-empty
                         if !content.footer.isEmpty {
                             Text(content.footer)
@@ -122,6 +150,48 @@ private struct WelcomeItemRow: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - Feature Page Card
+
+private struct WelcomePageCard: View {
+    let page: WelcomePage
+
+    private var tint: Color {
+        switch page.color {
+        case "orange": return .orange
+        case "blue":   return .blue
+        case "pink":   return .pink
+        case "green":  return .green
+        case "purple": return .purple
+        case "red":    return .red
+        default:       return .orange
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: page.icon)
+                .font(.system(size: 36))
+                .foregroundStyle(tint)
+                .frame(height: 44)
+
+            Text(page.headline)
+                .font(.headline)
+                .fontWeight(.bold)
+
+            Text(page.description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 

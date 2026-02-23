@@ -60,12 +60,27 @@ class WelcomeService: ObservableObject {
             return WelcomeItem(icon: icon, text: text)
         }
 
+        let rawPages = data["pages"] as? [[String: String]] ?? []
+        let pages = rawPages.compactMap { dict -> WelcomePage? in
+            guard let icon = dict["icon"],
+                  let headline = dict["headline"],
+                  let description = dict["description"],
+                  let color = dict["color"] else { return nil }
+            return WelcomePage(icon: icon, headline: headline, description: description, color: color)
+        }
+
+        let changeNote = data["changeNote"] as? String ?? ""
+        let changeDate = data["changeDate"] as? String ?? ""
+
         return WelcomeContent(
             version: version,
             title: title,
             subtitle: subtitle,
             items: items.isEmpty ? WelcomeContent.fallback.items : items,
-            footer: footer
+            pages: pages.isEmpty ? WelcomeContent.fallback.pages : pages,
+            footer: footer,
+            changeNote: changeNote,
+            changeDate: changeDate
         )
     }
 }

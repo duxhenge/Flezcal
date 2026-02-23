@@ -34,13 +34,8 @@ struct ContentView: View {
                 .tag(AppTab.myPicks)
 
             ListTabView(locationManager: locationManager, picksService: picksService)
-                .tabItem { Label("List", systemImage: "list.bullet") }
-                .tag(AppTab.list)
-
-            AddSpotView()
-                .environmentObject(picksService)
-                .tabItem { Label("Add Spot", systemImage: "plus.circle") }
-                .tag(AppTab.addSpot)
+                .tabItem { Label("Spots", systemImage: "list.bullet") }
+                .tag(AppTab.spots)
 
             LeaderboardView()
                 .tabItem { Label("Leaderboard", systemImage: "trophy") }
@@ -51,8 +46,8 @@ struct ContentView: View {
                 .tag(AppTab.profile)
         }
         .tint(.orange)
-        .onReceive(NotificationCenter.default.publisher(for: .switchToAddSpot)) { _ in
-            selectedTab = AppTab.addSpot
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSpots)) { _ in
+            selectedTab = AppTab.spots
         }
         .onReceive(NotificationCenter.default.publisher(for: .showOnMap)) { notification in
             if let suggestion = notification.userInfo?["suggestion"] as? SuggestedSpot {
