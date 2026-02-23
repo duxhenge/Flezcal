@@ -34,6 +34,21 @@ struct SuggestedSpotSheet: View {
     /// Use the frozen result so the sheet is stable after opening.
     private var displayResult: MultiCategoryCheckResult? { frozenResult }
 
+    /// If this venue is already confirmed in Firestore, this holds the existing Spot.
+    private var existingSpot: Spot? {
+        guard let coord = suggestion.mapItem.placemark.location?.coordinate,
+              let name = suggestion.mapItem.name else { return nil }
+        return spotService.findExistingSpot(
+            name: name, latitude: coord.latitude, longitude: coord.longitude
+        )
+    }
+
+    /// FoodCategories already confirmed on this spot in Firestore.
+    private var existingCategories: [FoodCategory] {
+        guard let spot = existingSpot else { return [] }
+        return spot.categories.compactMap { FoodCategory(spotCategory: $0) }
+    }
+
     /// SpotCategories to pass to ConfirmSpotView.
     /// Uses confirmed picks when available, otherwise falls back to the primary pick.
     private var spotCategories: [SpotCategory] {
@@ -49,6 +64,8 @@ struct SuggestedSpotSheet: View {
     }
 
     /// Banner message and icon based on the multi-category website check.
+    /// When the spot already exists in Firestore, the banner focuses on
+    /// newly-discovered categories rather than contradicting existing data.
     private var websiteCheckBanner: (icon: String, color: Color, message: String) {
         guard let result = displayResult else {
             return (
@@ -57,13 +74,56 @@ struct SuggestedSpotSheet: View {
                 message: "Checking their website…"
             )
         }
+
+        let existingIDs = Set(existingCategories.map(\.id))
+
+        // Categories confirmed by website check that are NOT already in Firestore
+        let newlyConfirmed = result.confirmed.filter { !existingIDs.contains($0.id) }
+        // Categories confirmed by website check that ARE already in Firestore
+        let reconfirmed = result.confirmed.filter { existingIDs.contains($0.id) }
+
         if result.websiteUnavailable {
+            if existingSpot != nil {
+                return (
+                    icon: "wifi.slash",
+                    color: .secondary,
+                    message: "No website on file — but this spot is already confirmed by the community."
+                )
+            }
             return (
                 icon: "wifi.slash",
                 color: .secondary,
                 message: "No website on file for this location."
             )
         }
+
+        // When the spot already exists, tailor the message
+        if existingSpot != nil {
+            if !newlyConfirmed.isEmpty {
+                let names = newlyConfirmed.map { $0.displayName.lowercased() }.joined(separator: ", ")
+                return (
+                    icon: "plus.circle.fill",
+                    color: newlyConfirmed.first?.color ?? .orange,
+                    message: "We also found \(names) on their website — a new category to add!"
+                )
+            }
+            if !reconfirmed.isEmpty {
+                let names = reconfirmed.map { $0.displayName.lowercased() }.joined(separator: ", ")
+                return (
+                    icon: "checkmark.seal.fill",
+                    color: reconfirmed.first?.color ?? .orange,
+                    message: "Their website confirms \(names) — matches the community data."
+                )
+            }
+            // Website didn't find any picks, but spot is already confirmed
+            return (
+                icon: "checkmark.circle",
+                color: .orange,
+                message: "Website scan didn't find your picks, but this spot is confirmed by the community."
+            )
+        }
+
+        // Not an existing spot — original behavior
         if !result.confirmed.isEmpty {
             let names = result.confirmed.map { $0.displayName.lowercased() }
                 .joined(separator: ", ")
@@ -87,21 +147,8 @@ struct SuggestedSpotSheet: View {
             // ScrollView ensures the buttons are never clipped on smaller screens
             ScrollView {
                 VStack(spacing: 0) {
-                    // Map mini-preview
-                    Map(initialPosition: .region(MKCoordinateRegion(
-                        center: suggestion.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.004, longitudeDelta: 0.004)
-                    ))) {
-                        Annotation(suggestion.name, coordinate: suggestion.coordinate) {
-                            GhostPinView(category: suggestedCategory)
-                        }
-                    }
-                    .frame(height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding()
-
                     VStack(alignment: .leading, spacing: 12) {
-                        // Source label
+                        // Source label — replaces the removed mini-map preview
                         Label(
                             source == .exploreSearch
                                 ? "Found via Apple Maps search"
@@ -111,10 +158,31 @@ struct SuggestedSpotSheet: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                        // Category chips — shows confirmed picks, or primary pick while loading
+                        // Category chips — existing Firestore categories + website check results
                         HStack(spacing: 6) {
+                            // 1. Show existing Firestore categories (already confirmed by community)
+                            ForEach(existingCategories) { cat in
+                                HStack(spacing: 4) {
+                                    FoodCategoryIcon(category: cat, size: 18)
+                                    Text(cat.displayName)
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                }
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(cat.color.opacity(0.15))
+                                .foregroundStyle(cat.color)
+                                .clipShape(Capsule())
+                            }
+
+                            // 2. Show website-check confirmed categories (excluding those already in Firestore)
                             if let result = displayResult, !result.confirmed.isEmpty {
-                                ForEach(result.confirmed) { cat in
+                                let existingIDs = Set(existingCategories.map(\.id))
+                                let newConfirmed = result.confirmed.filter { !existingIDs.contains($0.id) }
+                                ForEach(newConfirmed) { cat in
                                     HStack(spacing: 4) {
                                         FoodCategoryIcon(category: cat, size: 18)
                                         Text(cat.displayName)
@@ -130,8 +198,8 @@ struct SuggestedSpotSheet: View {
                                     .foregroundStyle(cat.color)
                                     .clipShape(Capsule())
                                 }
-                            } else {
-                                // Loading or nothing confirmed — show primary pick
+                            } else if existingCategories.isEmpty {
+                                // Loading and no existing spot — show primary pick placeholder
                                 HStack(spacing: 4) {
                                     FoodCategoryIcon(category: suggestedCategory, size: 20)
                                     Text(suggestedCategory.displayName)
@@ -158,6 +226,23 @@ struct SuggestedSpotSheet: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
+                        // ── Already on Flezcal banner ─────────────────────────
+                        if let spot = existingSpot {
+                            let catNames = spot.categories.map(\.displayName).joined(separator: ", ")
+                            Label(
+                                "Already on Flezcal for \(catNames).",
+                                systemImage: "star.fill"
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.orange)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.orange.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .padding(.top, 4)
+                        }
+
                         // ── Website check result banner ───────────────────────
                         let banner = websiteCheckBanner
                         Label(banner.message, systemImage: banner.icon)
@@ -172,7 +257,21 @@ struct SuggestedSpotSheet: View {
 
                         // User prompt
                         Group {
-                            if let result = displayResult {
+                            if existingSpot != nil {
+                                // Venue already exists — prompt to add new categories if any detected
+                                if let result = displayResult {
+                                    let existingIDs = Set(existingCategories.map(\.id))
+                                    let newCats = result.confirmed.filter { !existingIDs.contains($0.id) }
+                                    if !newCats.isEmpty {
+                                        let newNames = newCats.map { $0.displayName.lowercased() }.joined(separator: ", ")
+                                        Text("This spot is already on Flezcal. We also found \(newNames) on their website — tap below to add \(newCats.count == 1 ? "it" : "them").")
+                                    } else {
+                                        Text("This spot is already on Flezcal. You can still update it with new categories or mezcal offerings.")
+                                    }
+                                } else {
+                                    Text("This spot is already on Flezcal. Checking their website for more categories…")
+                                }
+                            } else if let result = displayResult {
                                 if !result.confirmed.isEmpty {
                                     Text("Know this place? If you've been here, add it so the community can find it.")
                                 } else if result.websiteUnavailable {
@@ -191,19 +290,27 @@ struct SuggestedSpotSheet: View {
                         .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal)
+                    .padding(.top, 8)
 
                     // Action buttons — inside the scroll view so they're always reachable
                     VStack(spacing: 12) {
                         Button {
                             showAddSpot = true
                         } label: {
-                            Label("Yes, add it to Flezcal!", systemImage: "checkmark.circle.fill")
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
+                            Label(
+                                existingSpot != nil
+                                    ? "Update this spot"
+                                    : "Yes, add it to Flezcal!",
+                                systemImage: existingSpot != nil
+                                    ? "pencil.circle.fill"
+                                    : "checkmark.circle.fill"
+                            )
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(suggestedCategory.color)
+                        .tint(existingSpot != nil ? .orange : suggestedCategory.color)
 
                         // Open the venue in Apple Maps so the user can check
                         // the listing, menu link, photos, or reviews directly.
@@ -217,6 +324,25 @@ struct SuggestedSpotSheet: View {
                         }
                         .buttonStyle(.bordered)
                         .tint(.blue)
+
+                        // Show on Map — only from Explore search (already on map from ghost pin)
+                        if source == .exploreSearch {
+                            Button {
+                                NotificationCenter.default.post(
+                                    name: .showOnMap,
+                                    object: nil,
+                                    userInfo: ["suggestion": suggestion]
+                                )
+                                dismiss()
+                            } label: {
+                                Label("Show on Map", systemImage: "map.fill")
+                                    .fontWeight(.medium)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.green)
+                        }
 
                         Button(role: .destructive) {
                             onDismiss()

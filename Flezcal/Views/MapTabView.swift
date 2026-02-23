@@ -3,6 +3,10 @@ import MapKit
 import CoreLocation
 
 struct MapTabView: View {
+    /// Set by ContentView when a .showOnMap notification arrives from the List tab.
+    /// MapTabView picks it up, centers the camera, and opens the ghost pin sheet.
+    @Binding var pendingMapSuggestion: SuggestedSpot?
+
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
     @StateObject private var suggestionService = SuggestionService()
@@ -22,6 +26,9 @@ struct MapTabView: View {
     /// True when the map has moved enough to warrant a new ghost-pin fetch
     /// but the user hasn't tapped "Search This Area" yet.
     @State private var showSearchHereButton = false
+    /// Ghost pin placed via "Show on Map" from Explore. Stored separately from
+    /// selectedSuggestion so it persists after the sheet is dismissed.
+    @State private var showOnMapPin: SuggestedSpot? = nil
     /// Number of auto-fetches remaining on boot.  MapKit fires .onEnd once
     /// with a fallback region before the user's real location resolves, so
     /// we allow 2 auto-fetches to ensure ghost pins appear for the correct area.
@@ -201,6 +208,23 @@ struct MapTabView: View {
                             }
                     }
                 }
+
+                // Persistent ghost pin for venues sent from Explore "Show on Map".
+                // Uses showOnMapPin (not selectedSuggestion) so it survives sheet dismissal.
+                // Only shown when the venue isn't already in suggestionService.suggestions.
+                if let pinned = showOnMapPin,
+                   !suggestionService.suggestions.contains(where: { $0.id == pinned.id }) {
+                    Annotation("", coordinate: pinned.coordinate) {
+                        VStack(spacing: 0) {
+                            GhostPinView(category: pinned.suggestedCategory)
+                                .scaleEffect(1.3)
+                            Image(systemName: "arrowtriangle.down.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(pinned.suggestedCategory.color.opacity(0.85))
+                                .offset(y: -2)
+                        }
+                    }
+                }
             }
             .onMapCameraChange(frequency: .onEnd) { context in
                 visibleRegion = context.region
@@ -260,6 +284,33 @@ struct MapTabView: View {
                         existingSpots: spotService.spots,
                         picks: picksService.picks
                     )
+                }
+            }
+            .onChange(of: pendingMapSuggestion) { _, newValue in
+                guard let suggestion = newValue else { return }
+                pendingMapSuggestion = nil   // consume immediately
+
+                // Center camera on the venue
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: suggestion.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                ))
+
+                // Open the ghost pin sheet + run website check (same as ghost pin tap)
+                websiteCheckTask?.cancel()
+                multiCheckResult = nil
+                showOnMapPin = suggestion  // persist pin after sheet dismissal
+                selectedSuggestion = suggestion
+                let primaryPick = suggestion.suggestedCategory
+                let allPicks = picksService.picks
+                websiteCheckTask = Task {
+                    let result = await websiteChecker.checkAllPicks(
+                        suggestion.mapItem,
+                        picks: allPicks,
+                        primaryPick: primaryPick
+                    )
+                    guard !Task.isCancelled else { return }
+                    multiCheckResult = result
                 }
             }
 
@@ -661,7 +712,7 @@ struct CategoryFilterBar: View {
 }
 
 #Preview {
-    MapTabView()
+    MapTabView(pendingMapSuggestion: .constant(nil))
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())
 }

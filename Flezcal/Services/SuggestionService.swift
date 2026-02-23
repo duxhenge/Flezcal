@@ -3,7 +3,11 @@ import MapKit
 
 /// A suggested (unconfirmed) spot found via Apple Maps search.
 /// Shown on the map as a ghost pin until a user confirms or dismisses it.
-struct SuggestedSpot: Identifiable {
+struct SuggestedSpot: Identifiable, Equatable {
+    static func == (lhs: SuggestedSpot, rhs: SuggestedSpot) -> Bool {
+        lhs.id == rhs.id
+    }
+
     /// Stable ID derived from the venue name so the same venue keeps the
     /// same ID across successive fetches. This lets SwiftUI diff map
     /// annotations correctly and lets website-check results survive re-fetches.

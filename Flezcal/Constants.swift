@@ -63,4 +63,7 @@ enum AppTab {
 extension Notification.Name {
     /// Post this to programmatically switch to the Add Spot tab from anywhere in the app.
     static let switchToAddSpot = Notification.Name("switchToAddSpot")
+    /// Post with a `SuggestedSpot` as `object` to switch to the Map tab,
+    /// center on the venue, and show the ghost pin sheet.
+    static let showOnMap = Notification.Name("showOnMap")
 }

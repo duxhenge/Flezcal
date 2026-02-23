@@ -9,6 +9,9 @@ struct ContentView: View {
     @StateObject private var picksService = UserPicksService()
     @State private var showWelcome = false
     @State private var selectedTab: Int = AppTab.explore
+    /// Set by the .showOnMap notification — MapTabView picks this up,
+    /// centers the camera, and shows the ghost pin sheet.
+    @State private var pendingMapSuggestion: SuggestedSpot? = nil
 
     // Plain (non-reactive) reference — intentionally NOT @EnvironmentObject.
     // ContentView never reads locationManager.userLocation in its body, so
@@ -20,7 +23,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            MapTabView()
+            MapTabView(pendingMapSuggestion: $pendingMapSuggestion)
                 .environmentObject(picksService)
                 .tabItem { Label("Explore", systemImage: "map") }
                 .tag(AppTab.explore)
@@ -50,6 +53,12 @@ struct ContentView: View {
         .tint(.orange)
         .onReceive(NotificationCenter.default.publisher(for: .switchToAddSpot)) { _ in
             selectedTab = AppTab.addSpot
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showOnMap)) { notification in
+            if let suggestion = notification.userInfo?["suggestion"] as? SuggestedSpot {
+                pendingMapSuggestion = suggestion
+            }
+            selectedTab = AppTab.explore
         }
         .wormEasterEgg()
         .sheet(isPresented: $showWelcome) {

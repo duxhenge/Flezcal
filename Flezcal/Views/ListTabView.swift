@@ -306,15 +306,29 @@ private struct ExplorePanel: View {
                     .padding(.top, 4)
 
                     List(searchService.searchResults, id: \.self) { mapItem in
-                        Button {
-                            selectResult(mapItem)
-                        } label: {
-                            ExploreResultRowView(
-                                mapItem: mapItem,
-                                userLocation: effectiveLocation
-                            )
+                        HStack(spacing: 0) {
+                            Button {
+                                selectResult(mapItem)
+                            } label: {
+                                ExploreResultRowView(
+                                    mapItem: mapItem,
+                                    userLocation: effectiveLocation
+                                )
+                            }
+
+                            // "Show on Map" shortcut — jumps to Map tab with ghost pin
+                            Button {
+                                showOnMap(mapItem)
+                            } label: {
+                                Image(systemName: "map")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 8))
                     }
                     .listStyle(.plain)
                 }
@@ -354,14 +368,20 @@ private struct ExplorePanel: View {
         }
     }
 
+    /// Resolve the primary FoodCategory for a search result.
+    /// Uses the active filter if set, otherwise the user's first pick.
+    private var primaryFoodCategory: FoodCategory {
+        if let spotCat = selectedFilter.category,
+           let foodCat = FoodCategory.allCategories.first(where: { $0.id == spotCat.rawValue }) {
+            return foodCat
+        }
+        return userPicks.first ?? FoodCategory.mezcal
+    }
+
     private func selectResult(_ mapItem: MKMapItem) {
         websiteCheckTask?.cancel()
         multiCheckResult = nil
-        // Map the active SpotCategory filter → FoodCategory for SuggestedSpot and website check.
-        // Falls back to FoodCategory.mezcal when no filter is active.
-        let spotCat = selectedFilter.category ?? .mezcal
-        let foodCat = FoodCategory.allCategories.first { $0.id == spotCat.rawValue }
-                      ?? FoodCategory.mezcal
+        let foodCat = primaryFoodCategory
         selectedSuggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
         let picks = userPicks
         websiteCheckTask = Task {
@@ -371,6 +391,17 @@ private struct ExplorePanel: View {
             guard !Task.isCancelled else { return }
             multiCheckResult = result
         }
+    }
+
+    /// Jump to the Map tab centered on this venue with a ghost pin + website check.
+    private func showOnMap(_ mapItem: MKMapItem) {
+        let foodCat = primaryFoodCategory
+        let suggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
+        NotificationCenter.default.post(
+            name: .showOnMap,
+            object: nil,
+            userInfo: ["suggestion": suggestion]
+        )
     }
 
     // MARK: Location bar
@@ -521,7 +552,7 @@ struct ListTabView: View {
         self.picksService = picksService
     }
 
-    @State private var selectedFilter: SpotFilter = .all
+    @State private var selectedFilter: FoodCategory? = nil   // nil = "All"
     @State private var selectedSpot: Spot?
     @State private var searchText = ""
     @State private var listMode: ListMode = .community
@@ -530,7 +561,8 @@ struct ListTabView: View {
     // MARK: Community data
 
     private var filteredAndSortedSpots: [Spot] {
-        let categoryFiltered = spotService.filteredSpots(for: selectedFilter)
+        let spotFilter = SpotFilter(category: selectedFilter.flatMap { SpotCategory(rawValue: $0.id) })
+        let categoryFiltered = spotService.filteredSpots(for: spotFilter)
         let textFiltered: [Spot]
         if searchText.isEmpty {
             textFiltered = categoryFiltered
@@ -591,7 +623,7 @@ struct ListTabView: View {
                 .padding(.top, 8)
 
                 // Category filter — shown in both modes
-                CategoryFilterBar(selectedFilter: $selectedFilter)
+                PicksFilterBar(picks: picksService.picks, selectedPick: $selectedFilter)
                     .padding(.top, 8)
 
                 // ── Content ───────────────────────────────────────────────────
@@ -601,7 +633,7 @@ struct ListTabView: View {
                 case .explore:
                     ExplorePanel(
                         searchText: $searchText,
-                        selectedFilter: selectedFilter,
+                        selectedFilter: SpotFilter(category: selectedFilter.flatMap { SpotCategory(rawValue: $0.id) }),
                         currentLocation: currentLocation,
                         spotService: spotService,
                         userPicks: picksService.picks
@@ -667,7 +699,7 @@ struct ListTabView: View {
                     Text("No spots found")
                         .font(.headline)
                     Text(searchText.isEmpty
-                         ? "Be the first to add a \(selectedFilter.category?.displayName.lowercased() ?? "flan or mezcal") spot!"
+                         ? "Be the first to add a \(selectedFilter?.displayName.lowercased() ?? "flan or mezcal") spot!"
                          : "Try a different search term.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
