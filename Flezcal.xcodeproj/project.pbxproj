@@ -52,6 +52,9 @@
 		B100000100000000000000B3 /* MyPicksTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B3 /* MyPicksTabView.swift */; };
 		B100000100000000000000B4 /* FoodCategoryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B4 /* FoodCategoryGridView.swift */; };
 		B853A5AFCE7241ADF4E8E09A /* LocationUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22355A4714E4831AF36DB21 /* LocationUtils.swift */; };
+		65327E3F685BFF9B52AB64AC /* CustomCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB135D53650572B2339AC0B /* CustomCategory.swift */; };
+		4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */; };
+		CAB4B65A1D3A48DB38C9BB7A /* CreateCustomCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -112,6 +115,9 @@
 		D22355A4714E4831AF36DB21 /* LocationUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationUtils.swift; sourceTree = "<group>"; };
 		E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExploreSearchUITest.swift; sourceTree = "<group>"; };
 		F4A8B31AA11DC786E5093A4F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		BEB135D53650572B2339AC0B /* CustomCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategory.swift; sourceTree = "<group>"; };
+		1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategoryService.swift; sourceTree = "<group>"; };
+		96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCustomCategoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +189,7 @@
 				B2000001000000000000001A /* ContributorStats.swift */,
 				B2000001000000000000001F /* WelcomeContent.swift */,
 				B200000100000000000000B1 /* FoodCategory.swift */,
+				BEB135D53650572B2339AC0B /* CustomCategory.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -206,6 +213,7 @@
 				B20000010000000000000023 /* EmailAuthView.swift */,
 				B200000100000000000000B3 /* MyPicksTabView.swift */,
 				B200000100000000000000B4 /* FoodCategoryGridView.swift */,
+				96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -224,6 +232,7 @@
 				B20000010000000000000020 /* WelcomeService.swift */,
 				B20000010000000000000022 /* SpotService.swift */,
 				D22355A4714E4831AF36DB21 /* LocationUtils.swift */,
+				1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -404,6 +413,9 @@
 				B100000100000000000000B2 /* UserPicksService.swift in Sources */,
 				B100000100000000000000B3 /* MyPicksTabView.swift in Sources */,
 				B100000100000000000000B4 /* FoodCategoryGridView.swift in Sources */,
+				65327E3F685BFF9B52AB64AC /* CustomCategory.swift in Sources */,
+				4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */,
+				CAB4B65A1D3A48DB38C9BB7A /* CreateCustomCategoryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

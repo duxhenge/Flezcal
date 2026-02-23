@@ -190,13 +190,13 @@ struct ConfirmSpotView: View {
                                             .font(.caption)
                                             .foregroundStyle(cat.color)
                                     }
-                                    if existing.reviewCount > 0 {
+                                    if existing.reviewCount > 0,
+                                       let level = RatingLevel.from(max(1, min(5, Int(existing.averageRating.rounded())))) {
                                         Text("•")
                                             .foregroundStyle(.secondary)
                                         HStack(spacing: 2) {
-                                            Image(systemName: "star.fill")
-                                                .foregroundStyle(.orange)
-                                            Text(String(format: "%.1f", existing.averageRating))
+                                            Text(level.emoji)
+                                            Text(level.label)
                                         }
                                         .font(.caption)
                                     }
@@ -212,23 +212,22 @@ struct ConfirmSpotView: View {
                                         .foregroundStyle(.green)
                                 }
 
-                                // Show existing mezcal offerings
-                                if let offerings = existing.mezcalOfferings, !offerings.isEmpty {
-                                    Text("Mezcals already listed:")
+                                // Show existing offerings for this category
+                                let existingOfferings = existing.offerings(for: category)
+                                if !existingOfferings.isEmpty {
+                                    Text("\(category.offeringsLabel) already listed:")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                    ForEach(offerings, id: \.self) { mezcal in
-                                        Label(mezcal, systemImage: "checkmark")
+                                    ForEach(existingOfferings, id: \.self) { item in
+                                        Label(item, systemImage: "checkmark")
                                             .font(.caption)
                                             .foregroundStyle(.green)
                                     }
                                 }
 
-                                if category.supportsOfferings || existing.categories.contains(where: { $0.supportsOfferings }) {
-                                    Text("You can add \(category.offeringsLabel.lowercased()) not yet on the list below.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                                Text("You can add \(category.offeringsLabel.lowercased()) not yet on the list below.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         } else {
                             // Category badge for new spots
@@ -238,41 +237,43 @@ struct ConfirmSpotView: View {
                                 .foregroundStyle(category.color)
                         }
 
-                        // Offerings input (for categories that support brand listings)
-                        let showOfferings = category.supportsOfferings || (existingSpot?.categories.contains(where: { $0.supportsOfferings }) == true)
-                        if showOfferings {
-                            Divider()
+                        // Offerings input
+                        Divider()
 
-                            Text(existingSpot != nil ? "Add New \(category.offeringsLabel)" : category.offeringsLabel)
-                                .font(.headline)
+                        Text(existingSpot != nil ? "Add New \(category.offeringsLabel)" : category.offeringsLabel)
+                            .font(.headline)
 
-                            Text(existingSpot != nil
-                                 ? "Add any \(category.offeringsLabel.lowercased()) not already listed above."
-                                 : "List the \(category.offeringsLabel.lowercased()) available here (optional).")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        Text(existingSpot != nil
+                             ? "Add any \(category.offeringsLabel.lowercased()) not already listed above."
+                             : category.offeringsExamples)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
 
-                            ForEach(mezcalOfferings.indices, id: \.self) { index in
-                                HStack {
-                                    MezcalInputField(text: $mezcalOfferings[index], placeholder: "One brand per field")
+                        ForEach(mezcalOfferings.indices, id: \.self) { index in
+                            HStack {
+                                if category == .mezcal {
+                                    MezcalInputField(text: $mezcalOfferings[index], placeholder: "One \(category.offeringSingular) per field")
+                                } else {
+                                    TextField("One \(category.offeringSingular) per field", text: $mezcalOfferings[index])
+                                        .textFieldStyle(.roundedBorder)
+                                }
 
-                                    if mezcalOfferings.count > 1 {
-                                        Button {
-                                            mezcalOfferings.remove(at: index)
-                                        } label: {
-                                            Image(systemName: "minus.circle.fill")
-                                                .foregroundStyle(.red)
-                                        }
+                                if mezcalOfferings.count > 1 {
+                                    Button {
+                                        mezcalOfferings.remove(at: index)
+                                    } label: {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundStyle(.red)
                                     }
                                 }
                             }
+                        }
 
-                            Button {
-                                mezcalOfferings.append("")
-                            } label: {
-                                Label("Add Another", systemImage: "plus.circle")
-                                    .font(.subheadline)
-                            }
+                        Button {
+                            mezcalOfferings.append("")
+                        } label: {
+                            Label("Add Another", systemImage: "plus.circle")
+                                .font(.subheadline)
                         }
                     }
                     .padding(.horizontal)
@@ -391,11 +392,11 @@ struct ConfirmSpotView: View {
                     }
                 }
 
-                // Merge mezcal offerings if any
+                // Merge offerings for the primary category
                 if !filteredOfferings.isEmpty {
-                    let mezcalSuccess = await spotService.addMezcalOfferings(spotID: existing.id, newOfferings: filteredOfferings)
-                    if mezcalSuccess {
-                        messages.append("Mezcal offerings have been updated.")
+                    let offeringsSuccess = await spotService.addOfferings(spotID: existing.id, category: category, newOfferings: filteredOfferings)
+                    if offeringsSuccess {
+                        messages.append("\(category.offeringsLabel) have been updated.")
                         didSomething = true
                     }
                 }
@@ -423,7 +424,7 @@ struct ConfirmSpotView: View {
                     addedDate: Date(),
                     averageRating: 0,
                     reviewCount: 0,
-                    mezcalOfferings: category.supportsOfferings ? filteredOfferings : nil,
+                    offerings: filteredOfferings.isEmpty ? nil : [category.rawValue: filteredOfferings],
                     websiteURL: mapItem.url?.absoluteString,
                     communityVerified: preVerified
                 )

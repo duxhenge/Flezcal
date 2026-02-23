@@ -54,7 +54,7 @@ private func tier1Passes(for pick: FoodCategory) -> [([MKPointOfInterestCategory
         return [([.brewery], pick)]
     case "specialty_coffee":
         return [([.cafe], pick)]
-    case "ramen", "tacos", "dim_sum", "pizza", "birria", "pho":
+    case "sushi", "ramen", "tacos", "dim_sum", "pizza", "birria", "pho":
         return [([.restaurant], pick)]
     case "oysters":
         return [([.restaurant], pick)]

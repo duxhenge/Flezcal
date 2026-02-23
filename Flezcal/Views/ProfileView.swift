@@ -46,7 +46,7 @@ struct SignedOutProfileView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
 
-            Text("Sign in to add flan and mezcal spots, leave reviews, and discover new favorites.")
+            Text("Sign in to add spots, rate your favorite finds, and discover new favorites.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -212,7 +212,7 @@ struct SignedInProfileView: View {
                     Label("Mezcal Brands Listed", systemImage: "list.bullet")
                         .badge("\(stats.mezcalBrandsAdded)")
 
-                    Label("Reviews Written", systemImage: "star.bubble")
+                    Label("Ratings Given", systemImage: "flame")
                         .badge("\(stats.reviewsWritten)")
                 }
             } else {
@@ -220,7 +220,7 @@ struct SignedInProfileView: View {
                 Section("Activity") {
                     Label("Spots Added", systemImage: "mappin.circle")
                         .badge("--")
-                    Label("Reviews Written", systemImage: "star.bubble")
+                    Label("Ratings Given", systemImage: "flame")
                         .badge("--")
                 }
             }

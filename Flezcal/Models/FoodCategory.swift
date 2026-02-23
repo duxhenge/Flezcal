@@ -232,6 +232,17 @@ extension FoodCategory {
 
     // ── Savory ────────────────────────────────────────────────────────────────
 
+    static let sushi = FoodCategory(
+        id: "sushi",
+        displayName: "Sushi",
+        emoji: "🍣",
+        color: Color(red: 0.9, green: 0.3, blue: 0.3),
+        mapSearchTerms: ["sushi", "sushi bar", "japanese restaurant"],
+        websiteKeywords: ["sushi", "omakase", "nigiri", "sashimi",
+                          "sushi bar", "maki", "sushi roll"],
+        addSpotPrompt: "Search for a sushi bar or Japanese restaurant."
+    )
+
     static let ramen = FoodCategory(
         id: "ramen",
         displayName: "Ramen",
@@ -321,15 +332,23 @@ extension FoodCategory {
     )
 
     // MARK: - Full catalogue (order = display order in the grid)
+    //
+    // 10 Common + 10 Trendy/Hip. Flan and Mezcal are permanent (origin story).
+    // The split is conceptual — all 20 are equal in the app.
 
     static let allCategories: [FoodCategory] = [
-        // Drinks
-        mezcal, naturalWine, craftBeer, sake, specialtyCoffee, boba, cocktails,
-        // Desserts
-        flan, mochi, churros, gelato, crepes, baklava,
-        // Savory
-        ramen, tacos, dimSum, pizza, birria, oysters, pho,
+        // ── Common (widely recognized food categories) ──
+        tacos, pizza, ramen, sushi, pho,
+        craftBeer, specialtyCoffee, gelato, oysters, dimSum,
+        // ── Trendy / Hip (emerging, niche, or culturally specific) ──
+        mezcal, flan,          // permanent — the origin story
+        birria, naturalWine, boba, baklava,
+        mochi, cocktails, sake, churros,
     ]
+
+    /// All categories including legacy ones that may still exist in Firestore.
+    /// Use `allCategories` for the picker grid; use this for decoding/lookup.
+    static let allKnownCategories: [FoodCategory] = allCategories + [crepes]
 
     // MARK: - Default picks (used when user hasn't chosen yet)
 
@@ -338,15 +357,16 @@ extension FoodCategory {
     // MARK: - Lookup helpers
 
     /// Returns the FoodCategory whose id matches the given string, or nil if not found.
+    /// Checks allKnownCategories (including legacy ones) for backward compat.
     static func by(id: String) -> FoodCategory? {
-        allCategories.first { $0.id == id }
+        allKnownCategories.first { $0.id == id }
     }
 
     /// Convenience initializer from a SpotCategory.
     /// Since SpotCategory.rawValue == FoodCategory.id by design, this always succeeds
     /// for any SpotCategory case that was added alongside its FoodCategory counterpart.
     init?(spotCategory: SpotCategory) {
-        guard let match = FoodCategory.allCategories.first(where: { $0.id == spotCategory.rawValue }) else {
+        guard let match = FoodCategory.allKnownCategories.first(where: { $0.id == spotCategory.rawValue }) else {
             return nil
         }
         self = match

@@ -3,12 +3,17 @@ import SwiftUI
 /// Full-screen grid where the user selects up to `UserPicksService.maxPicks` categories.
 /// Presented as a sheet from MyPicksTabView.
 ///
-/// NOTE: ForEach is intentionally avoided in this file due to a SwiftUICore/SwiftUI
+/// Includes all 20 hardcoded categories plus a "Create Your Own" button for custom picks.
+///
+/// NOTE: ForEach is intentionally avoided in some spots due to a SwiftUICore/SwiftUI
 /// module ambiguity that causes "ambiguous use of init" errors in Xcode 16 whole-module
 /// compilation. The category list is rendered via a helper wrapper instead.
 struct FoodCategoryGridView: View {
     @EnvironmentObject var picksService: UserPicksService
+    @EnvironmentObject var authService: AuthService
     @Environment(\.dismiss) private var dismiss
+
+    @State private var showCreateCustom = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -27,6 +32,9 @@ struct FoodCategoryGridView: View {
                             .fontWeight(.semibold)
                     }
                 }
+                .sheet(isPresented: $showCreateCustom) {
+                    CreateCustomCategoryView()
+                }
         }
     }
 
@@ -42,6 +50,12 @@ struct FoodCategoryGridView: View {
 
                 categoryGrid
                     .padding(.horizontal)
+
+                // Create custom button
+                if authService.isSignedIn && picksService.canCreateCustom {
+                    createCustomButton
+                        .padding(.horizontal)
+                }
             }
             .padding(.vertical)
         }
@@ -64,8 +78,42 @@ struct FoodCategoryGridView: View {
     }
 
     private var categoryGrid: some View {
-        // Wrap in a helper view to avoid ForEach module ambiguity at this call site.
         CategoryGridContent(columns: columns, picksService: picksService)
+    }
+
+    private var createCustomButton: some View {
+        Button {
+            showCreateCustom = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.purple)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create Your Own")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Can't find your category? Create a custom one.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(picksService.customPickCount)/\(CustomCategoryService.maxCustomPicks)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.purple.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

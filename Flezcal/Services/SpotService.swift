@@ -34,47 +34,58 @@ class SpotService: ObservableObject {
         isLoading = false
     }
 
-    // MARK: - Clean Up Comma-Separated Mezcal Entries
+    // MARK: - Clean Up Comma-Separated Offering Entries
 
-    /// Finds any mezcalOfferings entries that contain commas (bulk-entered),
-    /// splits them into individual brands, and re-saves the cleaned list.
+    /// Finds any offerings entries that contain commas (bulk-entered),
+    /// splits them into individual items, and re-saves the cleaned list.
     /// Safe to call on every launch — no-ops if data is already clean.
-    func cleanupCommaSeparatedMezcals() async {
+    func cleanupCommaSeparatedOfferings() async {
         for spot in spots {
-            guard let offerings = spot.mezcalOfferings, !offerings.isEmpty else { continue }
+            guard let allOfferings = spot.offerings, !allOfferings.isEmpty else { continue }
+            var needsUpdate = false
+            var cleanedAll: [String: [String]] = [:]
 
-            // Split any entry that contains a comma
-            var expanded: [String] = []
-            for entry in offerings {
-                let parts = entry.split(separator: ",").map {
-                    $0.trimmingCharacters(in: .whitespaces)
-                }.filter { !$0.isEmpty }
-                expanded.append(contentsOf: parts)
-            }
-
-            // Deduplicate (case-insensitive)
-            var cleaned: [String] = []
-            for brand in expanded {
-                if !cleaned.contains(where: { $0.localizedCaseInsensitiveCompare(brand) == .orderedSame }) {
-                    cleaned.append(brand)
+            for (catKey, items) in allOfferings {
+                guard !items.isEmpty else { continue }
+                var expanded: [String] = []
+                for entry in items {
+                    let parts = entry.split(separator: ",").map {
+                        $0.trimmingCharacters(in: .whitespaces)
+                    }.filter { !$0.isEmpty }
+                    expanded.append(contentsOf: parts)
+                }
+                var cleaned: [String] = []
+                for item in expanded {
+                    if !cleaned.contains(where: { $0.localizedCaseInsensitiveCompare(item) == .orderedSame }) {
+                        cleaned.append(item)
+                    }
+                }
+                cleanedAll[catKey] = cleaned
+                if cleaned.count != items.count || Set(cleaned.map { $0.lowercased() }) != Set(items.map { $0.lowercased() }) {
+                    needsUpdate = true
                 }
             }
 
-            // Only update if the content actually changed (count or entries differ)
-            let cleanedSet = Set(cleaned.map { $0.lowercased() })
-            let originalSet = Set(offerings.map { $0.lowercased() })
-            guard cleanedSet != originalSet || cleaned.count != offerings.count else { continue }
+            guard needsUpdate else { continue }
 
             do {
-                let data: [String: Any] = ["mezcalOfferings": cleaned]
+                var data: [String: Any] = ["offerings": cleanedAll]
+                if let mezcal = cleanedAll["mezcal"] {
+                    data["mezcalOfferings"] = mezcal
+                }
                 try await db.collection(collectionName).document(spot.id).updateData(data)
                 if let index = spots.firstIndex(where: { $0.id == spot.id }) {
-                    spots[index].mezcalOfferings = cleaned
+                    spots[index].offerings = cleanedAll
                 }
             } catch {
                 // Non-fatal — will retry next launch
             }
         }
+    }
+
+    /// Legacy name — routes to cleanupCommaSeparatedOfferings
+    func cleanupCommaSeparatedMezcals() async {
+        await cleanupCommaSeparatedOfferings()
     }
 
     // MARK: - Deduplicate Existing Spots
@@ -120,14 +131,20 @@ class SpotService: ObservableObject {
             // Keep the oldest entry
             guard let keeper = groupSpots.min(by: { $0.addedDate < $1.addedDate }) else { continue }
 
-            // Merge ALL mezcal offerings from every entry in the group
-            var allOfferings: [String] = []
+            // Merge ALL offerings from every entry in the group
+            var mergedOfferings: [String: [String]] = [:]
             var allCategories: [SpotCategory] = []
             for member in groupSpots {
-                for offering in member.mezcalOfferings ?? [] {
-                    let trimmed = offering.trimmingCharacters(in: .whitespaces)
-                    if !trimmed.isEmpty && !allOfferings.contains(where: { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }) {
-                        allOfferings.append(trimmed)
+                if let memberOfferings = member.offerings {
+                    for (catKey, items) in memberOfferings {
+                        var existing = mergedOfferings[catKey] ?? []
+                        for item in items {
+                            let trimmed = item.trimmingCharacters(in: .whitespaces)
+                            if !trimmed.isEmpty && !existing.contains(where: { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }) {
+                                existing.append(trimmed)
+                            }
+                        }
+                        mergedOfferings[catKey] = existing
                     }
                 }
                 for cat in member.categories {
@@ -139,8 +156,10 @@ class SpotService: ObservableObject {
             }
 
             // Apply merged data to the kept entry
-            if !allOfferings.isEmpty {
-                _ = await addMezcalOfferings(spotID: keeper.id, newOfferings: allOfferings)
+            for (catKey, items) in mergedOfferings where !items.isEmpty {
+                if let cat = SpotCategory(rawValue: catKey) {
+                    _ = await addOfferings(spotID: keeper.id, category: cat, newOfferings: items)
+                }
             }
             if allCategories.count > keeper.categories.count {
                 _ = await addCategories(spotID: keeper.id, newCategories: allCategories)
@@ -197,14 +216,15 @@ class SpotService: ObservableObject {
         }
     }
 
-    // MARK: - Add Mezcals to Existing Spot
+    // MARK: - Add Offerings to Existing Spot
 
-    func addMezcalOfferings(spotID: String, newOfferings: [String]) async -> Bool {
+    /// Add offerings for a specific category. Mezcal offerings are also mirrored
+    /// to the legacy "mezcalOfferings" field for backward compatibility.
+    func addOfferings(spotID: String, category: SpotCategory, newOfferings: [String]) async -> Bool {
         guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
 
-        let existingOfferings = spots[index].mezcalOfferings ?? []
-        // Merge and deduplicate (case-insensitive)
-        var merged = existingOfferings
+        let existing = spots[index].offerings(for: category)
+        var merged = existing
         for offering in newOfferings {
             let trimmed = offering.trimmingCharacters(in: .whitespaces)
             if !trimmed.isEmpty && !merged.contains(where: { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }) {
@@ -213,14 +233,25 @@ class SpotService: ObservableObject {
         }
 
         do {
-            let data: [String: Any] = ["mezcalOfferings": merged]
+            var allOfferings = spots[index].offerings ?? [:]
+            allOfferings[category.rawValue] = merged
+            var data: [String: Any] = ["offerings": allOfferings]
+            // Legacy compat: also write mezcalOfferings for mezcal
+            if category == .mezcal {
+                data["mezcalOfferings"] = merged
+            }
             try await db.collection(collectionName).document(spotID).updateData(data)
-            spots[index].mezcalOfferings = merged
+            spots[index].offerings = allOfferings
             return true
         } catch {
-            errorMessage = "Failed to update mezcal offerings: \(error.localizedDescription)"
+            errorMessage = "Failed to update offerings: \(error.localizedDescription)"
             return false
         }
+    }
+
+    /// Legacy wrapper — calls addOfferings for mezcal category.
+    func addMezcalOfferings(spotID: String, newOfferings: [String]) async -> Bool {
+        await addOfferings(spotID: spotID, category: .mezcal, newOfferings: newOfferings)
     }
 
     // MARK: - Update Spot Rating
@@ -235,20 +266,6 @@ class SpotService: ObservableObject {
             }
         } catch {
             errorMessage = "Failed to update rating: \(error.localizedDescription)"
-        }
-    }
-
-    // MARK: - Update Mezcal Offerings
-
-    func updateMezcalOfferings(spotID: String, offerings: [String]) async {
-        do {
-            let data: [String: Any] = ["mezcalOfferings": offerings]
-            try await db.collection(collectionName).document(spotID).updateData(data)
-            if let index = spots.firstIndex(where: { $0.id == spotID }) {
-                spots[index].mezcalOfferings = offerings
-            }
-        } catch {
-            errorMessage = "Failed to update offerings: \(error.localizedDescription)"
         }
     }
 

@@ -14,7 +14,8 @@ struct SpotDetailView: View {
     @State private var showWriteReview = false
     @State private var showReportSpotAlert = false
     @State private var showReportConfirmation = false
-    @State private var showAddMezcals = false
+    @State private var showAddOfferings = false
+    @State private var addOfferingsCategory: SpotCategory = .mezcal
     @State private var showPhotoPicker = false
     @State private var pickerItem: PhotosPickerItem?
     @State private var localPhotoURL: String?   // optimistic local update after upload
@@ -118,21 +119,11 @@ struct SpotDetailView: View {
                             importedSpotBanner
                         }
 
-                        // Rating row — on its own line so it never gets clipped
-                        if liveSpot.reviewCount > 0 {
-                            HStack(spacing: 6) {
-                                StarDisplayView(rating: liveSpot.averageRating)
-                                Text(String(format: "%.1f", liveSpot.averageRating))
-                                    .fontWeight(.semibold)
-                                Text("(\(liveSpot.reviewCount) review\(liveSpot.reviewCount == 1 ? "" : "s"))")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline)
-                        } else {
-                            Text("No reviews yet")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+                        // Rating row
+                        AverageRatingView(
+                            averageRating: liveSpot.averageRating,
+                            reviewCount: liveSpot.reviewCount
+                        )
 
                         // Fun badges row
                         if liveSpot.isPerfectPairing || liveSpot.isHiddenGem || liveSpot.isRecentlyVerified || reviewService.hasTranscendentReview {
@@ -170,16 +161,18 @@ struct SpotDetailView: View {
                             .foregroundStyle(.green)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        // Mezcal offerings
-                        if liveSpot.hasMezcal {
+                        // Offerings per category
+                        ForEach(liveSpot.categories) { cat in
+                            let catOfferings = liveSpot.offerings(for: cat)
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text("Mezcal Menu")
+                                    Text(cat.offeringsLabel)
                                         .font(.headline)
                                     Spacer()
                                     if authService.isSignedIn {
                                         Button {
-                                            showAddMezcals = true
+                                            addOfferingsCategory = cat
+                                            showAddOfferings = true
                                         } label: {
                                             Label("Add", systemImage: "plus.circle")
                                                 .font(.caption)
@@ -188,16 +181,21 @@ struct SpotDetailView: View {
                                 }
                                 .padding(.top, 4)
 
-                                if let offerings = liveSpot.mezcalOfferings, !offerings.isEmpty {
-                                    ForEach(offerings, id: \.self) { mezcal in
+                                if !catOfferings.isEmpty {
+                                    ForEach(catOfferings, id: \.self) { item in
                                         HStack(spacing: 6) {
-                                            VeladoraIcon(size: 16)
-                                            Text(mezcal)
+                                            if cat == .mezcal {
+                                                VeladoraIcon(size: 16)
+                                            } else {
+                                                Text(cat.emoji)
+                                                    .font(.caption)
+                                            }
+                                            Text(item)
                                                 .font(.subheadline)
                                         }
                                     }
                                 } else {
-                                    Text("No mezcals listed yet. Be the first to add some!")
+                                    Text("No \(cat.offeringSingular)s listed yet. Be the first to add some!")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -234,17 +232,17 @@ struct SpotDetailView: View {
                         .tint(.orange)
 
                         if authService.isSignedIn {
-                            let alreadyReviewed = reviewService.hasUserReviewed(userID: authService.userID ?? "")
+                            let alreadyRated = reviewService.hasUserReviewed(userID: authService.userID ?? "")
                             Button {
                                 showWriteReview = true
                             } label: {
-                                Label(alreadyReviewed ? "Reviewed" : "Review", systemImage: alreadyReviewed ? "checkmark" : "star.bubble")
+                                Label(alreadyRated ? "Rated" : "Rate", systemImage: alreadyRated ? "checkmark" : "flame")
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(.orange)
-                            .disabled(alreadyReviewed)
+                            .disabled(alreadyRated)
                         }
                     }
                     .padding(.horizontal)
@@ -279,9 +277,9 @@ struct SpotDetailView: View {
                     Divider()
                         .padding(.horizontal)
 
-                    // Reviews section
+                    // Ratings section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Reviews")
+                        Text("Ratings")
                             .font(.headline)
                             .padding(.horizontal)
 
@@ -290,7 +288,7 @@ struct SpotDetailView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding()
                         } else if reviewService.visibleReviews.isEmpty {
-                            Text("No reviews yet. Be the first!")
+                            Text("No ratings yet. Be the first!")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
@@ -320,8 +318,8 @@ struct SpotDetailView: View {
             .sheet(isPresented: $showWriteReview) {
                 WriteReviewView(spot: spot, reviewService: reviewService)
             }
-            .sheet(isPresented: $showAddMezcals) {
-                AddMezcalsSheet(spot: liveSpot)
+            .sheet(isPresented: $showAddOfferings) {
+                AddOfferingsSheet(spot: liveSpot, category: addOfferingsCategory)
             }
             .sheet(isPresented: $showAddCategory) {
                 AddCategorySheet(
@@ -514,7 +512,7 @@ struct ReviewCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header: name + stars + date
+            // Header: name + rating badge + date
             HStack {
                 Text(review.userName)
                     .font(.subheadline)
@@ -522,17 +520,30 @@ struct ReviewCardView: View {
 
                 Spacer()
 
-                StarDisplayView(rating: Double(review.rating))
+                RatingLevelBadge(rating: review.rating)
 
                 Text(review.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
 
-            // Comment
-            Text(review.comment)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
+            // Category tag (if present on newer reviews)
+            if let catID = review.category,
+               let cat = SpotCategory(rawValue: catID) {
+                HStack(spacing: 4) {
+                    Text(cat.emoji)
+                    Text(cat.displayName)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            // Legacy comment (shown if non-empty for old reviews)
+            if !review.comment.isEmpty {
+                Text(review.comment)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+            }
 
             // Report button (don't show for own reviews)
             if review.userID != currentUserID {
@@ -566,7 +577,7 @@ struct ReviewCardView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Report this review as inappropriate? Reviews with multiple reports will be automatically hidden.")
+            Text("Report this rating as inappropriate? Ratings with multiple reports will be automatically hidden.")
         }
         .alert("Report Submitted", isPresented: $showReportConfirmation) {
             Button("OK", role: .cancel) {}
@@ -576,10 +587,11 @@ struct ReviewCardView: View {
     }
 }
 
-// MARK: - Add Mezcals Sheet
+// MARK: - Add Offerings Sheet (generic for all categories)
 
-struct AddMezcalsSheet: View {
+struct AddOfferingsSheet: View {
     let spot: Spot
+    let category: SpotCategory
     @EnvironmentObject var spotService: SpotService
     @Environment(\.dismiss) private var dismiss
 
@@ -596,16 +608,17 @@ struct AddMezcalsSheet: View {
                         .font(.title3)
                         .fontWeight(.bold)
 
-                    // Existing mezcals
-                    if let existing = spot.mezcalOfferings, !existing.isEmpty {
+                    // Existing offerings for this category
+                    let existing = spot.offerings(for: category)
+                    if !existing.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Already Listed")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundStyle(.secondary)
 
-                            ForEach(existing, id: \.self) { mezcal in
-                                Label(mezcal, systemImage: "checkmark.circle.fill")
+                            ForEach(existing, id: \.self) { item in
+                                Label(item, systemImage: "checkmark.circle.fill")
                                     .font(.subheadline)
                                     .foregroundStyle(.green)
                             }
@@ -614,17 +627,22 @@ struct AddMezcalsSheet: View {
                         Divider()
                     }
 
-                    // New mezcals
-                    Text("Add New Mezcals")
+                    // New offerings
+                    Text("Add \(category.offeringsLabel)")
                         .font(.headline)
 
-                    Text("Add mezcals that aren't listed above.")
+                    Text(category.offeringsExamples)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     ForEach(newOfferings.indices, id: \.self) { index in
                         HStack {
-                            MezcalInputField(text: $newOfferings[index], placeholder: "One brand per field")
+                            if category == .mezcal {
+                                MezcalInputField(text: $newOfferings[index], placeholder: "One \(category.offeringSingular) per field")
+                            } else {
+                                TextField("One \(category.offeringSingular) per field", text: $newOfferings[index])
+                                    .textFieldStyle(.roundedBorder)
+                            }
 
                             if newOfferings.count > 1 {
                                 Button {
@@ -646,14 +664,14 @@ struct AddMezcalsSheet: View {
 
                     // Save button
                     Button {
-                        saveMezcals()
+                        saveOfferings()
                     } label: {
                         if isSaving {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                         } else {
-                            Label("Save Mezcals", systemImage: "checkmark.circle.fill")
+                            Label("Save \(category.offeringsLabel)", systemImage: "checkmark.circle.fill")
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -665,33 +683,32 @@ struct AddMezcalsSheet: View {
                 }
                 .padding()
             }
-            .navigationTitle("Add Mezcals")
+            .navigationTitle("Add \(category.offeringsLabel)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
             }
-            .alert("Mezcals Added!", isPresented: $showSuccess) {
+            .alert("\(category.offeringsLabel) Added!", isPresented: $showSuccess) {
                 Button("OK") { dismiss() }
             } message: {
-                Text("The mezcal list for \(spot.name) has been updated.")
+                Text("The \(category.offeringsLabel.lowercased()) for \(spot.name) have been updated.")
             }
         }
     }
 
     private var filteredOfferings: [String] {
-        // Split on commas so "A, B, C" becomes three separate brands
         newOfferings
             .flatMap { $0.split(separator: ",") }
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }
 
-    private func saveMezcals() {
+    private func saveOfferings() {
         isSaving = true
         Task {
-            let success = await spotService.addMezcalOfferings(spotID: spot.id, newOfferings: filteredOfferings)
+            let success = await spotService.addOfferings(spotID: spot.id, category: category, newOfferings: filteredOfferings)
             isSaving = false
             if success {
                 let generator = UINotificationFeedbackGenerator()

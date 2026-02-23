@@ -17,8 +17,19 @@ struct Spot: Identifiable, Codable, Hashable {
     var averageRating: Double
     var reviewCount: Int
 
-    // Mezcal-specific: list of mezcal brands/bottles available
-    var mezcalOfferings: [String]?
+    // Category offerings — brands, styles, varieties contributed by users.
+    // Originally mezcal-only ("mezcalOfferings"), now generalised to all categories.
+    // Firestore field: "offerings" (new) or "mezcalOfferings" (legacy).
+    var offerings: [String: [String]]?
+
+    // Legacy accessor — reads mezcal offerings from the new structure.
+    var mezcalOfferings: [String]? {
+        get { offerings?["mezcal"] }
+        set {
+            if offerings == nil { offerings = [:] }
+            offerings?["mezcal"] = newValue
+        }
+    }
 
     // Website URL — saved at confirm time from MKMapItem.url (optional)
     // Used by SpotDetailView to perform a cache-first website check when adding categories.
@@ -57,6 +68,16 @@ struct Spot: Identifiable, Codable, Hashable {
     /// Whether this spot has mezcal
     var hasMezcal: Bool { categories.contains(.mezcal) }
 
+    /// Offerings for a specific category on this spot
+    func offerings(for category: SpotCategory) -> [String] {
+        offerings?[category.rawValue] ?? []
+    }
+
+    /// Whether this spot has any offerings listed for any category
+    var hasAnyOfferings: Bool {
+        offerings?.values.contains(where: { !$0.isEmpty }) ?? false
+    }
+
     /// Primary category (for icon color when only one is needed)
     var primaryCategory: SpotCategory {
         if categories.contains(.flan) && categories.contains(.mezcal) {
@@ -88,11 +109,13 @@ struct Spot: Identifiable, Codable, Hashable {
     // MARK: - Backward Compatibility
 
     /// Supports reading old Firestore documents that have a single "category" field
+    /// and old "mezcalOfferings" field (migrated to "offerings" dict).
     enum CodingKeys: String, CodingKey {
         case id, name, address, latitude, longitude, mapItemName
         case categories, category  // "category" for old data
         case addedByUserID, addedDate, averageRating, reviewCount
-        case mezcalOfferings
+        case offerings            // new: { "mezcal": [...], "pizza": [...] }
+        case mezcalOfferings      // legacy: [String] — auto-migrated on read
         case websiteURL
         case photoURL, userPhotoURL
         case isReported, reportCount, reportedByUserIDs, isHidden
@@ -105,7 +128,7 @@ struct Spot: Identifiable, Codable, Hashable {
          mapItemName: String, categories: [SpotCategory],
          addedByUserID: String, addedDate: Date,
          averageRating: Double, reviewCount: Int,
-         mezcalOfferings: [String]? = nil,
+         offerings: [String: [String]]? = nil,
          websiteURL: String? = nil,
          photoURL: String? = nil,
          userPhotoURL: String? = nil,
@@ -123,7 +146,7 @@ struct Spot: Identifiable, Codable, Hashable {
         self.addedDate = addedDate
         self.averageRating = averageRating
         self.reviewCount = reviewCount
-        self.mezcalOfferings = mezcalOfferings
+        self.offerings = offerings
         self.websiteURL = websiteURL
         self.photoURL = photoURL
         self.userPhotoURL = userPhotoURL
@@ -154,7 +177,14 @@ struct Spot: Identifiable, Codable, Hashable {
         addedDate = try container.decode(Date.self, forKey: .addedDate)
         averageRating = try container.decode(Double.self, forKey: .averageRating)
         reviewCount = try container.decode(Int.self, forKey: .reviewCount)
-        mezcalOfferings = try container.decodeIfPresent([String].self, forKey: .mezcalOfferings)
+        // Read new "offerings" dict first, fall back to legacy "mezcalOfferings" array
+        if let dict = try? container.decodeIfPresent([String: [String]].self, forKey: .offerings) {
+            offerings = dict
+        } else if let legacy = try? container.decodeIfPresent([String].self, forKey: .mezcalOfferings), !legacy.isEmpty {
+            offerings = ["mezcal": legacy]
+        } else {
+            offerings = nil
+        }
         websiteURL = try container.decodeIfPresent(String.self, forKey: .websiteURL)
         photoURL = try container.decodeIfPresent(String.self, forKey: .photoURL)
         userPhotoURL = try container.decodeIfPresent(String.self, forKey: .userPhotoURL)
@@ -180,7 +210,9 @@ struct Spot: Identifiable, Codable, Hashable {
         try container.encode(addedDate, forKey: .addedDate)
         try container.encode(averageRating, forKey: .averageRating)
         try container.encode(reviewCount, forKey: .reviewCount)
-        try container.encodeIfPresent(mezcalOfferings, forKey: .mezcalOfferings)
+        try container.encodeIfPresent(offerings, forKey: .offerings)
+        // Also write legacy mezcalOfferings for backward compat with older app versions
+        try container.encodeIfPresent(offerings?["mezcal"], forKey: .mezcalOfferings)
         try container.encodeIfPresent(websiteURL, forKey: .websiteURL)
         try container.encodeIfPresent(photoURL, forKey: .photoURL)
         try container.encodeIfPresent(userPhotoURL, forKey: .userPhotoURL)

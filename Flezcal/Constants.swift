@@ -43,10 +43,11 @@ enum AppConstants {
 /// Firestore collection and document path constants.
 /// Add new entries here when introducing new collections — never use raw strings elsewhere.
 enum FirestoreCollections {
-    static let spots   = "spots"
-    static let reviews = "reviews"
-    static let app     = "app"
-    static let welcome = "welcome"    // document under "app" collection
+    static let spots             = "spots"
+    static let reviews           = "reviews"
+    static let customCategories  = "customCategories"
+    static let app               = "app"
+    static let welcome           = "welcome"    // document under "app" collection
 }
 
 /// Tab index constants — update if tab order changes in ContentView.

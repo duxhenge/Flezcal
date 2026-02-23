@@ -726,12 +726,12 @@ struct SpotListRowView: View {
                         .monospacedDigit()
                         .fixedSize()
                 }
-                if spot.reviewCount > 0 {
+                if spot.reviewCount > 0,
+                   let level = RatingLevel.from(max(1, min(5, Int(spot.averageRating.rounded())))) {
                     HStack(spacing: 2) {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.orange)
+                        Text(level.emoji)
                             .font(.caption2)
-                        Text(String(format: "%.1f", spot.averageRating))
+                        Text(level.label)
                             .font(.caption)
                             .fontWeight(.medium)
                     }

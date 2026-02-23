@@ -8,9 +8,15 @@ struct WriteReviewView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var rating: Int = 0
-    @State private var comment: String = ""
+    @State private var selectedCategory: SpotCategory
     @State private var isSaving = false
-    @State private var showError = false
+
+    init(spot: Spot, reviewService: ReviewService) {
+        self.spot = spot
+        self._reviewService = ObservedObject(wrappedValue: reviewService)
+        // Default to primary category
+        self._selectedCategory = State(initialValue: spot.primaryCategory)
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,56 +45,58 @@ struct WriteReviewView: View {
                         .font(.title3)
                         .fontWeight(.bold)
 
-                    // Flan emoji rating
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Your Rating")
-                            .font(.headline)
-
-                        FlanRatingView(rating: $rating)
-
-                        if rating > 0 {
-                            Text(ReviewTitleGenerator.title(for: rating))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .transition(.opacity)
-                                .animation(.easeInOut(duration: 0.2), value: rating)
-                        }
-                    }
-
-                    // Comment
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Your Review")
+                    // Category picker (if spot has multiple categories)
+                    if spot.categories.count > 1 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("What are you rating?")
                                 .font(.headline)
-                            Spacer()
-                            Text("\(comment.count)/500")
-                                .font(.caption2)
-                                .foregroundStyle(comment.count > 500 ? .red : .secondary)
-                        }
 
-                        TextEditor(text: $comment)
-                            .frame(minHeight: 120)
-                            .padding(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                            )
-                            .overlay(alignment: .topLeading) {
-                                if comment.isEmpty {
-                                    Text("How was the wobble? Did the caramel pool properly?")
-                                        .foregroundStyle(.secondary.opacity(0.5))
+                            HStack(spacing: 8) {
+                                ForEach(spot.categories) { cat in
+                                    Button {
+                                        withAnimation {
+                                            selectedCategory = cat
+                                            rating = 0
+                                        }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(cat.emoji)
+                                            Text(cat.displayName)
+                                        }
                                         .font(.subheadline)
+                                        .fontWeight(.medium)
                                         .padding(.horizontal, 12)
-                                        .padding(.vertical, 16)
-                                        .allowsHitTesting(false)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            selectedCategory == cat
+                                                ? cat.color.opacity(0.15)
+                                                : Color(.systemGray6)
+                                        )
+                                        .foregroundStyle(
+                                            selectedCategory == cat
+                                                ? cat.color
+                                                : .primary
+                                        )
+                                        .clipShape(Capsule())
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(selectedCategory == cat
+                                                        ? cat.color.opacity(0.3)
+                                                        : Color.clear,
+                                                        lineWidth: 1.5)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
-                            .onChange(of: comment) { _, newValue in
-                                if newValue.count > 500 {
-                                    comment = String(newValue.prefix(500))
-                                }
-                            }
+                        }
                     }
+
+                    // Passionate rating picker
+                    PassionateRatingView(
+                        rating: $rating,
+                        categoryName: selectedCategory.displayName.lowercased()
+                    )
 
                     // Error message
                     if let error = reviewService.errorMessage {
@@ -103,14 +111,14 @@ struct WriteReviewView: View {
 
                     // Submit button
                     Button {
-                        submitReview()
+                        submitRating()
                     } label: {
                         if isSaving {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                         } else {
-                            Text("Submit Review")
+                            Text("Submit Rating")
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -118,11 +126,11 @@ struct WriteReviewView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
-                    .disabled(rating == 0 || comment.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                    .disabled(rating == 0 || isSaving)
                 }
                 .padding()
             }
-            .navigationTitle("Write Review")
+            .navigationTitle("Rate \(selectedCategory.displayName)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -132,9 +140,9 @@ struct WriteReviewView: View {
         }
     }
 
-    private func submitReview() {
+    private func submitRating() {
         guard let userID = authService.userID else {
-            reviewService.errorMessage = "You must be signed in to submit a review."
+            reviewService.errorMessage = "You must be signed in to submit a rating."
             return
         }
 
@@ -145,8 +153,9 @@ struct WriteReviewView: View {
             userID: userID,
             userName: authService.displayName,
             rating: rating,
-            comment: comment.trimmingCharacters(in: .whitespaces),
-            date: Date()
+            comment: "",  // no written reviews in the new system
+            date: Date(),
+            category: selectedCategory.rawValue
         )
 
         Task {

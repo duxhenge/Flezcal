@@ -31,6 +31,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     case baklava
 
     // Savory
+    case sushi
     case ramen
     case tacos
     case dimSum       = "dim_sum"
@@ -57,6 +58,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .gelato:          return "Gelato"
         case .crepes:          return "Crepes"
         case .baklava:         return "Baklava"
+        case .sushi:           return "Sushi"
         case .ramen:           return "Ramen"
         case .tacos:           return "Tacos"
         case .dimSum:          return "Dim Sum"
@@ -83,6 +85,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .gelato:          return "🍨"
         case .crepes:          return "🥞"
         case .baklava:         return "🍯"
+        case .sushi:           return "🍣"
         case .ramen:           return "🍜"
         case .tacos:           return "🌮"
         case .dimSum:          return "🥟"
@@ -109,6 +112,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .gelato:          return "fork.knife"
         case .crepes:          return "fork.knife"
         case .baklava:         return "fork.knife"
+        case .sushi:           return "fork.knife"
         case .ramen:           return "fork.knife"
         case .tacos:           return "fork.knife"
         case .dimSum:          return "fork.knife"
@@ -135,6 +139,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .gelato:          return Color(red: 0.4, green: 0.7, blue: 0.9)
         case .crepes:          return Color(red: 0.9, green: 0.75, blue: 0.4)
         case .baklava:         return Color(red: 0.75, green: 0.55, blue: 0.1)
+        case .sushi:           return Color(red: 0.9, green: 0.3, blue: 0.3)
         case .ramen:           return Color(red: 0.85, green: 0.2, blue: 0.1)
         case .tacos:           return Color(red: 0.95, green: 0.6, blue: 0.0)
         case .dimSum:          return Color(red: 0.8, green: 0.15, blue: 0.15)
@@ -174,6 +179,8 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
             return ["crepes", "crêpes", "creperie", "crêperie", "sweet crepes", "savory crepes"]
         case .baklava:
             return ["baklava", "baklawa", "turkish sweets", "pistachio baklava", "pastry", "middle eastern sweets"]
+        case .sushi:
+            return ["sushi", "omakase", "nigiri", "sashimi", "sushi bar", "maki", "sushi roll"]
         case .ramen:
             return ["ramen", "tonkotsu", "shoyu ramen", "miso ramen", "ramen shop", "noodle soup"]
         case .tacos:
@@ -207,6 +214,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .gelato:          return "Search for a gelateria or artisan ice cream shop."
         case .crepes:          return "Search for a creperie or cafe that serves crepes."
         case .baklava:         return "Search for a bakery or shop that makes baklava."
+        case .sushi:           return "Search for a sushi bar or Japanese restaurant."
         case .ramen:           return "Search for a ramen restaurant."
         case .tacos:           return "Search for a taqueria or taco spot."
         case .dimSum:          return "Search for a dim sum restaurant."
@@ -217,19 +225,87 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether spots in this category can list specific brand offerings
-    var supportsOfferings: Bool {
+    /// All categories now support user-contributed offerings (brands, styles, types).
+    var supportsOfferings: Bool { true }
+
+    /// Label for the offerings section header
+    var offeringsLabel: String {
         switch self {
-        case .mezcal: return true
-        default:      return false
+        case .mezcal:          return "Mezcal Brands"
+        case .naturalWine:     return "Wine Styles"
+        case .craftBeer:       return "Beer Styles"
+        case .sake:            return "Sake Types"
+        case .specialtyCoffee: return "Coffee Methods"
+        case .boba:            return "Drink Flavors"
+        case .cocktails:       return "Cocktail Styles"
+        case .flan:            return "Flan Styles"
+        case .mochi:           return "Mochi Types"
+        case .churros:         return "Churro Varieties"
+        case .gelato:          return "Gelato Flavors"
+        case .crepes:          return "Crepe Varieties"
+        case .baklava:         return "Baklava Types"
+        case .sushi:           return "Sushi Highlights"
+        case .ramen:           return "Ramen Styles"
+        case .tacos:           return "Taco Types"
+        case .dimSum:          return "Dim Sum Dishes"
+        case .pizza:           return "Pizza Styles"
+        case .birria:          return "Birria Styles"
+        case .oysters:         return "Oyster Varieties"
+        case .pho:             return "Pho Types"
         }
     }
 
-    /// Plural label for offerings input section
-    var offeringsLabel: String {
+    /// Singular label for an offering entry (e.g. "brand", "style", "flavor")
+    var offeringSingular: String {
         switch self {
-        case .mezcal: return "Mezcal Brands"
-        default:      return ""
+        case .mezcal:          return "brand"
+        case .naturalWine:     return "style"
+        case .craftBeer:       return "style"
+        case .sake:            return "type"
+        case .specialtyCoffee: return "method"
+        case .boba:            return "flavor"
+        case .cocktails:       return "style"
+        case .flan:            return "style"
+        case .mochi:           return "type"
+        case .churros:         return "variety"
+        case .gelato:          return "flavor"
+        case .crepes:          return "variety"
+        case .baklava:         return "type"
+        case .sushi:           return "highlight"
+        case .ramen:           return "style"
+        case .tacos:           return "type"
+        case .dimSum:          return "dish"
+        case .pizza:           return "style"
+        case .birria:          return "style"
+        case .oysters:         return "variety"
+        case .pho:             return "type"
+        }
+    }
+
+    /// Example offerings shown as placeholder hints
+    var offeringsExamples: String {
+        switch self {
+        case .mezcal:          return "e.g. Del Maguey, Vago, Bozal"
+        case .naturalWine:     return "e.g. Pet-Nat, Orange, Skin Contact"
+        case .craftBeer:       return "e.g. Hazy IPA, Stout, Sour"
+        case .sake:            return "e.g. Junmai, Daiginjo, Nigori"
+        case .specialtyCoffee: return "e.g. Pour Over, Espresso, Cold Brew"
+        case .boba:            return "e.g. Taro, Brown Sugar, Matcha"
+        case .cocktails:       return "e.g. Negroni, Old Fashioned, Mezcal Mule"
+        case .flan:            return "e.g. Classic, Coconut, Cheese Flan"
+        case .mochi:           return "e.g. Daifuku, Ice Cream, Strawberry"
+        case .churros:         return "e.g. Classic, Filled, Chocolate Dipped"
+        case .gelato:          return "e.g. Pistachio, Stracciatella, Hazelnut"
+        case .crepes:          return "e.g. Nutella, Savory Ham & Cheese"
+        case .baklava:         return "e.g. Pistachio, Walnut, Bird's Nest"
+        case .sushi:           return "e.g. Omakase, Chirashi, Salmon Nigiri"
+        case .ramen:           return "e.g. Tonkotsu, Shoyu, Miso, Tsukemen"
+        case .tacos:           return "e.g. Al Pastor, Carnitas, Suadero"
+        case .dimSum:          return "e.g. Har Gow, Siu Mai, Char Siu Bao"
+        case .pizza:           return "e.g. Margherita, Marinara, Diavola"
+        case .birria:          return "e.g. Tacos, Consomme, Quesabirria"
+        case .oysters:         return "e.g. Wellfleet, Kumamoto, Blue Point"
+        case .pho:             return "e.g. Tai (Rare Beef), Dac Biet (Special)"
         }
     }
 }

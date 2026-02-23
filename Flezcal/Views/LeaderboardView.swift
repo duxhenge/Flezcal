@@ -63,8 +63,8 @@ struct LeaderboardView: View {
                             Image(systemName: "mappin.circle.fill")
                                 .foregroundStyle(.orange)
                         }
-                        ScoringBadge(label: "Review", points: "+5") {
-                            Image(systemName: "star.bubble.fill")
+                        ScoringBadge(label: "Rating", points: "+5") {
+                            Image(systemName: "flame.fill")
                                 .foregroundStyle(.orange)
                         }
                         ScoringBadge(label: "Mezcal", points: "+3") {
@@ -191,8 +191,8 @@ struct MyRankCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                StatPill(value: "\(stats.reviewsWritten)", label: "Reviews") {
-                    Image(systemName: "star.bubble.fill")
+                StatPill(value: "\(stats.reviewsWritten)", label: "Ratings") {
+                    Image(systemName: "flame.fill")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -282,7 +282,7 @@ struct ContributorRow: View {
                         Text("\(stats.mezcalBrandsAdded)")
                     }
                     .fixedSize()
-                    Label("\(stats.reviewsWritten)", systemImage: "star.bubble")
+                    Label("\(stats.reviewsWritten)", systemImage: "flame")
                         .fixedSize()
                 }
                 .font(.caption2)
