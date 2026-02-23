@@ -400,29 +400,85 @@ struct SuggestedSpotSheet: View {
     }
 }
 
-// MARK: - Ghost Pin View
+/// MARK: - Ghost Pin View
 
-/// Semi-transparent dashed pin shown on the map for unconfirmed suggestions.
-/// All ghost pins look identical — website check only happens on tap.
+/// Two-tier ghost pin shown on the map for unconfirmed suggestions.
+///
+/// **Yellow (default):** Dashed outline, "?" center — unknown / not yet scanned.
+/// **Green (`isLikely`):** Solid outline, pulse animation, category badge — homepage
+/// HTML matched keywords for the user's active picks.
 struct GhostPinView: View {
     let category: FoodCategory
+    /// Set to true when the batch homepage pre-screen found keywords for this venue.
+    var isLikely: Bool = false
+    /// Categories matched during pre-screen — used for the badge icon on green pins.
+    var likelyCategories: [FoodCategory] = []
+
+    @State private var isPulsing = false
 
     var body: some View {
+        if isLikely {
+            greenPin
+        } else {
+            yellowPin
+        }
+    }
+
+    // MARK: - Yellow pin (unknown)
+
+    private var yellowPin: some View {
         ZStack {
             Circle()
-                .fill(.white.opacity(0.85))
+                .fill(Color.yellow.opacity(0.2))
                 .frame(width: 36, height: 36)
 
             Circle()
                 .strokeBorder(
                     style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
                 )
-                .foregroundStyle(category.color.opacity(0.85))
+                .foregroundStyle(Color.yellow.opacity(0.85))
                 .frame(width: 36, height: 36)
 
             Text("?")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(category.color.opacity(0.85))
+                .foregroundStyle(Color.yellow.opacity(0.85))
+        }
+    }
+
+    // MARK: - Green pin (likely match)
+
+    private var greenPin: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 38, height: 38)
+
+                Circle()
+                    .strokeBorder(lineWidth: 1.5)
+                    .foregroundStyle(Color.green.opacity(0.9))
+                    .frame(width: 38, height: 38)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.green)
+            }
+            .scaleEffect(isPulsing ? 1.08 : 1.0)
+            .animation(
+                .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear { isPulsing = true }
+
+            // Category badge — small circle with emoji at bottom-right
+            if let first = likelyCategories.first {
+                Text(first.emoji)
+                    .font(.system(size: 10))
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(.white))
+                    .overlay(Circle().stroke(Color.green.opacity(0.5), lineWidth: 0.5))
+                    .offset(x: 4, y: 4)
+            }
         }
     }
 }

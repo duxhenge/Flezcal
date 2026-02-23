@@ -39,6 +39,11 @@ struct MapTabView: View {
     @State private var websiteCheckTask: Task<Void, Never>? = nil
     private let websiteChecker = WebsiteCheckService()
 
+    // Batch pre-screen — homepage-only scan triggered after ghost pin fetch
+    @State private var preScreenTask: Task<Void, Never>? = nil
+    @State private var showNoMatchBanner = false
+    @State private var isPreScreening = false
+
     // MARK: - Helpers
 
     /// The picks currently active for fetching / filtering.
@@ -58,6 +63,48 @@ struct MapTabView: View {
         let a = CLLocation(latitude: last.latitude, longitude: last.longitude)
         let b = CLLocation(latitude: newCenter.latitude, longitude: newCenter.longitude)
         return a.distance(from: b) >= Self.fetchMoveThresholdMeters
+    }
+
+    /// Fetches ghost pin suggestions then kicks off the batch homepage pre-screen.
+    /// Call this everywhere that `fetchSuggestions` is called to ensure the
+    /// pre-screen always follows.
+    private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory]) {
+        Task {
+            await suggestionService.fetchSuggestions(
+                in: region,
+                existingSpots: spotService.spots,
+                picks: picks
+            )
+            // Kick off batch homepage pre-screen after pins appear
+            preScreenTask?.cancel()
+            showNoMatchBanner = false
+            suggestionService.preScreenComplete = false
+            isPreScreening = true
+            let suggestions = suggestionService.suggestions
+            preScreenTask = Task {
+                let results = await websiteChecker.batchPreScreen(
+                    suggestions: suggestions,
+                    picks: picks
+                )
+                guard !Task.isCancelled else {
+                    isPreScreening = false
+                    return
+                }
+                suggestionService.applyPreScreenResults(results)
+                isPreScreening = false
+                // Show "no quick matches" banner if zero green pins
+                let hasAnyLikely = suggestionService.suggestions.contains {
+                    $0.preScreenMatches?.isEmpty == false
+                }
+                if !hasAnyLikely && !suggestionService.suggestions.isEmpty {
+                    showNoMatchBanner = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(5))
+                        showNoMatchBanner = false
+                    }
+                }
+            }
+        }
     }
 
     private func bounds(for region: MKCoordinateRegion) -> RegionBounds {
@@ -184,9 +231,15 @@ struct MapTabView: View {
                 }
 
                 // Ghost pins — unconfirmed Apple Maps suggestions
+                // Yellow = unknown/not scanned. Green = homepage pre-screen found keywords.
                 ForEach(suggestionService.suggestions) { suggestion in
                     Annotation(suggestion.name, coordinate: suggestion.coordinate) {
-                        GhostPinView(category: suggestion.suggestedCategory)
+                        GhostPinView(
+                            category: suggestion.suggestedCategory,
+                            isLikely: suggestion.preScreenMatches?.isEmpty == false,
+                            likelyCategories: (suggestion.preScreenMatches ?? [])
+                                .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
+                        )
                             .onTapGesture {
                                 websiteCheckTask?.cancel()
                                 multiCheckResult = nil
@@ -242,14 +295,7 @@ struct MapTabView: View {
                 if bootFetchesRemaining > 0 {
                     bootFetchesRemaining -= 1
                     lastFetchedCenter = context.region.center
-                    let picks = activePicks
-                    Task {
-                        await suggestionService.fetchSuggestions(
-                            in: context.region,
-                            existingSpots: spotService.spots,
-                            picks: picks
-                        )
-                    }
+                    fetchAndPreScreen(in: context.region, picks: activePicks)
                 } else {
                     showSearchHereButton = true
                 }
@@ -263,14 +309,7 @@ struct MapTabView: View {
                 showSearchHereButton = false
                 guard let region = visibleRegion else { return }
                 lastFetchedCenter = region.center
-                let picks = activePicks
-                Task {
-                    await suggestionService.fetchSuggestions(
-                        in: region,
-                        existingSpots: spotService.spots,
-                        picks: picks
-                    )
-                }
+                fetchAndPreScreen(in: region, picks: activePicks)
             }
             .onChange(of: picksService.picks) { _, _ in
                 // User changed their picks in My Picks tab — re-fetch with new picks
@@ -278,13 +317,7 @@ struct MapTabView: View {
                 showSearchHereButton = false
                 guard let region = visibleRegion else { return }
                 lastFetchedCenter = region.center
-                Task {
-                    await suggestionService.fetchSuggestions(
-                        in: region,
-                        existingSpots: spotService.spots,
-                        picks: picksService.picks
-                    )
-                }
+                fetchAndPreScreen(in: region, picks: picksService.picks)
             }
             .onChange(of: pendingMapSuggestion) { _, newValue in
                 guard let suggestion = newValue else { return }
@@ -357,14 +390,7 @@ struct MapTabView: View {
                         showSearchHereButton = false
                         guard let region = visibleRegion else { return }
                         lastFetchedCenter = region.center
-                        let picks = activePicks
-                        Task {
-                            await suggestionService.fetchSuggestions(
-                                in: region,
-                                existingSpots: spotService.spots,
-                                picks: picks
-                            )
-                        }
+                        fetchAndPreScreen(in: region, picks: activePicks)
                     } label: {
                         Label("Search This Area", systemImage: "magnifyingglass")
                             .font(.subheadline)
@@ -379,6 +405,48 @@ struct MapTabView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeInOut(duration: 0.25), value: showSearchHereButton)
+            }
+
+            // "No quick matches" banner — shown when pre-screen found zero green pins
+            if showNoMatchBanner {
+                VStack {
+                    Text("No quick matches yet — tap any pin to search deeper")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                        .onTapGesture { showNoMatchBanner = false }
+                    Spacer()
+                }
+                .padding(.top, 60)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: showNoMatchBanner)
+            }
+
+            // Pre-screen scanning indicator
+            if isPreScreening {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Scanning menus…")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                    .padding(.bottom, 24)
+                }
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: isPreScreening)
             }
 
             // Loading overlay

@@ -16,6 +16,11 @@ struct SuggestedSpot: Identifiable, Equatable {
     /// The FoodCategory pick that produced this suggestion.
     let suggestedCategory: FoodCategory
 
+    /// Categories found during batch homepage pre-screen.
+    /// `nil` = not yet scanned. Empty set = scanned, nothing found.
+    /// Non-empty set = homepage HTML matched these category IDs.
+    var preScreenMatches: Set<String>? = nil
+
     var name: String { mapItem.name ?? "Unknown" }
     var coordinate: CLLocationCoordinate2D { mapItem.placemark.coordinate }
     var address: String { mapItem.placemark.formattedAddress ?? "" }
@@ -73,6 +78,8 @@ private func tier2Queries(for pick: FoodCategory) -> [(query: String, category: 
 class SuggestionService: ObservableObject {
     @Published var suggestions: [SuggestedSpot] = []
     @Published var isLoading = false
+    /// True once the batch homepage pre-screen has finished for the current suggestions.
+    @Published var preScreenComplete = false
 
     /// Dismissed suggestion IDs (stable String IDs, persisted for the session)
     private var dismissedIDs: Set<String> = []
@@ -209,5 +216,23 @@ class SuggestionService: ObservableObject {
     /// User confirmed a suggestion was added — remove it from suggestions
     func confirm(_ suggestion: SuggestedSpot) {
         suggestions.removeAll { $0.id == suggestion.id }
+    }
+
+    /// Updates suggestions in-place with batch pre-screen results.
+    /// Each suggestion gets its `preScreenMatches` set: non-empty if the
+    /// homepage HTML contained keywords for the user's active picks,
+    /// empty `Set()` if scanned but nothing found, or stays `nil` if
+    /// the venue had no fetchable URL.
+    func applyPreScreenResults(_ results: [String: Set<String>]) {
+        for i in suggestions.indices {
+            let id = suggestions[i].id
+            if let matched = results[id] {
+                suggestions[i].preScreenMatches = matched
+            } else if suggestions[i].preScreenMatches == nil {
+                // Mark as scanned-but-not-found (distinct from not-yet-scanned)
+                suggestions[i].preScreenMatches = Set()
+            }
+        }
+        preScreenComplete = true
     }
 }

@@ -99,6 +99,93 @@ actor WebsiteCheckService {
         return .notFound
     }
 
+    /// Homepage-only scan for batch pre-screening ghost pins.
+    /// Fetches homepages concurrently, scans for all category keywords, and
+    /// returns matched category IDs per suggestion ID.
+    /// NO Brave API calls. NO subpage crawling. Homepage only for speed.
+    ///
+    /// Results are filtered to the user's active picks so that only relevant
+    /// categories appear as "likely" on the map. The underlying htmlCache still
+    /// stores all 20 categories so a later full check gets a free cache hit.
+    func batchPreScreen(
+        suggestions: [SuggestedSpot],
+        picks: [FoodCategory]
+    ) async -> [String: Set<String>] {
+        let pickIDs = Set(picks.map(\.id))
+        var results: [String: Set<String>] = [:]
+
+        // Separate into cached (instant) and needs-fetch
+        var toFetch: [(id: String, url: URL)] = []
+
+        for suggestion in suggestions {
+            guard let url = suggestion.mapItem.url,
+                  !isSocialMediaURL(url) else {
+                continue
+            }
+            let key = url.absoluteString
+            if let cached = htmlCache[key] {
+                // Already scanned — filter to user's picks
+                let relevant = cached.intersection(pickIDs)
+                if !relevant.isEmpty {
+                    results[suggestion.id] = relevant
+                }
+            } else {
+                toFetch.append((id: suggestion.id, url: url))
+            }
+        }
+
+        // Fetch uncached homepages concurrently (max 10 at a time)
+        if !toFetch.isEmpty {
+            let fetched = await withTaskGroup(
+                of: (String, URL, Set<String>)?.self,
+                returning: [(String, URL, Set<String>)].self
+            ) { group in
+                // Limit concurrency to 10 by batching
+                var pending = 0
+                var index = 0
+                var collected: [(String, URL, Set<String>)] = []
+
+                while index < toFetch.count {
+                    while pending < 10 && index < toFetch.count {
+                        let item = toFetch[index]
+                        index += 1
+                        pending += 1
+                        group.addTask { [self] in
+                            guard let (html, isValid) = await self.fetchPage(item.url),
+                                  isValid else {
+                                return nil
+                            }
+                            let matched = await self.scanForCategories(in: html)
+                            return (item.id, item.url, matched)
+                        }
+                    }
+                    // Wait for one to finish before adding more
+                    if let result = await group.next() {
+                        pending -= 1
+                        if let r = result { collected.append(r) }
+                    }
+                }
+                // Drain remaining
+                for await result in group {
+                    if let r = result { collected.append(r) }
+                }
+                return collected
+            }
+
+            // Cache results and filter to picks
+            for (id, url, matched) in fetched {
+                htmlCache[url.absoluteString] = matched
+                let relevant = matched.intersection(pickIDs)
+                if !relevant.isEmpty {
+                    results[id] = relevant
+                }
+            }
+        }
+
+        print("[PreScreen] scanned \(toFetch.count) homepages, \(results.count) likely matches")
+        return results
+    }
+
     /// Check a single tapped venue — uses Brave Search as fallback when
     /// Apple Maps has no URL. Only call this for single user-initiated taps,
     /// never in a batch loop.
