@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flezcal — Find the food and drinks you crave</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #e8e8e8;
+            background: #0f1b2d;
+            line-height: 1.6;
+        }
+
+        a { color: #4ecdc4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 80px 24px 60px;
+            background: linear-gradient(135deg, #0f1b2d 0%, #1a3a4a 100%);
+        }
+        .hero-emoji { font-size: 72px; margin-bottom: 16px; }
+        .hero h1 {
+            font-size: 2.4rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        .hero h1 span { color: #e67e22; }
+        .hero p {
+            font-size: 1.15rem;
+            color: #b0bec5;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        /* Features */
+        .features {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 24px;
+            padding: 60px 24px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .feature {
+            flex: 1 1 240px;
+            max-width: 280px;
+            background: #162a3e;
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+        }
+        .feature-icon { font-size: 40px; margin-bottom: 12px; }
+        .feature h3 {
+            font-size: 1.05rem;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .feature p { font-size: 0.9rem; color: #90a4ae; }
+
+        /* Sections */
+        .section {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 48px 24px;
+            text-align: center;
+        }
+        .section h2 {
+            font-size: 1.5rem;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        .section p {
+            font-size: 1rem;
+            color: #b0bec5;
+            margin-bottom: 16px;
+        }
+
+        /* Owner card */
+        .owner-card {
+            background: #1a3a4a;
+            border: 1px solid #264d5e;
+            border-radius: 16px;
+            padding: 36px 28px;
+            max-width: 580px;
+            margin: 0 auto 48px;
+            text-align: center;
+        }
+        .owner-card h2 {
+            font-size: 1.4rem;
+            color: #e67e22;
+            margin-bottom: 10px;
+        }
+        .owner-card p { color: #b0bec5; font-size: 0.95rem; margin-bottom: 14px; }
+
+        /* App Store badge placeholder */
+        .app-badge {
+            display: inline-block;
+            background: #fff;
+            color: #0f1b2d;
+            font-weight: 700;
+            font-size: 1rem;
+            padding: 14px 32px;
+            border-radius: 12px;
+            margin: 8px 0 48px;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid #1e3347;
+            padding: 36px 24px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #607d8b;
+        }
+        footer .links { margin-bottom: 12px; }
+        footer .links a { margin: 0 12px; }
+        footer .social { margin-bottom: 12px; }
+        footer .social a { margin: 0 8px; color: #4ecdc4; }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .hero { padding: 56px 20px 40px; }
+            .hero h1 { font-size: 1.8rem; }
+            .hero p { font-size: 1rem; }
+            .features { padding: 40px 16px; gap: 16px; }
+            .feature { padding: 24px 18px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-emoji">🍮</div>
+        <h1>Find the food and drinks you crave</h1>
+        <p>Discover the spots that serve mezcal, flan, handmade tortillas, and more — all powered by the community.</p>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+        <div class="feature">
+            <div class="feature-icon">🗺️</div>
+            <h3>Discover spots on an interactive map</h3>
+            <p>Pan and zoom to find ghost pins — places that might have what you're craving. Search becomes more powerful over time.</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">⭐</div>
+            <h3>Rate and verify your favorite places</h3>
+            <p>Vote to confirm a spot has what you're looking for. The community builds the guide together.</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">🏆</div>
+            <h3>Grow the guide and climb the leaderboard</h3>
+            <p>Add spots, write reviews, and upload photos. Earn recognition as you contribute.</p>
+        </div>
+    </section>
+
+    <!-- Own a Spot -->
+    <div class="owner-card">
+        <h2>Own a Spot?</h2>
+        <p>Restaurant or bar owner? Update your spot for free, or contact us to become Owner Verified.</p>
+        <a href="mailto:support@flezcal.app">Contact us at support@flezcal.app</a>
+    </div>
+
+    <!-- App Store -->
+    <section class="section">
+        <div class="app-badge">Coming Soon to the App Store</div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="links">
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+        </div>
+        <div class="social">
+            <a href="https://instagram.com/flezcalapp" target="_blank" rel="noopener">Instagram @flezcalapp</a>
+            <a href="https://tiktok.com/@flezcalapp" target="_blank" rel="noopener">TikTok @flezcalapp</a>
+        </div>
+        <p>Contact: <a href="mailto:support@flezcal.app">support@flezcal.app</a></p>
+        <p style="margin-top: 12px;">&copy; 2026 Duxhenge Consulting LLC</p>
+    </footer>
+
+</body>
+</html>
