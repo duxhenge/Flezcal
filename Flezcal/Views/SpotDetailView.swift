@@ -137,6 +137,8 @@ struct SpotDetailView: View {
                                         .frame(maxWidth: .infinity, alignment: .center)
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel("Add a category to \(liveSpot.name)")
+                                    .accessibilityHint("Double tap to choose a food or drink category to add")
                                 }
                             }
                             .padding(.vertical, 10)
@@ -517,6 +519,7 @@ struct SpotDetailView: View {
         .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .allowsHitTesting(false)
+        .accessibilityLabel("Map showing location of \(spot.name)")
     }
 
     private func openInMaps() {
@@ -716,6 +719,7 @@ struct SpotBadge: View {
         HStack(spacing: 3) {
             Text(emoji)
                 .font(.caption2)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.caption2)
                 .fontWeight(.semibold)
@@ -725,6 +729,8 @@ struct SpotBadge: View {
         .background(color.opacity(0.12))
         .foregroundStyle(color)
         .clipShape(Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }
 
@@ -936,6 +942,7 @@ struct AddCategorySheet: View {
                                     Text(cat.emoji)
                                         .font(.system(size: 28))
                                         .frame(width: 50, height: 50)
+                                        .accessibilityHidden(true)
                                         .background(selectedCategory == cat
                                                     ? cat.color.opacity(0.2)
                                                     : Color(.systemGray6))

@@ -264,16 +264,20 @@ struct SignedInProfileView: View {
                                     Image(systemName: verification.vote ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
                                         .foregroundStyle(verification.vote ? .green : .red)
                                         .font(.caption)
+                                        .accessibilityLabel(verification.vote ? "Verified" : "Not verified")
 
                                     // Rating if present
                                     if let rating = verification.rating {
                                         HStack(spacing: 1) {
                                             Text("🍮")
                                                 .font(.caption2)
+                                                .accessibilityHidden(true)
                                             Text("\(rating)")
                                                 .font(.caption)
                                                 .fontWeight(.medium)
                                         }
+                                        .accessibilityElement(children: .ignore)
+                                        .accessibilityLabel("Rated \(rating) out of 5")
                                     }
 
                                     // Date
@@ -308,11 +312,13 @@ struct SignedInProfileView: View {
                     Label("Privacy Policy", systemImage: "hand.raised")
                 }
                 .foregroundStyle(.primary)
+                .accessibilityHint("Opens privacy policy in browser")
 
                 Link(destination: AppConstants.termsURL) {
                     Label("Terms of Service", systemImage: "doc.text")
                 }
                 .foregroundStyle(.primary)
+                .accessibilityHint("Opens terms of service in browser")
             }
 
             // Sign out

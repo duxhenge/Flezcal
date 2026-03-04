@@ -53,6 +53,10 @@ class ClosureReportService: ObservableObject {
     // MARK: - Submit Closure Report
 
     func submitReport(spotID: String, spotName: String, spotAddress: String, reporterUserID: String) async -> Bool {
+        guard await RateLimiter.shared.allowAction("closure-\(spotID)", cooldown: 5.0) else {
+            return false
+        }
+
         // Extract city from address (take last component before state/zip or use full address)
         let city = extractCity(from: spotAddress)
 

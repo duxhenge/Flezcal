@@ -231,6 +231,9 @@ class SpotService: ObservableObject {
     // MARK: - Add a Spot
 
     func addSpot(_ spot: Spot) async -> Bool {
+        guard await RateLimiter.shared.allowAction("addSpot-\(spot.id)", cooldown: 3.0) else {
+            return false
+        }
         do {
             try db.collection(collectionName).document(spot.id).setData(from: spot)
             spots.insert(spot, at: 0)

@@ -65,6 +65,7 @@ struct FlezcalRowView: View {
             HStack(spacing: 6) {
                 Text(category.emoji)
                     .font(.title3)
+                    .accessibilityHidden(true)
                 Text(category.displayName)
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -78,6 +79,7 @@ struct FlezcalRowView: View {
                             .foregroundStyle(.secondary.opacity(0.6))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Remove \(category.displayName)")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -95,6 +97,8 @@ struct FlezcalRowView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isSubmitting)
+                    .accessibilityLabel(userVote == true ? "\(category.displayName) verified" : "Verify \(category.displayName)")
+                    .accessibilityHint(userVote == true ? "Double tap to edit your rating" : "Double tap to confirm this spot has \(category.displayName)")
 
                     Button {
                         handleThumbsDown()
@@ -105,6 +109,8 @@ struct FlezcalRowView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isSubmitting)
+                    .accessibilityLabel(userVote == false ? "\(category.displayName) not here" : "Mark \(category.displayName) as not available")
+                    .accessibilityHint("Double tap to vote that this spot does not have \(category.displayName)")
 
                     if confirmCount > 0 {
                         Text("\(confirmCount) confirmed")
@@ -123,10 +129,13 @@ struct FlezcalRowView: View {
                             .fontWeight(.medium)
                         Text("🍮")
                             .font(.caption)
+                            .accessibilityHidden(true)
                         Text("(\(catRating.count) \(catRating.count == 1 ? "rating" : "ratings"))")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(String(format: "%.1f", catRating.average)) out of 5, \(catRating.count) \(catRating.count == 1 ? "rating" : "ratings")")
                 }
             }
 
@@ -150,10 +159,13 @@ struct FlezcalRowView: View {
                             Image(systemName: "pencil")
                                 .font(.caption2)
                                 .foregroundStyle(.blue)
+                                .accessibilityHidden(true)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Your rating: \(level.label), \(rating) out of 5")
+                    .accessibilityHint("Double tap to change your rating")
                 } else if userVote == true {
                     // User verified (thumbs-up) but hasn't rated yet
                     Button {
@@ -254,6 +266,10 @@ struct FlezcalRowView: View {
         // New thumbs up or flipping from thumbs down
         isSubmitting = true
         Task {
+            guard await RateLimiter.shared.allowAction("vote-\(spot.id)-\(category.rawValue)") else {
+                isSubmitting = false
+                return
+            }
             let success = await verificationService.submitVote(
                 spotID: spot.id, userID: userID, category: category, vote: true
             )
@@ -283,6 +299,10 @@ struct FlezcalRowView: View {
 
         isSubmitting = true
         Task {
+            guard await RateLimiter.shared.allowAction("vote-\(spot.id)-\(category.rawValue)") else {
+                isSubmitting = false
+                return
+            }
             let success = await verificationService.submitVote(
                 spotID: spot.id, userID: userID, category: category, vote: false
             )

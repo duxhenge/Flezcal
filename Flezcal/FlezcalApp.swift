@@ -1,7 +1,6 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseCrashlytics
-
 @main
 struct FlezcalApp: App {
     @AppStorage("hasPassedAgeVerification") private var hasPassedAgeVerification = false
@@ -14,6 +13,8 @@ struct FlezcalApp: App {
     init() {
         FirebaseApp.configure()
         Crashlytics.crashlytics()
+        // Firestore offline persistence is enabled by default in Firebase iOS SDK 11.x.
+        // Writes are queued locally when offline and synced when connectivity resumes.
     }
 
     var body: some Scene {

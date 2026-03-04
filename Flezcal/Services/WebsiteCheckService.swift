@@ -983,6 +983,14 @@ actor WebsiteCheckService {
 
     /// Shared Brave Search HTTP call. Returns the raw result array or nil on failure.
     private func braveWebResults(query: String, count: Int) async -> [[String: Any]]? {
+        guard await RateLimiter.shared.canMakeBraveCall() else {
+            #if DEBUG
+            print("[WebsiteCheck] Session Brave API limit reached")
+            #endif
+            return []
+        }
+        await RateLimiter.shared.recordBraveCall()
+
         guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let requestURL = URL(string: "https://api.search.brave.com/res/v1/web/search?q=\(encodedQuery)&count=\(count)")
         else { return nil }

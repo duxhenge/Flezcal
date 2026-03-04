@@ -72,6 +72,7 @@
 		CAB4B65A1D3A48DB38C9BB7A /* CreateCustomCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */; };
 		CR0000010000000000000001 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = CR0000020000000000000001 /* FirebaseCrashlytics */; };
 		GH0000010000000000000001 /* Geohash.swift in Sources */ = {isa = PBXBuildFile; fileRef = GH0000020000000000000001 /* Geohash.swift */; };
+		RL0000010000000000000001 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = RL0000020000000000000001 /* RateLimiter.swift */; };
 		NM0000010000000000000001 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = NM0000020000000000000001 /* NetworkMonitor.swift */; };
 		VF0000010000000000000001 /* Verification.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000001 /* Verification.swift */; };
 		VF0000010000000000000002 /* ClosureReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000002 /* ClosureReport.swift */; };
@@ -172,6 +173,7 @@
 		EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditCustomCategoryView.swift; sourceTree = "<group>"; };
 		F4A8B31AA11DC786E5093A4F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		GH0000020000000000000001 /* Geohash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geohash.swift; sourceTree = "<group>"; };
+		RL0000020000000000000001 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
 		NM0000020000000000000001 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		VF0000020000000000000001 /* Verification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Verification.swift; sourceTree = "<group>"; };
 		VF0000020000000000000002 /* ClosureReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureReport.swift; sourceTree = "<group>"; };
@@ -344,6 +346,7 @@
 				CR0000050000000000000001 /* CrashReporter.swift */,
 				LC0000020000000000000001 /* LocationCompleterService.swift */,
 				GH0000020000000000000001 /* Geohash.swift */,
+				RL0000020000000000000001 /* RateLimiter.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -640,6 +643,7 @@
 				CR0000040000000000000001 /* CrashReporter.swift in Sources */,
 				LC0000010000000000000001 /* LocationCompleterService.swift in Sources */,
 				GH0000010000000000000001 /* Geohash.swift in Sources */,
+				RL0000010000000000000001 /* RateLimiter.swift in Sources */,
 				FR0000010000000000000001 /* FlezcalRowView.swift in Sources */,
 				FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */,
 			);

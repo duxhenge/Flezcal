@@ -104,6 +104,7 @@ struct LeaderboardView: View {
             Image(systemName: "trophy")
                 .font(.system(size: 60))
                 .foregroundStyle(.orange)
+                .accessibilityHidden(true)
 
             Text("No Contributors Yet")
                 .font(.title2)
@@ -221,6 +222,7 @@ struct MyRankCard: View {
                 Image(systemName: stats.rankIcon)
                     .font(.title2)
                     .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Your Rank")
@@ -237,6 +239,8 @@ struct MyRankCard: View {
                     .fontWeight(.bold)
                     .foregroundStyle(.orange)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Your rank: number \(rank), \(stats.rankTitle), \(stats.score) points")
 
             Divider()
 
@@ -301,6 +305,8 @@ struct StatPill<Icon: View>: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(value) \(label)")
     }
 }
 
@@ -337,6 +343,7 @@ struct ContributorRow: View {
                             Text("🫙")
                                 .font(.caption)
                                 .help("Brand Collector — 10+ mezcal brands logged!")
+                                .accessibilityLabel("Brand Collector")
                         }
                     }
 
@@ -376,8 +383,11 @@ struct ContributorRow: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.leading, 42) // align with name (32 badge + 10 spacing)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(stats.spotsAdded) spots, \(stats.categoriesIdentified) finds, \(stats.brandsLogged) brands, \(stats.ratingsGiven) ratings, \(stats.verificationsGiven) verifications")
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private var rankColor: Color {
@@ -408,5 +418,7 @@ struct ScoringBadge<Icon: View>: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(points) points")
     }
 }

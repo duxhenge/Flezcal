@@ -56,6 +56,7 @@ struct ListTabRowView: View {
                 .frame(width: 44, height: 44)
                 .background(spot.primaryCategory.color.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 // Row 1: Spot name (full width)
@@ -97,6 +98,8 @@ struct ListTabRowView: View {
             .layoutPriority(1)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(spot.name), \(shortAddress(from: spot.address))\(spot.isClosed ? ", Closed" : "")\(spot.categories.map { ", \($0.displayName)" }.joined())")
     }
 
     @ViewBuilder
@@ -219,6 +222,8 @@ struct ExploreResultRowView: View {
                 .fixedSize()
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(mapItem.name ?? "Unknown venue")\(isMatched ? ", likely match" : ""), \(formattedDistanceMiles(from: userLocation, to: mapItem))")
     }
 
     /// Maps a POI category to a suitable SF Symbol name.

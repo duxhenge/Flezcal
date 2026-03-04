@@ -32,6 +32,8 @@ struct InlineRatingPicker: View {
                             let generator = UIImpactFeedbackGenerator(style: .light)
                             generator.impactOccurred()
                         }
+                        .accessibilityLabel("Rate \(level) out of 5\(RatingLevel.from(level).map { ", \($0.label)" } ?? "")")
+                        .accessibilityAddTraits(.isButton)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -54,6 +56,8 @@ struct InlineRatingPicker: View {
                             .foregroundStyle(.secondary)
                     }
                     .opacity(selectedRating == 0 || selectedRating == level.rawValue ? 1.0 : 0.5)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(level.rawValue): \(level.label), \(level.description)")
                 }
             }
 
