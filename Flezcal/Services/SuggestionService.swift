@@ -5,7 +5,8 @@ import MapKit
 /// Shown on the map as a ghost pin until a user confirms or dismisses it.
 struct SuggestedSpot: Identifiable, Equatable {
     static func == (lhs: SuggestedSpot, rhs: SuggestedSpot) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id &&
+        lhs.preScreenMatches == rhs.preScreenMatches
     }
 
     /// Stable ID derived from the venue name so the same venue keeps the
@@ -137,12 +138,25 @@ class SuggestionService: ObservableObject {
             }
         }
 
+        // Enforce a minimum search span so zoomed-in maps still discover
+        // the same venues the Explore tab finds with its fixed 0.5° region.
+        // MKLocalSearch treats region as a relevance hint — a tiny region
+        // causes it to return different (often fewer) results for the same query.
+        let minSpan = 0.5
+        let searchRegion = MKCoordinateRegion(
+            center: region.center,
+            span: MKCoordinateSpan(
+                latitudeDelta:  max(region.span.latitudeDelta,  minSpan),
+                longitudeDelta: max(region.span.longitudeDelta, minSpan)
+            )
+        )
+
         // ── Run each pick's mapSearchTerms as text queries ────────────────
         for entry in allQueries {
             guard fetchGeneration == myGeneration else { break }
             let request = MKLocalSearch.Request()
             request.naturalLanguageQuery = entry.query
-            request.region = region
+            request.region = searchRegion
             request.resultTypes = .pointOfInterest
             await runQuery(request, as: entry.category, label: "\(entry.category.id) \"\(entry.query)\"")
         }
@@ -192,19 +206,19 @@ class SuggestionService: ObservableObject {
     }
 
     /// Updates suggestions in-place with batch pre-screen results.
-    /// Each suggestion gets its `preScreenMatches` set: non-empty if the
-    /// homepage HTML contained keywords for the user's active picks,
-    /// empty `Set()` if scanned but nothing found, or stays `nil` if
-    /// the venue had no fetchable URL.
+    ///
+    /// The `results` dict contains entries for every venue that had a scannable URL:
+    /// - Non-empty set → homepage matched keywords for user's picks (green pin)
+    /// - Empty set → URL was scanned but no keywords matched (dimmed yellow pin)
+    /// - Not in dict → venue had no URL / social media only (stays yellow "?" pin)
     func applyPreScreenResults(_ results: [String: Set<String>]) {
         for i in suggestions.indices {
             let id = suggestions[i].id
             if let matched = results[id] {
+                // Venue was in the scan set — update with result (possibly empty)
                 suggestions[i].preScreenMatches = matched
-            } else if suggestions[i].preScreenMatches == nil {
-                // Mark as scanned-but-not-found (distinct from not-yet-scanned)
-                suggestions[i].preScreenMatches = Set()
             }
+            // Venues not in results had no scannable URL — keep preScreenMatches = nil
         }
         preScreenComplete = true
     }

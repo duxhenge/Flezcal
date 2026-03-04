@@ -232,6 +232,7 @@ class SpotService: ObservableObject {
 
     func addSpot(_ spot: Spot) async -> Bool {
         guard await RateLimiter.shared.allowAction("addSpot-\(spot.id)", cooldown: 3.0) else {
+            errorMessage = "Too fast — wait a moment and try again."
             return false
         }
         do {

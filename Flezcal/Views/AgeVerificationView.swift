@@ -23,12 +23,26 @@ struct AgeVerificationView: View {
                 .foregroundStyle(.orange)
 
             if denied {
-                // Denial state — no way to proceed
+                // Denial state — allow going back in case of accidental tap
                 Text("You must be at least 21 years old to use Flezcal.")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        denied = false
+                    }
+                } label: {
+                    Text("Go Back")
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.orange)
+                }
+                .padding(.top, 8)
+                .accessibilityLabel("Go back to age verification")
+                .accessibilityHint("Returns to the age verification question")
             } else {
                 // Verification prompt
                 Text("This app includes alcohol-related content.\nAre you 21 or older?")

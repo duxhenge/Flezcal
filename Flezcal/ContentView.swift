@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreLocation
 
 struct ContentView: View {
     /// Stores the version string of the last welcome screen the user dismissed.
@@ -17,6 +18,9 @@ struct ContentView: View {
     /// Set by the .showOnMap notification — MapTabView picks this up,
     /// centers the camera, and shows the ghost pin sheet.
     @State private var pendingMapSuggestion: SuggestedSpot? = nil
+    /// Set by the .showAreaOnMap notification — MapTabView picks this up,
+    /// centers the camera on the area, and runs fetchAndPreScreen.
+    @State private var pendingMapCenter: CLLocationCoordinate2D? = nil
     @State private var showDisplayNamePrompt = false
     @State private var promptedName = ""
 
@@ -31,7 +35,8 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .top) {
             TabView(selection: $selectedTab) {
-                MapTabView(pendingMapSuggestion: $pendingMapSuggestion)
+                MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
+                          pendingMapCenter: $pendingMapCenter)
                     .environmentObject(picksService)
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
@@ -79,6 +84,14 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showOnMap)) { notification in
             if let suggestion = notification.userInfo?["suggestion"] as? SuggestedSpot {
                 pendingMapSuggestion = suggestion
+            }
+            selectedTab = AppTab.explore
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showAreaOnMap)) { notification in
+            if let info = notification.userInfo,
+               let lat = info["latitude"] as? Double,
+               let lon = info["longitude"] as? Double {
+                pendingMapCenter = CLLocationCoordinate2D(latitude: lat, longitude: lon)
             }
             selectedTab = AppTab.explore
         }

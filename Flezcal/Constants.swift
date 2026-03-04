@@ -104,4 +104,7 @@ extension Notification.Name {
     /// Post with a `SuggestedSpot` as `object` to switch to the Map tab,
     /// center on the venue, and show the ghost pin sheet.
     static let showOnMap = Notification.Name("showOnMap")
+    /// Post with a CLLocationCoordinate2D (as ["latitude": Double, "longitude": Double])
+    /// to switch to the Map tab, center on that area, and run a full search + pre-screen.
+    static let showAreaOnMap = Notification.Name("showAreaOnMap")
 }

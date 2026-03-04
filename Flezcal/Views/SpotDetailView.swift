@@ -29,6 +29,7 @@ struct SpotDetailView: View {
     // Closure reporting
     @State private var showClosureReportAlert = false
     @State private var showClosureReportConfirmation = false
+    @State private var showClosureReportFailed = false
     @State private var isSubmittingClosureReport = false
 
     // Sign-in gate
@@ -455,14 +456,18 @@ struct SpotDetailView: View {
                     Task {
                         isSubmittingClosureReport = true
                         let service = ClosureReportService()
-                        let _ = await service.submitReport(
+                        let success = await service.submitReport(
                             spotID: spot.id,
                             spotName: spot.name,
                             spotAddress: spot.address,
                             reporterUserID: authService.userID ?? ""
                         )
                         isSubmittingClosureReport = false
-                        showClosureReportConfirmation = true
+                        if success {
+                            showClosureReportConfirmation = true
+                        } else {
+                            showClosureReportFailed = true
+                        }
                     }
                 }
                 Button("Cancel", role: .cancel) {}
@@ -473,6 +478,11 @@ struct SpotDetailView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Thank you for letting us know. We'll review this report and take appropriate action.")
+            }
+            .alert("Report Failed", isPresented: $showClosureReportFailed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Couldn't submit the report. Please wait a moment and try again.")
             }
             .alert(
                 liveSpot.categories.count <= 1 ? "Remove Spot" : "Remove Category",

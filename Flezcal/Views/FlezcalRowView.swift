@@ -23,6 +23,8 @@ struct FlezcalRowView: View {
     @State private var showRatingPicker = false
     @State private var isSubmitting = false
     @State private var showSignIn = false
+    /// Brief inline error shown when a vote/rating action fails.
+    @State private var actionError: String? = nil
     /// Tracks what the user tried to do before sign-in so we can auto-proceed.
     @State private var pendingAction: PendingAction? = nil
 
@@ -98,7 +100,9 @@ struct FlezcalRowView: View {
                     .buttonStyle(.plain)
                     .disabled(isSubmitting)
                     .accessibilityLabel(userVote == true ? "\(category.displayName) verified" : "Verify \(category.displayName)")
-                    .accessibilityHint(userVote == true ? "Double tap to edit your rating" : "Double tap to confirm this spot has \(category.displayName)")
+                    .accessibilityHint(userVote == true
+                        ? (userRating == nil ? "Double tap to add your rating" : "Already verified and rated")
+                        : "Double tap to confirm this spot has \(category.displayName)")
 
                     Button {
                         handleThumbsDown()
@@ -219,6 +223,15 @@ struct FlezcalRowView: View {
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            // ── Inline error message (auto-dismissing) ───────────────
+            if let error = actionError {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .transition(.opacity)
+            }
         }
         .sheet(isPresented: $showSignIn) {
             SignInSheet()
@@ -247,6 +260,14 @@ struct FlezcalRowView: View {
 
     // MARK: - Actions
 
+    private func showError(_ message: String) {
+        withAnimation(.easeInOut(duration: 0.2)) { actionError = message }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation(.easeInOut(duration: 0.2)) { actionError = nil }
+        }
+    }
+
     private func handleThumbsUp() {
         guard authService.isSignedIn else {
             pendingAction = .thumbsUp
@@ -256,9 +277,17 @@ struct FlezcalRowView: View {
         let previousVote = userVote
 
         if previousVote == true {
-            // Already thumbs up — toggle the rating picker instead of retracting
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showRatingPicker.toggle()
+            // Already verified — open rating picker if not yet rated,
+            // or give feedback that the vote is already recorded.
+            if userRating == nil {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showRatingPicker = true
+                }
+            } else {
+                // Already verified and rated — brief feedback
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+                showError("Already verified — tap your rating below to edit")
             }
             return
         }
@@ -268,6 +297,7 @@ struct FlezcalRowView: View {
         Task {
             guard await RateLimiter.shared.allowAction("vote-\(spot.id)-\(category.rawValue)") else {
                 isSubmitting = false
+                showError("Too fast — wait a moment and try again")
                 return
             }
             let success = await verificationService.submitVote(
@@ -282,6 +312,8 @@ struct FlezcalRowView: View {
                     // Show rating picker after successful thumbs up
                     showRatingPicker = true
                 }
+            } else {
+                showError("Couldn't save — check your connection and try again")
             }
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
@@ -301,6 +333,7 @@ struct FlezcalRowView: View {
         Task {
             guard await RateLimiter.shared.allowAction("vote-\(spot.id)-\(category.rawValue)") else {
                 isSubmitting = false
+                showError("Too fast — wait a moment and try again")
                 return
             }
             let success = await verificationService.submitVote(
@@ -329,6 +362,8 @@ struct FlezcalRowView: View {
                         )
                     }
                 }
+            } else {
+                showError("Couldn't save — check your connection and try again")
             }
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
@@ -347,6 +382,8 @@ struct FlezcalRowView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showRatingPicker = false
                 }
+            } else {
+                showError("Couldn't save rating — try again")
             }
         }
     }
@@ -361,6 +398,8 @@ struct FlezcalRowView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showRatingPicker = false
                 }
+            } else {
+                showError("Couldn't remove rating — try again")
             }
         }
     }

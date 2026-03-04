@@ -381,14 +381,15 @@ private struct ExplorePanel: View {
                     let displayCount = split.matched.count + split.other.count
 
                     List {
-                        // ── Status banner (filter searches only) ──
-                        if isFilterSearch, let foodCat = selectedFilterCategory {
+                        // ── Status banner (auto-searches only) ──
+                        if isFilterSearch {
+                            let categoryLabel = selectedFilterCategory?.displayName.lowercased() ?? "your picks"
                             Section {
                                 if isPreScreening {
                                     HStack(spacing: 8) {
                                         ProgressView()
                                             .controlSize(.small)
-                                        Text("Checking menus for \(foodCat.displayName.lowercased())…")
+                                        Text("Checking menus for \(categoryLabel)…")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
@@ -399,7 +400,7 @@ private struct ExplorePanel: View {
                                             Image(systemName: "magnifyingglass")
                                                 .font(.subheadline)
                                                 .foregroundStyle(.secondary)
-                                            Text("No \(foodCat.displayName.lowercased()) found on menus nearby")
+                                            Text("No \(categoryLabel) found on menus nearby")
                                                 .font(.subheadline)
                                                 .fontWeight(.medium)
                                         }
@@ -417,7 +418,7 @@ private struct ExplorePanel: View {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .font(.subheadline)
                                                 .foregroundStyle(.green)
-                                            Text("\(matchedCount) possible \(foodCat.displayName.lowercased()) result\(matchedCount == 1 ? "" : "s")")
+                                            Text("\(matchedCount) possible \(categoryLabel) result\(matchedCount == 1 ? "" : "s")")
                                                 .font(.subheadline)
                                                 .fontWeight(.medium)
                                         }
@@ -488,6 +489,9 @@ private struct ExplorePanel: View {
             customLocation: customLocation
         )) {
             let userTypedText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+            #if DEBUG
+            print("[Explore] .task fired — searchText='\(searchText)' filter=\(selectedFilterCategory?.displayName ?? "All") customLoc=\(customLocation?.name ?? "nil") userTyped=\(userTypedText)")
+            #endif
 
             if userTypedText {
                 // User typed a venue name — single query, debounced
@@ -497,7 +501,12 @@ private struct ExplorePanel: View {
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(400))
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    #if DEBUG
+                    print("[Explore] cancelled during debounce")
+                    #endif
+                    return
+                }
                 await searchService.search(query: query, userLocation: effectiveLocation)
             } else if let foodCat = selectedFilterCategory {
                 // Filter pill active — multi-query search using all mapSearchTerms.
@@ -510,24 +519,60 @@ private struct ExplorePanel: View {
                     userLocation: effectiveLocation
                 )
             } else {
-                // "All" filter — broad nearby search
-                await searchService.search(query: "restaurant", userLocation: effectiveLocation)
+                // "All" filter — multi-query search combining terms from all picks.
+                // A single "restaurant" query misses venues that Apple Maps classifies
+                // as bars, cafes, or nightlife. Using each pick's mapSearchTerms ensures
+                // niche venues (mezcal bars, flan bakeries) appear in the results for
+                // the pre-screen to scan and promote.
+                var allTerms: [String] = []
+                var seen = Set<String>()
+                for pick in userPicks {
+                    for term in pick.mapSearchTerms {
+                        let key = term.lowercased()
+                        if seen.insert(key).inserted {
+                            allTerms.append(term)
+                        }
+                    }
+                }
+                // Fall back to "restaurant" if the user has no picks
+                if allTerms.isEmpty { allTerms = ["restaurant"] }
+                await searchService.multiSearch(
+                    queries: allTerms,
+                    userLocation: effectiveLocation
+                )
             }
 
             // Pre-screen: scan homepages to re-rank results (matched venues first).
             // Only for filter-based auto-searches — user-typed queries skip re-ranking.
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                #if DEBUG
+                print("[Explore] cancelled after search")
+                #endif
+                return
+            }
             preScreenMatchedIndices = nil
             isPreScreening = false
             let items = searchService.searchResults
             let picks = activePicks
+            #if DEBUG
+            print("[Explore] pre-screen gate: items=\(items.count) userTyped=\(userTypedText) picks=\(picks.map(\.displayName))")
+            #endif
             guard !items.isEmpty, !userTypedText else { return }
             isPreScreening = true
+            #if DEBUG
+            print("[Explore] starting batchPreScreenMapItems with \(items.count) items")
+            #endif
             let matched = await websiteChecker.batchPreScreenMapItems(items, picks: picks)
             guard !Task.isCancelled else {
+                #if DEBUG
+                print("[Explore] cancelled after pre-screen")
+                #endif
                 isPreScreening = false
                 return
             }
+            #if DEBUG
+            print("[Explore] pre-screen complete: \(matched.count) matches out of \(items.count)")
+            #endif
             preScreenMatchedIndices = matched
             isPreScreening = false
         }
@@ -739,27 +784,53 @@ struct ListTabView: View {
                 .padding(.top, 8)
 
                 // ── Search bar ────────────────────────────────────────────────
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField(
-                        listMode == .community
-                            ? "Search spots, mezcals…"
-                            : explorePlaceholder,
-                        text: $searchText
-                    )
-                    .textFieldStyle(.plain)
-                    .autocorrectionDisabled()
-                    if !searchText.isEmpty {
-                        Button { searchText = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField(
+                            listMode == .community
+                                ? "Search spots, mezcals…"
+                                : explorePlaceholder,
+                            text: $searchText
+                        )
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                        if !searchText.isEmpty {
+                            Button { searchText = "" } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .padding(10)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    // "Show on Map" — switches to Map tab centered on the search area
+                    if listMode == .explore {
+                        Button {
+                            let center = customLocation?.coordinate
+                                ?? locationManager.userLocation
+                                ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
+                            NotificationCenter.default.post(
+                                name: .showAreaOnMap,
+                                object: nil,
+                                userInfo: ["latitude": center.latitude,
+                                           "longitude": center.longitude]
+                            )
+                        } label: {
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(.orange)
+                                .frame(width: 40, height: 40)
+                                .background(Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .accessibilityLabel("Show on map")
+                        .accessibilityHint("Switches to the map centered on the current search area")
+                    }
                 }
-                .padding(10)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal)
                 .padding(.top, 8)
 

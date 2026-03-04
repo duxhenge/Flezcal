@@ -72,6 +72,8 @@ actor WebsiteCheckService {
 
     // Session for fetching restaurant websites — includes a browser User-Agent
     // because many sites (Joomla, Wix, etc.) return 403 without one.
+    // Accepts TLS 1.0+ because many small-town restaurant sites run outdated
+    // SSL configurations that fail with the default TLS 1.2 minimum.
     private let webSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest  = 6
@@ -84,6 +86,7 @@ actor WebsiteCheckService {
         config.httpAdditionalHeaders = [
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
         ]
+        config.tlsMinimumSupportedProtocolVersion = .TLSv10
         // Disable URL caching — we maintain our own in-memory htmlCache and
         // don't want stale disk-cached responses consuming storage.
         config.urlCache = nil
@@ -146,6 +149,11 @@ actor WebsiteCheckService {
         picks: [FoodCategory]
     ) async -> [String: Set<String>] {
         let pickIDs = Set(picks.map(\.id))
+        // Results map: id → matched pick IDs.
+        // Venues WITH a URL that were scanned but had no matches get an empty Set().
+        // Venues WITHOUT a URL are omitted entirely (not in the dict).
+        // This lets applyPreScreenResults distinguish "scanned, nothing found"
+        // from "no URL to scan" — the latter keeps preScreenMatches = nil (yellow pin).
         var results: [String: Set<String>] = [:]
 
         // Separate into cached (instant) and needs-fetch
@@ -154,6 +162,7 @@ actor WebsiteCheckService {
         for suggestion in suggestions {
             guard let url = suggestion.mapItem.url,
                   !isSocialMediaURL(url) else {
+                // No URL or social media URL — skip entirely (not added to results)
                 continue
             }
             let key = url.absoluteString
@@ -163,9 +172,8 @@ actor WebsiteCheckService {
                 // Related (relatedKeyword) matches are too weak — e.g. "agave" on a
                 // breakfast menu would falsely promote a non-mezcal venue.
                 let relevant = cached.confirmed.intersection(pickIDs)
-                if !relevant.isEmpty {
-                    results[suggestion.id] = relevant
-                }
+                // Always include in results (even if empty) to mark as scanned
+                results[suggestion.id] = relevant
             } else {
                 toFetch.append((id: suggestion.id, url: url))
             }
@@ -213,17 +221,31 @@ actor WebsiteCheckService {
 
             // Cache results and filter to picks.
             // Only confirmed matches drive pre-screen ranking (not related).
+            // Include all fetched venues in results (even empty) to mark as scanned.
             for (id, url, scanResult) in fetched {
                 htmlCache[url.absoluteString] = scanResult
                 let relevant = scanResult.confirmed.intersection(pickIDs)
-                if !relevant.isEmpty {
-                    results[id] = relevant
+                results[id] = relevant
+            }
+
+            // Also mark venues whose fetch failed (not in `fetched`) as scanned
+            // if they had a URL — they were attempted but the server was unreachable.
+            let fetchedIDs = Set(fetched.map(\.0))
+            for item in toFetch where !fetchedIDs.contains(item.id) {
+                if results[item.id] == nil {
+                    results[item.id] = Set()
                 }
             }
         }
 
         #if DEBUG
-        print("[PreScreen] scanned \(toFetch.count) homepages, \(results.count) likely matches")
+        let matchCount = results.values.filter { !$0.isEmpty }.count
+        let noURLCount = suggestions.count - results.count
+        print("[PreScreen] \(suggestions.count) venues: \(matchCount) matches, \(results.count - matchCount) scanned-no-match, \(noURLCount) no-URL. Fetched \(toFetch.count) homepages.")
+        for (id, matches) in results where !matches.isEmpty {
+            let name = suggestions.first { $0.id == id }?.name ?? id
+            print("  ✅ \(name): \(matches)")
+        }
         #endif
         return results
     }
@@ -720,25 +742,57 @@ actor WebsiteCheckService {
     /// Fetches a single page. Returns (html, isValid) or nil on failure.
     /// isValid is false when the page is a captcha / bot wall.
     private func fetchPage(_ url: URL) async -> (String, Bool)? {
-        // Upgrade http → https to avoid ATS blocks.  Many Apple Maps URLs are
-        // stored as http:// even though the site supports https://.
-        var fetchURL = url
+        // Try HTTPS first, fall back to HTTP if it fails.
+        // Many small-town restaurant sites have broken SSL, outdated TLS,
+        // or only serve HTTP. We try HTTPS first (upgrading http:// URLs),
+        // then fall back to plain HTTP on failure.
+        // Requires NSAllowsArbitraryLoads in Info.plist for HTTP fallback.
+        var httpsURL = url
         if var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
            components.scheme == "http" {
             components.scheme = "https"
             if let upgraded = components.url {
-                fetchURL = upgraded
+                httpsURL = upgraded
             }
         }
+
+        // Attempt 1: HTTPS
+        if let result = await fetchPageDirect(httpsURL) {
+            return result
+        }
+
+        // Attempt 2: plain HTTP fallback (for broken SSL or HTTP-only sites)
+        if httpsURL.scheme == "https",
+           var components = URLComponents(url: httpsURL, resolvingAgainstBaseURL: false) {
+            components.scheme = "http"
+            if let httpURL = components.url {
+                #if DEBUG
+                print("[fetchPage] HTTPS failed for \(httpsURL.host ?? "?"), trying HTTP fallback")
+                #endif
+                return await fetchPageDirect(httpURL)
+            }
+        }
+        return nil
+    }
+
+    /// Raw fetch + HTML parse for a single URL (no retry logic).
+    private func fetchPageDirect(_ url: URL) async -> (String, Bool)? {
         do {
-            let (data, response) = try await webSession.data(from: fetchURL)
+            let (data, response) = try await webSession.data(from: url)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                #if DEBUG
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                print("[fetchPage] \(url.scheme ?? "?")://\(url.host ?? "?")\(url.path) → HTTP \(code)")
+                #endif
                 return nil
             }
             let html = String(data: data, encoding: .utf8)
                     ?? String(data: data, encoding: .isoLatin1)
                     ?? ""
             guard !html.isEmpty else { return nil }
+            #if DEBUG
+            print("[fetchPage] \(url.scheme ?? "?")://\(url.host ?? "?")\(url.path) → OK (\(html.count) chars)")
+            #endif
             let lower = html.lowercased()
 
             let isCaptchaWall = lower.contains("captcha-delivery.com") ||
@@ -747,6 +801,10 @@ actor WebsiteCheckService {
                                 (html.count < 2000 && lower.contains("cloudflare"))
             return (html, !isCaptchaWall)
         } catch {
+            #if DEBUG
+            let code = (error as NSError).code
+            print("[fetchPage] \(url.scheme ?? "?")://\(url.host ?? "?")\(url.path) → error \(code)")
+            #endif
             return nil
         }
     }

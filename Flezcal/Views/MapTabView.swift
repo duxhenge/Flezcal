@@ -6,6 +6,9 @@ struct MapTabView: View {
     /// Set by ContentView when a .showOnMap notification arrives from the List tab.
     /// MapTabView picks it up, centers the camera, and opens the ghost pin sheet.
     @Binding var pendingMapSuggestion: SuggestedSpot?
+    /// Set by ContentView when a .showAreaOnMap notification arrives from the List tab.
+    /// MapTabView centers the camera on this coordinate and runs fetchAndPreScreen.
+    @Binding var pendingMapCenter: CLLocationCoordinate2D?
 
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
@@ -39,7 +42,8 @@ struct MapTabView: View {
     @State private var websiteCheckTask: Task<Void, Never>? = nil
     private let websiteChecker = WebsiteCheckService()
 
-    // Batch pre-screen — homepage-only scan triggered after ghost pin fetch
+    // Batch fetch + pre-screen — homepage-only scan triggered after ghost pin fetch
+    @State private var fetchAndPreScreenTask: Task<Void, Never>? = nil
     @State private var preScreenTask: Task<Void, Never>? = nil
     @State private var preScreenBannerMessage: String? = nil
     @State private var isPreScreening = false
@@ -111,14 +115,25 @@ struct MapTabView: View {
     /// Call this everywhere that `fetchSuggestions` is called to ensure the
     /// pre-screen always follows.
     private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory]) {
-        Task {
+        // Cancel any in-flight fetch + pre-screen so a new call doesn't
+        // race with the previous one and overwrite green pin results.
+        fetchAndPreScreenTask?.cancel()
+        preScreenTask?.cancel()
+
+        fetchAndPreScreenTask = Task {
+            #if DEBUG
+            print("[MapTab] fetchAndPreScreen called with \(picks.count) picks")
+            #endif
             await suggestionService.fetchSuggestions(
                 in: region,
                 existingSpots: spotService.spots,
                 picks: picks
             )
+            guard !Task.isCancelled else {
+                isPreScreening = false
+                return
+            }
             // Kick off batch homepage pre-screen after pins appear
-            preScreenTask?.cancel()
             preScreenBannerMessage = nil
             suggestionService.preScreenComplete = false
             isPreScreening = true
@@ -140,12 +155,9 @@ struct MapTabView: View {
                 }
                 suggestionService.applyPreScreenResults(results)
                 // Update showOnMapPin's pre-screen status if it was scanned
-                if let pinned = showOnMapPin {
-                    if let matched = results[pinned.id] {
-                        showOnMapPin?.preScreenMatches = matched
-                    } else if pinned.preScreenMatches == nil {
-                        showOnMapPin?.preScreenMatches = Set()
-                    }
+                if let pinned = showOnMapPin,
+                   let matched = results[pinned.id] {
+                    showOnMapPin?.preScreenMatches = matched
                 }
                 isPreScreening = false
                 // Show "no quick matches" banner if zero green pins
@@ -299,15 +311,21 @@ struct MapTabView: View {
                 }
 
                 // Ghost pins — unconfirmed Apple Maps suggestions
-                // Yellow = unknown/not scanned. Green = homepage pre-screen found keywords.
+                // Yellow = not yet scanned. Green = pre-screen found keywords.
+                // Gray = scanned but no match found.
+                // The id includes preScreenMatches hash so MapKit re-renders
+                // the annotation when the pin state changes (yellow → green).
                 ForEach(suggestionService.suggestions) { suggestion in
+                    let pinID = "\(suggestion.id)_\(suggestion.preScreenMatches?.hashValue ?? 0)"
                     Annotation(suggestion.name, coordinate: suggestion.coordinate) {
                         GhostPinView(
                             category: suggestion.suggestedCategory,
                             isLikely: suggestion.preScreenMatches?.isEmpty == false,
+                            isScanned: suggestion.preScreenMatches != nil,
                             likelyCategories: (suggestion.preScreenMatches ?? [])
                                 .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                         )
+                        .id(pinID)
                             .onTapGesture {
                                 // Shift camera so the pin sits 3/4 up the map,
                                 // above the slide-up sheet.
@@ -347,6 +365,7 @@ struct MapTabView: View {
                             GhostPinView(
                                 category: pinned.suggestedCategory,
                                 isLikely: pinned.preScreenMatches?.isEmpty == false,
+                                isScanned: pinned.preScreenMatches != nil,
                                 likelyCategories: (pinned.preScreenMatches ?? [])
                                     .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                             )
@@ -397,15 +416,9 @@ struct MapTabView: View {
                 if bootFetchesRemaining > 0 {
                     bootFetchesRemaining -= 1
                     lastFetchedCenter = context.region.center
-                    // Boot auto-fetch: ghost pins only, no pre-screen.
-                    // Pre-screen runs only after user taps "Search This Area".
-                    Task {
-                        await suggestionService.fetchSuggestions(
-                            in: context.region,
-                            existingSpots: spotService.spots,
-                            picks: activePicks
-                        )
-                    }
+                    // Boot auto-fetch: ghost pins + pre-screen so green pins
+                    // appear on launch, matching Explore tab behavior.
+                    fetchAndPreScreen(in: context.region, picks: activePicks)
                 } else {
                     showSearchHereButton = true
                 }
@@ -454,6 +467,25 @@ struct MapTabView: View {
                     guard !Task.isCancelled else { return }
                     multiCheckResult = result
                 }
+            }
+            .onChange(of: pendingMapCenter?.latitude) { _, _ in
+                guard let center = pendingMapCenter else { return }
+                pendingMapCenter = nil   // consume immediately
+
+                // Center camera on the area with a neighborhood-level zoom
+                let region = MKCoordinateRegion(
+                    center: center,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                )
+                cameraPosition = .region(region)
+                lastFetchedCenter = center
+                showSearchHereButton = false
+                // Prevent onMapCameraChange from triggering a duplicate fetch
+                // when the camera settles at the new position.
+                bootFetchesRemaining = 0
+
+                // Fetch ghost pins + pre-screen for this area
+                fetchAndPreScreen(in: region, picks: activePicks)
             }
 
             // Filter pills — "All" + one pill per pick
@@ -552,6 +584,30 @@ struct MapTabView: View {
                 .padding(.bottom, 24)
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.3), value: preScreenBannerMessage)
+            }
+
+            // Ghost pin fetch indicator — shows while SuggestionService is
+            // querying Apple Maps, before the pre-screen phase begins.
+            if suggestionService.isLoading && !isPreScreening {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Finding nearby spots…")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                    .padding(.bottom, 24)
+                }
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: suggestionService.isLoading)
             }
 
             // Pre-screen scanning indicator
@@ -946,7 +1002,8 @@ struct CategoryFilterBar: View {
 }
 
 #Preview {
-    MapTabView(pendingMapSuggestion: .constant(nil))
+    MapTabView(pendingMapSuggestion: .constant(nil),
+               pendingMapCenter: .constant(nil))
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())
 }
