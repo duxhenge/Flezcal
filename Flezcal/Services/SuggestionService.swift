@@ -43,6 +43,16 @@ class SuggestionService: ObservableObject {
     /// True once the batch homepage pre-screen has finished for the current suggestions.
     @Published var preScreenComplete = false
 
+    /// Full pool of venues found by the last fetchSuggestions call, before
+    /// trimming to `maxDisplayPins`. Stored so `batchPreScreen` can scan all
+    /// of them — venues that match the user's picks are promoted into the
+    /// displayed `suggestions` even if they weren't in the closest 25.
+    var fullPool: [SuggestedSpot] = []
+
+    /// Reference center from the last fetch — used for distance sorting
+    /// when applying pre-screen results.
+    private var lastFetchCenter: CLLocation?
+
     /// Dismissed suggestion IDs (stable String IDs, persisted for the session)
     private var dismissedIDs: Set<String> = []
 
@@ -52,14 +62,16 @@ class SuggestionService: ObservableObject {
     /// This prevents stale batches from burning through Apple's rate limit.
     private var fetchGeneration = 0
 
-    /// Maximum ghost pins returned after sorting by distance.
-    private static let maxSuggestions = 25
+    /// Maximum ghost pins shown on the map / in the annotation set.
+    private static let maxDisplayPins = 25
 
     /// Fetch suggestions near the given map region for the user's chosen picks.
     ///
     /// Strategy: run each pick's mapSearchTerms as text queries, collect every
     /// result into one pool, deduplicate by name, sort by distance to region
-    /// center, then take the closest `maxSuggestions`.
+    /// center, then show the closest `maxDisplayPins`. The full pool is kept
+    /// in `fullPool` so the pre-screen can scan every venue — green matches
+    /// are promoted into the displayed set even if they weren't in the initial 25.
     ///
     /// No broad or POI-category queries — each pick's mapSearchTerms already
     /// include the right mix of specific + broad terms (e.g. mezcal's terms
@@ -161,7 +173,7 @@ class SuggestionService: ObservableObject {
             await runQuery(request, as: entry.category, label: "\(entry.category.id) \"\(entry.query)\"")
         }
 
-        // ── Sort by distance, take closest maxSuggestions ───────────────────
+        // ── Sort by distance, take closest maxDisplayPins ───────────────────
         pool.sort {
             let aLoc = CLLocation(latitude: $0.coordinate.latitude,
                                    longitude: $0.coordinate.longitude)
@@ -169,27 +181,32 @@ class SuggestionService: ObservableObject {
                                    longitude: $1.coordinate.longitude)
             return aLoc.distance(from: regionCenter) < bLoc.distance(from: regionCenter)
         }
-        let found = Array(pool.prefix(Self.maxSuggestions))
+
+        // Remove dismissed venues from the pool
+        let validPool = pool.filter { !dismissedIDs.contains($0.id) }
+        let found = Array(validPool.prefix(Self.maxDisplayPins))
 
         #if DEBUG
-        print("[Suggestions] Pool: \(pool.count) unique venues → closest \(found.count) kept")
+        print("[Suggestions] Pool: \(pool.count) unique venues → closest \(found.count) kept (full pool: \(validPool.count))")
         print("[Suggestions] Venues: \(found.map(\.name).joined(separator: ", "))")
         #endif
 
         // A newer fetch started while we were running — discard our results entirely.
         guard fetchGeneration == myGeneration else { isLoading = false; return }
 
-        // Remove any the user has already dismissed this session
-        let newSuggestions = found.filter { !dismissedIDs.contains($0.id) }
-
         // Only replace suggestions when:
         //   • The fetch found at least one result, AND
         //   • Either the fetch was not throttled, OR it found more than what we already have.
         // This prevents a throttled partial fetch from downgrading a good prior result set.
-        let shouldReplace = !newSuggestions.isEmpty &&
-            (!anyThrottled || newSuggestions.count >= suggestions.count)
+        let shouldReplace = !found.isEmpty &&
+            (!anyThrottled || found.count >= suggestions.count)
         if shouldReplace {
-            suggestions = newSuggestions
+            suggestions = found
+            // Store the full pool (distance-sorted, dismissed removed) for pre-screening.
+            // batchPreScreen will scan all of these, and applyPreScreenResults will
+            // promote green matches into the displayed suggestions.
+            fullPool = validPool
+            lastFetchCenter = regionCenter
         }
         isLoading = false
     }
@@ -205,21 +222,53 @@ class SuggestionService: ObservableObject {
         suggestions.removeAll { $0.id == suggestion.id }
     }
 
-    /// Updates suggestions in-place with batch pre-screen results.
+    /// Updates suggestions with batch pre-screen results, promoting green
+    /// matches from the full pool into the displayed set.
     ///
     /// The `results` dict contains entries for every venue that had a scannable URL:
     /// - Non-empty set → homepage matched keywords for user's picks (green pin)
     /// - Empty set → URL was scanned but no keywords matched (dimmed yellow pin)
     /// - Not in dict → venue had no URL / social media only (stays yellow "?" pin)
     func applyPreScreenResults(_ results: [String: Set<String>]) {
-        for i in suggestions.indices {
-            let id = suggestions[i].id
-            if let matched = results[id] {
-                // Venue was in the scan set — update with result (possibly empty)
-                suggestions[i].preScreenMatches = matched
+        // Apply pre-screen results to the full pool first.
+        let updatedPool = fullPool.map { suggestion in
+            var updated = suggestion
+            if let matched = results[suggestion.id] {
+                updated.preScreenMatches = matched
             }
-            // Venues not in results had no scannable URL — keep preScreenMatches = nil
+            return updated
         }
+
+        // Re-sort: green matches first (sorted by distance), then remaining
+        // (sorted by distance). Take the best maxDisplayPins.
+        let regionCenter = lastFetchCenter
+        func distance(_ s: SuggestedSpot) -> Double {
+            guard let center = regionCenter else { return 0 }
+            let loc = CLLocation(latitude: s.coordinate.latitude,
+                                  longitude: s.coordinate.longitude)
+            return loc.distance(from: center)
+        }
+
+        let green = updatedPool
+            .filter { $0.preScreenMatches?.isEmpty == false }
+            .sorted { distance($0) < distance($1) }
+        let nonGreen = updatedPool
+            .filter { !($0.preScreenMatches?.isEmpty == false) }
+            .sorted { distance($0) < distance($1) }
+
+        let combined = green + nonGreen
+        let trimmed = Array(combined.prefix(Self.maxDisplayPins))
+
+        #if DEBUG
+        print("[ApplyPreScreen] Applying \(results.count) results to pool of \(fullPool.count)")
+        print("[ApplyPreScreen] Green matches in pool: \(green.count)")
+        for s in green {
+            print("[ApplyPreScreen]   GREEN: \(s.name) → \(s.preScreenMatches!)")
+        }
+        print("[ApplyPreScreen] Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
+        #endif
+
+        suggestions = trimmed
         preScreenComplete = true
     }
 }

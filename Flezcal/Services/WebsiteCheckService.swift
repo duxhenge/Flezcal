@@ -226,6 +226,11 @@ actor WebsiteCheckService {
                 htmlCache[url.absoluteString] = scanResult
                 let relevant = scanResult.confirmed.intersection(pickIDs)
                 results[id] = relevant
+                #if DEBUG
+                if !scanResult.confirmed.isEmpty || !scanResult.related.isEmpty {
+                    print("[PreScreen] \(id): confirmed=\(scanResult.confirmed) related=\(scanResult.related) pickIDs=\(pickIDs) → relevant=\(relevant)")
+                }
+                #endif
             }
 
             // Also mark venues whose fetch failed (not in `fetched`) as scanned
@@ -314,6 +319,12 @@ actor WebsiteCheckService {
                 if !scanResult.confirmed.intersection(pickIDs).isEmpty {
                     matchedIndices.insert(index)
                 }
+                #if DEBUG
+                if !scanResult.confirmed.isEmpty || !scanResult.related.isEmpty {
+                    let name = mapItems[index].name ?? "?"
+                    print("[PreScreen-Explore] \(name): confirmed=\(scanResult.confirmed) related=\(scanResult.related) pickIDs=\(pickIDs)")
+                }
+                #endif
             }
         }
 

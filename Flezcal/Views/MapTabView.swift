@@ -133,20 +133,22 @@ struct MapTabView: View {
                 isPreScreening = false
                 return
             }
-            // Kick off batch homepage pre-screen after pins appear
+            // Kick off batch homepage pre-screen after pins appear.
+            // Pre-screen the FULL pool (not just displayed 25) so that
+            // venues beyond the 25th closest can be promoted if they match.
             preScreenBannerMessage = nil
             suggestionService.preScreenComplete = false
             isPreScreening = true
-            var suggestions = suggestionService.suggestions
+            var poolToScan = suggestionService.fullPool
             // Include showOnMapPin in the pre-screen batch so it gets
             // scanned along with the other ghost pins.
             if let pinned = showOnMapPin,
-               !suggestions.contains(where: { $0.id == pinned.id }) {
-                suggestions.append(pinned)
+               !poolToScan.contains(where: { $0.id == pinned.id }) {
+                poolToScan.append(pinned)
             }
             preScreenTask = Task {
                 let results = await websiteChecker.batchPreScreen(
-                    suggestions: suggestions,
+                    suggestions: poolToScan,
                     picks: picks
                 )
                 guard !Task.isCancelled else {
@@ -313,19 +315,17 @@ struct MapTabView: View {
                 // Ghost pins — unconfirmed Apple Maps suggestions
                 // Yellow = not yet scanned. Green = pre-screen found keywords.
                 // Gray = scanned but no match found.
-                // The id includes preScreenMatches hash so MapKit re-renders
-                // the annotation when the pin state changes (yellow → green).
                 ForEach(suggestionService.suggestions) { suggestion in
-                    let pinID = "\(suggestion.id)_\(suggestion.preScreenMatches?.hashValue ?? 0)"
+                    let isGreen = suggestion.preScreenMatches?.isEmpty == false
+                    let isScanned = suggestion.preScreenMatches != nil
                     Annotation(suggestion.name, coordinate: suggestion.coordinate) {
                         GhostPinView(
                             category: suggestion.suggestedCategory,
-                            isLikely: suggestion.preScreenMatches?.isEmpty == false,
-                            isScanned: suggestion.preScreenMatches != nil,
+                            isLikely: isGreen,
+                            isScanned: isScanned,
                             likelyCategories: (suggestion.preScreenMatches ?? [])
                                 .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                         )
-                        .id(pinID)
                             .onTapGesture {
                                 // Shift camera so the pin sits 3/4 up the map,
                                 // above the slide-up sheet.
