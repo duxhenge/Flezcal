@@ -17,49 +17,52 @@ struct Review: Identifiable, Codable {
     var reportCount: Int = 0
     var reportedByUserIDs: [String] = []
     var isHidden: Bool = false  // Auto-hidden after 3+ reports
-
-    /// True if the review contains the magic word — awards the Transcendent badge to the spot
-    var isTranscendent: Bool { comment.localizedCaseInsensitiveContains("transcendent") }
 }
 
-// MARK: - Passionate Rating Scale
+// MARK: - Rating Scale ("How far would you go?")
 
-/// The five passionate rating levels used across all food categories.
-/// Replaces the old star-based system with food-specific vibes.
+/// The five rating levels based on "how far would you go" for this food/drink.
+/// Rates the specific food/drink item at the venue, not the venue itself.
+/// Uses flan icons (🍮) as the visual scale.
 enum RatingLevel: Int, CaseIterable {
-    case pass = 1
-    case decent = 2
-    case legit = 3
-    case fire = 4
-    case obsessed = 5
+    case youDecide = 1
+    case popIn = 2
+    case bookIt = 3
+    case roadTrip = 4
+    case pilgrimage = 5
 
     var label: String {
         switch self {
-        case .pass:     return "Pass"
-        case .decent:   return "Decent"
-        case .legit:    return "Legit"
-        case .fire:     return "Fire"
-        case .obsessed: return "Obsessed"
+        case .youDecide:  return "You Decide"
+        case .popIn:      return "Pop In"
+        case .bookIt:     return "Book It"
+        case .roadTrip:   return "Road Trip"
+        case .pilgrimage: return "Pilgrimage"
         }
     }
 
+    /// Flan-count emoji scale: 1-5 flans (used in landscape / detail views)
     var emoji: String {
         switch self {
-        case .pass:     return "👋"
-        case .decent:   return "👍"
-        case .legit:    return "🔥"
-        case .fire:     return "🔥🔥"
-        case .obsessed: return "🤯"
+        case .youDecide:  return "🍮"
+        case .popIn:      return "🍮🍮"
+        case .bookIt:     return "🍮🍮🍮"
+        case .roadTrip:   return "🍮🍮🍮🍮"
+        case .pilgrimage: return "🍮🍮🍮🍮🍮"
         }
     }
 
+    /// Compact format for tight layouts: "3🍮" instead of "🍮🍮🍮"
+    var compactEmoji: String { "\(rawValue)🍮" }
+
+    /// "How far would you go?" descriptions for each level
     var description: String {
         switch self {
-        case .pass:     return "Not for me"
-        case .decent:   return "It's alright"
-        case .legit:    return "The real deal"
-        case .fire:     return "Exceptional"
-        case .obsessed: return "Life-changing"
+        case .youDecide:  return "It's here, your call"
+        case .popIn:      return "Glad it's on the menu"
+        case .bookIt:     return "Satisfies the craving"
+        case .roadTrip:   return "Worth going out of your way"
+        case .pilgrimage: return "Worth booking a flight"
         }
     }
 

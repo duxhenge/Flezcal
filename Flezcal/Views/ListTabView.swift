@@ -6,14 +6,14 @@ import CoreLocation
 
 /// Controls whether the list shows confirmed community spots or live Apple Maps search results.
 enum ListMode: String, CaseIterable {
-    case community = "Community"
-    case explore   = "Explore"
+    case community = "Verified Spots"
+    case explore   = "Potential Spots"
 }
 
 // MARK: - Custom search location (Explore mode)
 
 /// Holds a geocoded city name + coordinate so the user can search remote cities.
-private struct CustomSearchLocation: Equatable {
+struct CustomSearchLocation: Equatable {
     let name: String
     let coordinate: CLLocationCoordinate2D
 
@@ -28,14 +28,16 @@ private struct CustomSearchLocation: Equatable {
 /// the query text OR the custom location changes.
 private struct SearchTaskID: Equatable, Hashable {
     let query: String
+    let filterID: String?           // SpotFilter.category?.rawValue — triggers re-search on pill tap
     let customLocation: CustomSearchLocation?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.query == rhs.query && lhs.customLocation == rhs.customLocation
+        lhs.query == rhs.query && lhs.filterID == rhs.filterID && lhs.customLocation == rhs.customLocation
     }
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(query)
+        hasher.combine(filterID)
         hasher.combine(customLocation?.name)
         hasher.combine(customLocation?.coordinate.latitude)
         hasher.combine(customLocation?.coordinate.longitude)
@@ -49,57 +51,105 @@ struct ListTabRowView: View {
     let userLocation: CLLocationCoordinate2D?
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             SpotIcons(categories: spot.categories, size: 28)
                 .frame(width: 44, height: 44)
                 .background(spot.primaryCategory.color.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Row 1: Spot name (full width)
                 Text(spot.name)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(shortAddress(from: spot.address))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .layoutPriority(1)
 
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(formattedDistanceMiles(from: userLocation, to: spot.coordinate) ?? "—")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-
-                if spot.reviewCount > 0,
-                   let level = RatingLevel.from(max(1, min(5, Int(spot.averageRating.rounded())))) {
-                    HStack(spacing: 2) {
-                        Text(level.emoji)
+                // Row 2: Address + distance
+                HStack(spacing: 6) {
+                    if spot.isClosed {
+                        Text("Closed")
                             .font(.caption2)
-                        Text(level.label)
-                            .font(.caption)
                             .fontWeight(.medium)
+                            .foregroundStyle(.red)
+                    } else if spot.closureReportCount > 0 {
+                        Text("Reported")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.orange)
                     }
-                } else if spot.communityVerified {
-                    Text("Verified")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.green)
-                } else {
-                    Text("New")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.orange)
+                    Text(shortAddress(from: spot.address))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(formattedDistanceMiles(from: userLocation, to: spot.coordinate) ?? "—")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                }
+
+                // Row 3: Verified categories with emojis + names, or "Website mentions"
+                if !spot.isClosed {
+                    categoryDisplayRow
                 }
             }
-            .frame(minWidth: 60, alignment: .trailing)
+            .layoutPriority(1)
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var categoryDisplayRow: some View {
+        let verified = spot.categories.filter { spot.isVerified(for: $0) }
+        let potential = spot.categories.filter {
+            !spot.isVerified(for: $0) && spot.verificationStatus(for: $0) == .potential
+        }
+
+        if !verified.isEmpty {
+            // Show verified category emojis + names
+            FlowLayout(spacing: 6) {
+                ForEach(verified) { cat in
+                    HStack(spacing: 2) {
+                        Text(cat.emoji)
+                            .font(.caption2)
+                        Text(cat.displayName)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                    }
+                }
+            }
+        } else if !potential.isEmpty {
+            // No verified categories but website detected some
+            HStack(spacing: 4) {
+                Text("Website mentions:")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .italic()
+                ForEach(potential.prefix(3)) { cat in
+                    HStack(spacing: 2) {
+                        Text(cat.emoji)
+                            .font(.caption2)
+                        Text(cat.displayName)
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+        } else if spot.communityVerified || spot.hasAnyVerificationVotes {
+            // Has some votes but nothing at confirmed threshold yet — show categories
+            FlowLayout(spacing: 6) {
+                ForEach(spot.categories) { cat in
+                    HStack(spacing: 2) {
+                        Text(cat.emoji)
+                            .font(.caption2)
+                        Text(cat.displayName)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -109,6 +159,8 @@ struct ListTabRowView: View {
 struct ExploreResultRowView: View {
     let mapItem: MKMapItem
     let userLocation: CLLocationCoordinate2D?
+    /// True when the venue's homepage matched category keywords in the pre-screen.
+    var isMatched: Bool = false
 
     private var subtitle: String {
         mapItem.placemark.formattedAddress ?? mapItem.placemark.locality ?? ""
@@ -120,13 +172,23 @@ struct ExploreResultRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Generic venue icon
-            Image(systemName: venueIcon(for: mapItem.pointOfInterestCategory))
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 44, height: 44)
-                .background(Color(.systemGray5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+            // Venue icon — green checkmark overlay when pre-screen matched
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: venueIcon(for: mapItem.pointOfInterestCategory))
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(isMatched ? .green : .secondary)
+                    .frame(width: 44, height: 44)
+                    .background(isMatched ? Color.green.opacity(0.12) : Color(.systemGray5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                if isMatched {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.green)
+                        .background(Circle().fill(.white).padding(1))
+                        .offset(x: 4, y: 4)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(mapItem.name ?? "Unknown")
@@ -218,15 +280,18 @@ struct ExploreResultRowView: View {
 
 private struct ExplorePanel: View {
     @Binding var searchText: String       // ⚠️ Must be @Binding — see contract above
-    let selectedFilter: SpotFilter
+    /// The FoodCategory the user selected in the filter bar. nil = "All".
+    /// Passed as FoodCategory? (not SpotFilter) so custom picks aren't lost
+    /// in the SpotCategory conversion — SpotCategory is a fixed enum that
+    /// can't represent user-created categories.
+    let selectedFilterCategory: FoodCategory?
     let currentLocation: () -> CLLocationCoordinate2D?
-    /// Passed as a plain let — NOT @EnvironmentObject — so SpotService publishes
-    /// do not re-render ExplorePanel and cancel the in-flight .task(id: searchText).
-    let spotService: SpotService
     /// User's active picks — plain let (stability contract). Used by checkAllPicks
     /// to check all picks against the HTML cache at zero extra API cost.
     let userPicks: [FoodCategory]
-
+    /// Shared custom location — owned by ListTabView, passed as @Binding so
+    /// ExplorePanel's .task(id:) re-fires when location changes.
+    @Binding var customLocation: CustomSearchLocation?
     @StateObject private var searchService = LocationSearchService()
 
     // Sheet state lives here so changes never re-render ListTabView
@@ -235,45 +300,58 @@ private struct ExplorePanel: View {
     @State private var websiteCheckTask: Task<Void, Never>? = nil
     private let websiteChecker = WebsiteCheckService()
 
-    // Custom search location — all @State, no @EnvironmentObject (stability contract)
-    @State private var customLocation: CustomSearchLocation? = nil
-    @State private var isEditingLocation = false
-    @State private var locationInputText = ""
-    @State private var isGeocodingLocation = false
-    @State private var geocodeError: String? = nil
+    /// Indices of search results whose homepage matched category keywords.
+    /// nil = pre-screen not yet run. Empty = ran, no matches.
+    /// Used to re-rank: matched venues sort to the top of the list.
+    @State private var preScreenMatchedIndices: Set<Int>? = nil
+
+    /// True while the batch pre-screen is actively scanning homepages.
+    /// Used to show a scanning indicator and an optimistic "checking menus…" message.
+    @State private var isPreScreening = false
 
     /// The coordinate to use for searches. Custom location if set, otherwise GPS.
     private var effectiveLocation: CLLocationCoordinate2D? {
         customLocation?.coordinate ?? currentLocation()
     }
 
+    /// Number of pre-screen matched results (confirmed via homepage scan).
+    private var matchedCount: Int {
+        preScreenMatchedIndices?.count ?? 0
+    }
+
+    /// Apple Maps results split into matched (pre-screen confirmed) and unmatched.
+    /// Tier 1 (top): Pre-screen matched venues, sorted by distance.
+    /// Tier 2 (bottom): Unmatched venues, sorted by distance.
+    private var splitResults: (matched: [MKMapItem], other: [MKMapItem]) {
+        let results = searchService.searchResults
+        let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        let matchedIndices = preScreenMatchedIndices ?? []
+
+        var top: [MKMapItem] = []
+        var rest: [MKMapItem] = []
+
+        for (index, item) in results.enumerated() {
+            if isFilterSearch && matchedIndices.contains(index) {
+                top.append(item)
+            } else {
+                rest.append(item)
+            }
+        }
+        return (matched: top, other: rest)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // ── Custom location chip ────────────────────────────────
-            locationBar
-
             // ── Main content ────────────────────────────────────────
             // While searching, keep previous results visible instead of
             // flashing "No results" on every keystroke.  Only show the
             // empty / no-results states once the search has settled.
             Group {
-                if searchText.isEmpty {
+                if searchService.searchResults.isEmpty && searchService.isSearching {
                     Spacer()
-                    VStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass.circle")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.secondary)
-                        Text("Search any venue")
-                            .font(.headline)
-                        Text("Type a name, cuisine, or address to search Apple Maps — then add what you find to Flezcal.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
+                    ProgressView("Searching…")
                     Spacer()
                 } else if searchService.searchResults.isEmpty && !searchService.isSearching {
-                    // Only show "No results" when the search has finished
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "mappin.slash")
@@ -281,54 +359,103 @@ private struct ExplorePanel: View {
                             .foregroundStyle(.secondary)
                         Text("No results found")
                             .font(.headline)
-                        Text("Try a different name or location.")
+                        Text(searchText.isEmpty
+                             ? "Try searching for a specific venue."
+                             : "Try a different name or location.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("No results found. Try a different search.")
                     .padding()
-                    Spacer()
-                } else if searchService.searchResults.isEmpty && searchService.isSearching {
-                    // First search with no previous results to show
-                    Spacer()
-                    ProgressView("Searching…")
                     Spacer()
                 } else {
                     // Results list — stays visible while a new search is in flight
-                    HStack {
-                        Text("\(searchService.searchResults.count) result\(searchService.searchResults.count == 1 ? "" : "s") from Apple Maps")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if searchService.isSearching {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
-                    .padding(.top, 4)
+                    let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
+                    let split = splitResults
+                    let displayCount = split.matched.count + split.other.count
 
-                    List(searchService.searchResults, id: \.self) { mapItem in
-                        HStack(spacing: 0) {
-                            Button {
-                                selectResult(mapItem)
-                            } label: {
-                                ExploreResultRowView(
-                                    mapItem: mapItem,
-                                    userLocation: effectiveLocation
-                                )
+                    List {
+                        // ── Status banner (filter searches only) ──
+                        if isFilterSearch, let foodCat = selectedFilterCategory {
+                            Section {
+                                if isPreScreening {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("Checking menus for \(foodCat.displayName.lowercased())…")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .listRowSeparator(.hidden)
+                                } else if preScreenMatchedIndices != nil && matchedCount == 0 {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "magnifyingglass")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                            Text("No \(foodCat.displayName.lowercased()) found on menus nearby")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                        }
+                                        Text("\(displayCount) nearby venue\(displayCount == 1 ? "" : "s") shown — tap any to run a full search or confirm in person.")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Label("Web searches aren't as reliable as your own knowledge — but we'll give it our best shot!", systemImage: "info.circle")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .listRowSeparator(.hidden)
+                                } else if matchedCount > 0 {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.green)
+                                            Text("\(matchedCount) possible \(foodCat.displayName.lowercased()) result\(matchedCount == 1 ? "" : "s")")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                        }
+                                        Label("Web searches aren't as reliable as your own knowledge — but we'll give it our best shot!", systemImage: "info.circle")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .listRowSeparator(.hidden)
+                                }
                             }
-
-                            // "Show on Map" shortcut — jumps to Map tab with ghost pin
-                            Button {
-                                showOnMap(mapItem)
-                            } label: {
-                                Image(systemName: "map")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 44, height: 44)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 8))
+
+                        // ── User-typed search: plain count header ──
+                        if !isFilterSearch {
+                            Section {
+                                HStack {
+                                    Text("\(displayCount) result\(displayCount == 1 ? "" : "s") from Apple Maps")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if searchService.isSearching {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    }
+                                }
+                                .listRowSeparator(.hidden)
+                            }
+                        }
+
+                        // ── Matched results (pre-screen confirmed) ──
+                        if !split.matched.isEmpty {
+                            Section {
+                                ForEach(split.matched, id: \.self) { mapItem in
+                                    exploreRow(mapItem, isMatched: true)
+                                }
+                            }
+                        }
+
+                        // ── Other nearby results ──
+                        Section {
+                            ForEach(split.other, id: \.self) { mapItem in
+                                exploreRow(mapItem, isMatched: false)
+                            }
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -346,18 +473,58 @@ private struct ExplorePanel: View {
                     selectedSuggestion = nil
                     multiCheckResult = nil
                 },
-                source: .exploreSearch
+                source: .exploreSearch,
+                userPicks: searchScopedPicks
             )
         }
-        .task(id: SearchTaskID(query: searchText, customLocation: customLocation)) {
-            let query = searchText
-            guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-                searchService.clearResults()
+        .task(id: SearchTaskID(
+            query: searchText,
+            filterID: selectedFilterCategory?.id,
+            customLocation: customLocation
+        )) {
+            let userTypedText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+
+            if userTypedText {
+                // User typed a venue name — single query, debounced
+                let query = searchText
+                guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+                    searchService.clearResults()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                await searchService.search(query: query, userLocation: effectiveLocation)
+            } else if let foodCat = selectedFilterCategory {
+                // Filter pill active — multi-query search using all mapSearchTerms.
+                // Niche terms like "mezcal" return few Apple Maps hits on their own,
+                // so we also search broader terms like "bar" and "restaurant" to find
+                // nearby venues, then let the website pre-screen re-rank the ones
+                // that actually carry the item.
+                await searchService.multiSearch(
+                    queries: foodCat.mapSearchTerms,
+                    userLocation: effectiveLocation
+                )
+            } else {
+                // "All" filter — broad nearby search
+                await searchService.search(query: "restaurant", userLocation: effectiveLocation)
+            }
+
+            // Pre-screen: scan homepages to re-rank results (matched venues first).
+            // Only for filter-based auto-searches — user-typed queries skip re-ranking.
+            guard !Task.isCancelled else { return }
+            preScreenMatchedIndices = nil
+            isPreScreening = false
+            let items = searchService.searchResults
+            let picks = activePicks
+            guard !items.isEmpty, !userTypedText else { return }
+            isPreScreening = true
+            let matched = await websiteChecker.batchPreScreenMapItems(items, picks: picks)
+            guard !Task.isCancelled else {
+                isPreScreening = false
                 return
             }
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            await searchService.search(query: query, userLocation: effectiveLocation)
+            preScreenMatchedIndices = matched
+            isPreScreening = false
         }
         .onDisappear {
             // Cancel any in-flight website check so it doesn't write
@@ -365,17 +532,67 @@ private struct ExplorePanel: View {
             websiteCheckTask?.cancel()
             websiteCheckTask = nil
             multiCheckResult = nil
+            preScreenMatchedIndices = nil
+            isPreScreening = false
         }
     }
 
     /// Resolve the primary FoodCategory for a search result.
     /// Uses the active filter if set, otherwise the user's first pick.
     private var primaryFoodCategory: FoodCategory {
-        if let spotCat = selectedFilter.category,
-           let foodCat = FoodCategory.allCategories.first(where: { $0.id == spotCat.rawValue }) {
+        if let foodCat = selectedFilterCategory {
             return foodCat
         }
         return userPicks.first ?? FoodCategory.mezcal
+    }
+
+    /// Picks scoped to the active filter — all picks when "All", single pick otherwise.
+    private var activePicks: [FoodCategory] {
+        if selectedFilterCategory != nil {
+            return [primaryFoodCategory]
+        }
+        return userPicks
+    }
+
+    /// A single row in the Explore results list — venue info + green checkmark
+    /// for pre-screen matches + "Show on Map" button.
+    @ViewBuilder
+    private func exploreRow(_ mapItem: MKMapItem, isMatched: Bool) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                selectResult(mapItem)
+            } label: {
+                ExploreResultRowView(
+                    mapItem: mapItem,
+                    userLocation: effectiveLocation,
+                    isMatched: isMatched
+                )
+            }
+
+            // "Show on Map" shortcut — jumps to Map tab with ghost pin
+            Button {
+                showOnMap(mapItem)
+            } label: {
+                Image(systemName: "map")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 8))
+    }
+
+    /// Picks to use for the current search context.
+    /// When the user typed custom text, scope to just the primary category —
+    /// showing "we found flan!" is confusing when they searched for "tartare".
+    /// When using filter-based auto-search, include all active picks.
+    private var searchScopedPicks: [FoodCategory] {
+        if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+            return [primaryFoodCategory]
+        }
+        return activePicks
     }
 
     private func selectResult(_ mapItem: MKMapItem) {
@@ -383,7 +600,7 @@ private struct ExplorePanel: View {
         multiCheckResult = nil
         let foodCat = primaryFoodCategory
         selectedSuggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
-        let picks = userPicks
+        let picks = searchScopedPicks
         websiteCheckTask = Task {
             let result = await websiteChecker.checkAllPicks(
                 mapItem, picks: picks, primaryPick: foodCat
@@ -404,132 +621,6 @@ private struct ExplorePanel: View {
         )
     }
 
-    // MARK: Location bar
-
-    @ViewBuilder
-    private var locationBar: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 8) {
-                Image(systemName: customLocation != nil ? "location.circle.fill" : "location.circle")
-                    .foregroundStyle(customLocation != nil ? .blue : .secondary)
-                    .font(.subheadline)
-
-                if isEditingLocation {
-                    TextField("City name (e.g. Ajijic, Mexico)", text: $locationInputText)
-                        .textFieldStyle(.plain)
-                        .font(.subheadline)
-                        .autocorrectionDisabled()
-                        .onSubmit { geocodeCity(locationInputText) }
-
-                    if isGeocodingLocation {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Button { geocodeCity(locationInputText) } label: {
-                            Image(systemName: "arrow.right.circle.fill")
-                                .foregroundStyle(.blue)
-                        }
-                        .disabled(locationInputText.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-
-                    Button {
-                        isEditingLocation = false
-                        locationInputText = ""
-                        geocodeError = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                } else if let custom = customLocation {
-                    Text("Near: \(custom.name)")
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-
-                    Button {
-                        locationInputText = custom.name
-                        isEditingLocation = true
-                    } label: {
-                        Image(systemName: "pencil.circle")
-                            .foregroundStyle(.blue)
-                            .font(.subheadline)
-                    }
-
-                    Button {
-                        customLocation = nil
-                        geocodeError = nil
-                    } label: {
-                        Image(systemName: "location.fill")
-                            .foregroundStyle(.blue)
-                            .font(.subheadline)
-                    }
-                } else {
-                    Button {
-                        isEditingLocation = true
-                    } label: {
-                        Text("Near: Current Location")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal)
-            .padding(.top, 6)
-
-            if let error = geocodeError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal)
-                    .padding(.top, 2)
-            }
-        }
-    }
-
-    // MARK: Custom location geocoding
-
-    private func geocodeCity(_ cityName: String) {
-        let trimmed = cityName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-
-        isGeocodingLocation = true
-        geocodeError = nil
-
-        Task {
-            let geocoder = CLGeocoder()
-            do {
-                let placemarks = try await geocoder.geocodeAddressString(trimmed)
-                if let placemark = placemarks.first,
-                   let coord = placemark.location?.coordinate {
-                    let displayName = [placemark.locality, placemark.administrativeArea, placemark.country]
-                        .compactMap { $0 }
-                        .prefix(2)
-                        .joined(separator: ", ")
-                    customLocation = CustomSearchLocation(
-                        name: displayName.isEmpty ? trimmed : displayName,
-                        coordinate: coord
-                    )
-                    isEditingLocation = false
-                    locationInputText = ""
-                    geocodeError = nil
-                } else {
-                    geocodeError = "City not found"
-                }
-            } catch {
-                geocodeError = "Couldn't look up location"
-            }
-            isGeocodingLocation = false
-        }
-    }
 }
 
 // MARK: - List Tab View
@@ -557,12 +648,40 @@ struct ListTabView: View {
     @State private var searchText = ""
     @State private var listMode: ListMode = .community
 
+    // Custom search location — shared between Explore and Verified tabs
+    @State private var customLocation: CustomSearchLocation? = nil
+    @State private var isEditingLocation = false
+    @State private var locationInputText = ""
+    @State private var isGeocodingLocation = false
+    @State private var geocodeError: String? = nil
+    @State private var geocodeResults: [CustomSearchLocation] = []
+    @State private var showGeocodePicker = false
+    @State private var geocodeTask: Task<Void, Never>? = nil
+
+    /// The coordinate to use for all searches. Custom location if set, otherwise GPS.
+    private var effectiveLocation: CLLocationCoordinate2D? {
+        customLocation?.coordinate ?? currentLocation()
+    }
+
+    /// Search placeholder that reflects the active filter.
+    private var explorePlaceholder: String {
+        if let filter = selectedFilter {
+            return "Search for \(filter.displayName.lowercased()) spots…"
+        }
+        let names = picksService.picks.prefix(3).map { $0.displayName.lowercased() }
+        if names.count <= 2 {
+            return "Search for \(names.joined(separator: " & ")) spots…"
+        }
+        return "Search for all your picks…"
+    }
 
     // MARK: Community data
 
     private var filteredAndSortedSpots: [Spot] {
         let spotFilter = SpotFilter(category: selectedFilter.flatMap { SpotCategory(rawValue: $0.id) })
         let categoryFiltered = spotService.filteredSpots(for: spotFilter)
+
+        // Text search — filter by name/address/offerings
         let textFiltered: [Spot]
         if searchText.isEmpty {
             textFiltered = categoryFiltered
@@ -573,11 +692,31 @@ struct ListTabView: View {
                 (spot.mezcalOfferings ?? []).contains { $0.localizedCaseInsensitiveContains(searchText) }
             }
         }
-        return textFiltered.sorted { a, b in
-            guard let user = currentLocation() else { return a.name < b.name }
-            let userCL = CLLocation(latitude: user.latitude, longitude: user.longitude)
-            let distA = userCL.distance(from: CLLocation(latitude: a.latitude, longitude: a.longitude))
-            let distB = userCL.distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
+
+        // Distance filter — show spots within ~35 miles of the effective location
+        // (custom location if set, otherwise GPS).
+        // Skip the distance filter when the user is actively searching by name
+        // (they clearly want to find a specific spot regardless of distance).
+        // When location is unavailable, show all (sorted alphabetically).
+        guard let center = effectiveLocation else {
+            return textFiltered.sorted { $0.name < $1.name }
+        }
+        let centerCL = CLLocation(latitude: center.latitude, longitude: center.longitude)
+
+        let results: [Spot]
+        if searchText.isEmpty {
+            let maxDistance: CLLocationDistance = 56_327  // ~35 miles
+            results = textFiltered.filter { spot in
+                centerCL.distance(from: CLLocation(latitude: spot.latitude, longitude: spot.longitude)) <= maxDistance
+            }
+        } else {
+            // Text search — no distance cutoff, show all matching spots
+            results = textFiltered
+        }
+
+        return results.sorted { a, b in
+            let distA = centerCL.distance(from: CLLocation(latitude: a.latitude, longitude: a.longitude))
+            let distB = centerCL.distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
             return distA < distB
         }
     }
@@ -604,7 +743,7 @@ struct ListTabView: View {
                     TextField(
                         listMode == .community
                             ? "Search spots, mezcals…"
-                            : "Search any restaurant, bar, store…",
+                            : explorePlaceholder,
                         text: $searchText
                     )
                     .textFieldStyle(.plain)
@@ -622,6 +761,9 @@ struct ListTabView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
 
+                // Location bar — shared between both tabs
+                locationBar
+
                 // Category filter — shown in both modes
                 PicksFilterBar(picks: picksService.picks, selectedPick: $selectedFilter)
                     .padding(.top, 8)
@@ -633,10 +775,10 @@ struct ListTabView: View {
                 case .explore:
                     ExplorePanel(
                         searchText: $searchText,
-                        selectedFilter: SpotFilter(category: selectedFilter.flatMap { SpotCategory(rawValue: $0.id) }),
+                        selectedFilterCategory: selectedFilter,
                         currentLocation: currentLocation,
-                        spotService: spotService,
-                        userPicks: picksService.picks
+                        userPicks: picksService.picks,
+                        customLocation: $customLocation
                     )
                 }
             }
@@ -705,6 +847,7 @@ struct ListTabView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                .accessibilityElement(children: .combine)
                 .padding()
                 Spacer()
             } else {
@@ -712,13 +855,228 @@ struct ListTabView: View {
                     Button {
                         selectedSpot = spot
                     } label: {
-                        ListTabRowView(spot: spot, userLocation: currentLocation())
+                        ListTabRowView(spot: spot, userLocation: effectiveLocation)
                     }
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
                 .listStyle(.plain)
             }
         }
+    }
+
+    // MARK: - Location bar (shared between tabs)
+
+    @ViewBuilder
+    private var locationBar: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 8) {
+                Image(systemName: customLocation != nil ? "location.circle.fill" : "location.circle")
+                    .foregroundStyle(customLocation != nil ? .blue : .secondary)
+                    .font(.subheadline)
+
+                if isEditingLocation {
+                    TextField("City name (e.g. Ajijic, Mexico)", text: $locationInputText)
+                        .textFieldStyle(.plain)
+                        .font(.subheadline)
+                        .autocorrectionDisabled()
+                        .submitLabel(.go)
+                        .onSubmit {
+                            let query = locationInputText.trimmingCharacters(in: .whitespaces)
+                            guard query.count >= 2 else { return }
+                            geocodeTask?.cancel()
+                            geocodeTask = Task { await geocodeCity(query, autoSelect: true) }
+                        }
+                        .onChange(of: locationInputText) { _ in
+                            geocodeTask?.cancel()
+                            let query = locationInputText.trimmingCharacters(in: .whitespaces)
+                            guard query.count >= 2 else {
+                                geocodeResults = []
+                                showGeocodePicker = false
+                                geocodeError = nil
+                                return
+                            }
+                            geocodeTask = Task {
+                                try? await Task.sleep(for: .milliseconds(400))
+                                guard !Task.isCancelled else { return }
+                                await geocodeCity(query, autoSelect: false)
+                            }
+                        }
+
+                    if isGeocodingLocation {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Button {
+                        isEditingLocation = false
+                        locationInputText = ""
+                        geocodeError = nil
+                        geocodeResults = []
+                        showGeocodePicker = false
+                        geocodeTask?.cancel()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let custom = customLocation {
+                    Text("Near: \(custom.name)")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Button {
+                        locationInputText = ""
+                        isEditingLocation = true
+                    } label: {
+                        Image(systemName: "pencil.circle")
+                            .foregroundStyle(.blue)
+                            .font(.subheadline)
+                    }
+                    .accessibilityLabel("Change location")
+
+                    Button {
+                        customLocation = nil
+                        geocodeError = nil
+                    } label: {
+                        Image(systemName: "location.fill")
+                            .foregroundStyle(.blue)
+                            .font(.subheadline)
+                    }
+                    .accessibilityLabel("Use current location")
+                } else {
+                    Button {
+                        isEditingLocation = true
+                    } label: {
+                        Text("Near: Current Location")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal)
+            .padding(.top, 6)
+
+            if let error = geocodeError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal)
+                    .padding(.top, 2)
+            }
+
+            // Location picker — shown when geocoder returns multiple matches
+            if showGeocodePicker && !geocodeResults.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(geocodeResults.enumerated()), id: \.offset) { _, location in
+                        Button {
+                            selectLocation(location)
+                        } label: {
+                            HStack {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundStyle(.blue)
+                                    .font(.subheadline)
+                                Text(location.name)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+
+                        if location != geocodeResults.last {
+                            Divider()
+                                .padding(.leading, 36)
+                        }
+                    }
+                }
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    // MARK: - Custom location geocoding
+
+    /// Geocodes a city name and shows results in the picker.
+    /// - Parameter autoSelect: When true and there's exactly one result,
+    ///   auto-confirms it (used for explicit Go/Return). When false (typing),
+    ///   always shows the picker so the user can review before selecting.
+    private func geocodeCity(_ cityName: String, autoSelect: Bool) async {
+        let trimmed = cityName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        isGeocodingLocation = true
+        geocodeError = nil
+
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.geocodeAddressString(trimmed)
+            guard !Task.isCancelled else { return }
+            let results = placemarks.compactMap { placemark -> CustomSearchLocation? in
+                guard let coord = placemark.location?.coordinate else { return nil }
+                let displayName = buildDisplayName(from: placemark)
+                return CustomSearchLocation(
+                    name: displayName.isEmpty ? trimmed : displayName,
+                    coordinate: coord
+                )
+            }
+
+            if results.count == 1 && autoSelect {
+                // Explicit submit (Go/Return) with a single match — confirm immediately
+                selectLocation(results[0])
+            } else if !results.isEmpty {
+                // Multiple results, or single result from typing — show picker
+                geocodeResults = results
+                showGeocodePicker = true
+            } else {
+                geocodeResults = []
+                showGeocodePicker = false
+                geocodeError = "No results for \"\(trimmed)\""
+            }
+        } catch {
+            guard !Task.isCancelled else { return }
+            geocodeResults = []
+            showGeocodePicker = false
+            geocodeError = "Couldn't look up location"
+        }
+        isGeocodingLocation = false
+    }
+
+    private func buildDisplayName(from placemark: CLPlacemark) -> String {
+        var components: [String] = []
+        if let locality = placemark.locality {
+            components.append(locality)
+        }
+        if let admin = placemark.administrativeArea, admin != placemark.locality {
+            components.append(admin)
+        }
+        if let country = placemark.country, country != placemark.administrativeArea {
+            components.append(country)
+        }
+        return components.joined(separator: ", ")
+    }
+
+    private func selectLocation(_ location: CustomSearchLocation) {
+        customLocation = location
+        isEditingLocation = false
+        locationInputText = ""
+        geocodeError = nil
+        geocodeResults = []
+        showGeocodePicker = false
     }
 
 

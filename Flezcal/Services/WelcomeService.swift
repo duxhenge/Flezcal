@@ -69,6 +69,7 @@ class WelcomeService: ObservableObject {
             return WelcomePage(icon: icon, headline: headline, description: description, color: color)
         }
 
+        let tagline = data["tagline"] as? String ?? ""
         let changeNote = data["changeNote"] as? String ?? ""
         let changeDate = data["changeDate"] as? String ?? ""
 
@@ -76,6 +77,7 @@ class WelcomeService: ObservableObject {
             version: version,
             title: title,
             subtitle: subtitle,
+            tagline: tagline.isEmpty ? WelcomeContent.fallback.tagline : tagline,
             items: items.isEmpty ? WelcomeContent.fallback.items : items,
             pages: pages.isEmpty ? WelcomeContent.fallback.pages : pages,
             footer: footer,

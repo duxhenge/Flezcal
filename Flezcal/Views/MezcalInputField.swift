@@ -1,16 +1,25 @@
 import SwiftUI
 
-/// A text field with autocomplete suggestions for mezcal brand names.
-/// Users can pick a suggestion or type any custom brand name.
-struct MezcalInputField: View {
+/// A text field with autocomplete suggestions for any category's offerings.
+/// Shows up to 5 matching suggestions from the provided list as the user types.
+/// Users can pick a suggestion or type any custom value.
+struct OfferingInputField: View {
     @Binding var text: String
     let placeholder: String
+    /// All known offerings for this category — static brands + community-sourced.
+    /// The view filters this list as the user types.
+    let knownOfferings: [String]
+    /// SF Symbol shown next to each suggestion. Defaults to "tag" for generic categories.
+    var suggestionIcon: String = "tag"
+    /// If true, uses VeladoraIcon instead of an SF Symbol (mezcal-specific).
+    var useVeladoraIcon: Bool = false
 
     @State private var showSuggestions = false
     @FocusState private var isFocused: Bool
 
     private var suggestions: [String] {
-        MezcalBrands.suggestions(for: text)
+        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        return knownOfferings.filter { $0.localizedCaseInsensitiveContains(text) }
     }
 
     var body: some View {
@@ -34,7 +43,13 @@ struct MezcalInputField: View {
                             isFocused = false
                         } label: {
                             HStack {
-                                VeladoraIcon(size: 14)
+                                if useVeladoraIcon {
+                                    VeladoraIcon(size: 14)
+                                } else {
+                                    Image(systemName: suggestionIcon)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Text(suggestion)
                                     .font(.subheadline)
                                     .foregroundStyle(.primary)
@@ -54,9 +69,81 @@ struct MezcalInputField: View {
     }
 }
 
+// MARK: - Legacy wrapper
+
+/// Convenience wrapper that uses the static MezcalBrands list + VeladoraIcon.
+/// Keeps existing call sites working without changes during migration.
+struct MezcalInputField: View {
+    @Binding var text: String
+    let placeholder: String
+
+    var body: some View {
+        OfferingInputField(
+            text: $text,
+            placeholder: placeholder,
+            knownOfferings: MezcalBrands.all,
+            useVeladoraIcon: true
+        )
+    }
+}
+
+// MARK: - Community offerings aggregator
+
+/// Aggregates offerings across all saved spots for a given category,
+/// ranked by frequency (most common first). For mezcal, merges the
+/// static brand list as a base so users see suggestions even before
+/// any community data exists.
+enum CommunityOfferings {
+
+    /// Returns a deduplicated, frequency-ranked list of known offerings
+    /// for the given category, drawn from all saved spots.
+    /// For mezcal, the static MezcalBrands list is used as a base,
+    /// supplemented by any community-added brands not on the list.
+    static func suggestions(for category: SpotCategory, from spots: [Spot]) -> [String] {
+        // Count how many spots list each offering
+        var frequency: [String: Int] = [:]
+        for spot in spots where !spot.isHidden && !spot.isClosed {
+            for offering in spot.offerings(for: category) {
+                let trimmed = offering.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { continue }
+                frequency[trimmed, default: 0] += 1
+            }
+        }
+
+        if category == .mezcal {
+            // Start with the full static brand list, then append any
+            // community-added brands not already in the static list.
+            let staticSet = Set(MezcalBrands.all.map { $0.lowercased() })
+            let communityExtras = frequency.keys
+                .filter { !staticSet.contains($0.lowercased()) }
+                .sorted { (frequency[$0] ?? 0) > (frequency[$1] ?? 0) }
+            return MezcalBrands.all + communityExtras
+        }
+
+        // Non-mezcal: sort by frequency (most popular first), then alphabetically
+        return frequency.keys.sorted { a, b in
+            let fa = frequency[a] ?? 0
+            let fb = frequency[b] ?? 0
+            if fa != fb { return fa > fb }
+            return a.localizedCaseInsensitiveCompare(b) == .orderedAscending
+        }
+    }
+}
+
 #Preview {
-    VStack {
-        MezcalInputField(text: .constant("Del"), placeholder: "e.g. Del Maguey Vida")
+    VStack(spacing: 20) {
+        OfferingInputField(
+            text: .constant("Del"),
+            placeholder: "e.g. Del Maguey Vida",
+            knownOfferings: MezcalBrands.all,
+            useVeladoraIcon: true
+        )
+        OfferingInputField(
+            text: .constant("Class"),
+            placeholder: "e.g. Classic, Coconut",
+            knownOfferings: ["Classic", "Coconut", "Cheese Flan", "Chocolate"],
+            suggestionIcon: "birthday.cake"
+        )
     }
     .padding()
 }

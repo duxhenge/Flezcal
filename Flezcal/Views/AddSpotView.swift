@@ -6,6 +6,7 @@ struct AddSpotView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
+    @EnvironmentObject var photoService: PhotoService
     @State private var showSearch = false
     @State private var showEmailAuth = false
     /// The pick the user has selected to add a spot for.
@@ -209,4 +210,5 @@ private struct PickSelectionCard: View {
         .environmentObject(AuthService())
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())
+        .environmentObject(PhotoService())
 }

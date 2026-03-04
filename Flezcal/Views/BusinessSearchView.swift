@@ -5,6 +5,7 @@ struct BusinessSearchView: View {
     let category: SpotCategory
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
+    @EnvironmentObject var photoService: PhotoService
     @StateObject private var searchService = LocationSearchService()
     @Environment(\.dismiss) private var dismiss
 
@@ -92,6 +93,9 @@ struct BusinessSearchView: View {
                     ConfirmSpotView(mapItem: mapItem, categories: [category]) {
                         dismiss()
                     }
+                    .environmentObject(authService)
+                    .environmentObject(spotService)
+                    .environmentObject(photoService)
                 }
             }
         }
@@ -113,6 +117,8 @@ struct ConfirmSpotView: View {
     let categories: [SpotCategory]
     /// When true the spot is marked community-verified on creation (ghost pin / Explore search).
     var preVerified: Bool = false
+    /// Website-detected categories to store on the spot (from ghost pin flow).
+    var websiteDetectedCategories: [String]? = nil
     let onSaved: () -> Void
 
     /// Primary category — first in the list, used wherever the old single-category
@@ -133,6 +139,11 @@ struct ConfirmSpotView: View {
     @State private var successMessage = ""
     @State private var showSuccessOverlay = false
     @State private var overlayScale: CGFloat = 0.3
+    /// Holds the saved Spot so the user can navigate to its detail view.
+    @State private var savedSpot: Spot?
+    @State private var showSignIn = false
+    /// Tracks that the user tapped "save" before signing in — auto-proceed after.
+    @State private var pendingSaveAfterSignIn = false
 
     var body: some View {
         NavigationStack {
@@ -190,15 +201,24 @@ struct ConfirmSpotView: View {
                                             .font(.caption)
                                             .foregroundStyle(cat.color)
                                     }
-                                    if existing.reviewCount > 0,
-                                       let level = RatingLevel.from(max(1, min(5, Int(existing.averageRating.rounded())))) {
-                                        Text("•")
-                                            .foregroundStyle(.secondary)
-                                        HStack(spacing: 2) {
-                                            Text(level.emoji)
-                                            Text(level.label)
+                                }
+                                // Per-category ratings for existing spot
+                                let ratedCats = existing.categories.filter { existing.rating(for: $0) != nil && existing.rating(for: $0)!.count > 0 }
+                                if !ratedCats.isEmpty {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        ForEach(ratedCats) { cat in
+                                            if let catRating = existing.rating(for: cat) {
+                                                HStack(spacing: 4) {
+                                                    CategoryIcon(category: cat, size: 12)
+                                                    Text(cat.displayName)
+                                                        .font(.caption2)
+                                                    FlanBarView(rating: catRating.average, size: 10, spacing: 1)
+                                                    Text(String(format: "%.1f", catRating.average))
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
                                         }
-                                        .font(.caption)
                                     }
                                 }
 
@@ -249,14 +269,17 @@ struct ConfirmSpotView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
+                        let knownOfferings = CommunityOfferings.suggestions(for: category, from: spotService.spots)
+
                         ForEach(mezcalOfferings.indices, id: \.self) { index in
                             HStack {
-                                if category == .mezcal {
-                                    MezcalInputField(text: $mezcalOfferings[index], placeholder: "One \(category.offeringSingular) per field")
-                                } else {
-                                    TextField("One \(category.offeringSingular) per field", text: $mezcalOfferings[index])
-                                        .textFieldStyle(.roundedBorder)
-                                }
+                                OfferingInputField(
+                                    text: $mezcalOfferings[index],
+                                    placeholder: "One \(category.offeringSingular) per field",
+                                    knownOfferings: knownOfferings,
+                                    suggestionIcon: category.icon,
+                                    useVeladoraIcon: category == .mezcal
+                                )
 
                                 if mezcalOfferings.count > 1 {
                                     Button {
@@ -278,9 +301,14 @@ struct ConfirmSpotView: View {
                     }
                     .padding(.horizontal)
 
-                    // Save button
+                    // Save button — sign-in required, triggers inline sheet if needed
                     Button {
-                        saveSpot()
+                        if authService.isSignedIn {
+                            saveSpot()
+                        } else {
+                            pendingSaveAfterSignIn = true
+                            showSignIn = true
+                        }
                     } label: {
                         if isSaving {
                             ProgressView()
@@ -311,13 +339,26 @@ struct ConfirmSpotView: View {
             .onAppear {
                 checkForExistingSpot()
             }
+            .sheet(isPresented: $showSignIn) {
+                SignInSheet()
+                    .environmentObject(authService)
+                    .presentationDetents([.medium])
+            }
+            .onChange(of: authService.isSignedIn) { _, signedIn in
+                if signedIn && pendingSaveAfterSignIn {
+                    pendingSaveAfterSignIn = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        saveSpot()
+                    }
+                }
+            }
             .alert("Success!", isPresented: $showSuccess) {
                 Button("OK") {
                     dismiss()
                     onSaved()
                 }
             } message: {
-                Text(successMessage)
+                Text("\(successMessage)\n\nYou can rate individual categories from the spot's detail page.")
             }
             .alert("🍮 ¡Eres un Flanático!", isPresented: $showFirstSpotCelebration) {
                 Button("¡Vámonos!") {
@@ -325,7 +366,7 @@ struct ConfirmSpotView: View {
                     onSaved()
                 }
             } message: {
-                Text("You added your first spot to Flezcal! The community thanks you. You are now officially a Flanático. 🥃")
+                Text("You added your first spot to Flezcal! The community thanks you. You are now officially a Flanático. 🥃\n\nVisit the spot to rate individual categories.")
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
@@ -366,7 +407,13 @@ struct ConfirmSpotView: View {
 
     private func saveSpot() {
         guard let coordinate = mapItem.placemark.location?.coordinate,
-              let userID = authService.userID else { return }
+              let userID = authService.userID else {
+            // Surface the error so the button doesn't silently do nothing
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error)
+            showError = true
+            return
+        }
 
         isSaving = true
 
@@ -384,11 +431,22 @@ struct ConfirmSpotView: View {
                 // Add any new categories not already on the spot
                 let newCats = categories.filter { cat in !existing.categories.contains(cat) }
                 if !newCats.isEmpty {
-                    let catSuccess = await spotService.addCategories(spotID: existing.id, newCategories: newCats)
+                    let catSuccess = await spotService.addCategories(spotID: existing.id, newCategories: newCats, addedBy: userID)
                     if catSuccess {
                         let names = newCats.map(\.displayName).joined(separator: ", ")
                         messages.append("\(names) added to \(existing.name).")
                         didSomething = true
+
+                        // Auto-create verifications for the newly added categories
+                        let verificationService = VerificationService()
+                        for cat in newCats {
+                            _ = await verificationService.submitVote(
+                                spotID: existing.id,
+                                userID: userID,
+                                category: cat,
+                                vote: true
+                            )
+                        }
                     }
                 }
 
@@ -402,6 +460,12 @@ struct ConfirmSpotView: View {
                 }
 
                 isSaving = false
+                // Make the existing spot available for rating
+                savedSpot = spotService.findExistingSpot(
+                    name: existing.name,
+                    latitude: existing.latitude,
+                    longitude: existing.longitude
+                ) ?? existing
                 if didSomething {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
@@ -413,6 +477,7 @@ struct ConfirmSpotView: View {
                 }
             } else {
                 // Create new spot
+                let categoryAttribution = Dictionary(uniqueKeysWithValues: categories.map { ($0.rawValue, userID) })
                 let spot = Spot(
                     name: mapItem.name ?? "Unknown",
                     address: mapItem.placemark.formattedAddress ?? "Unknown address",
@@ -426,13 +491,31 @@ struct ConfirmSpotView: View {
                     reviewCount: 0,
                     offerings: filteredOfferings.isEmpty ? nil : [category.rawValue: filteredOfferings],
                     websiteURL: mapItem.url?.absoluteString,
-                    communityVerified: preVerified
+                    communityVerified: preVerified,
+                    categoryAddedBy: categoryAttribution,
+                    websiteDetectedCategories: websiteDetectedCategories
                 )
 
                 let isFirstSpot = spotService.spots.filter { $0.addedByUserID == userID }.isEmpty
                 let success = await spotService.addSpot(spot)
                 isSaving = false
                 if success {
+                    savedSpot = spot
+
+                    // Auto-create verification documents for each confirmed category
+                    // The user adding a spot IS their verification (vote: true)
+                    Task {
+                        let verificationService = VerificationService()
+                        for cat in categories {
+                            _ = await verificationService.submitVote(
+                                spotID: spot.id,
+                                userID: userID,
+                                category: cat,
+                                vote: true
+                            )
+                        }
+                    }
+
                     // Show pin-drop animation
                     withAnimation { showSuccessOverlay = true }
                     overlayScale = 0.3
@@ -521,6 +604,7 @@ extension MKPointOfInterestCategory {
         case .store: return "Store"
         case .winery: return "Winery"
         case .brewery: return "Brewery"
+        case .hotel: return "Restaurant & Inn"
         default: return "Business"
         }
     }

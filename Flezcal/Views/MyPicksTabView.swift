@@ -1,47 +1,71 @@
 import SwiftUI
 
-/// "My Picks" tab — shows the user's current 1–3 chosen food/drink categories
-/// as large cards, with a button to open the selection grid.
+/// "My Flezcals" tab — shows the user's current food/drink categories as large cards,
+/// with a button to open the selection grid.
+///
+/// All picks (including the 3 launch defaults) are freely selectable and removable,
+/// as long as at least 1 pick remains active. Custom picks also show an edit button.
 struct MyPicksTabView: View {
     @EnvironmentObject var picksService: UserPicksService
+    @EnvironmentObject var authService: AuthService
     @State private var showGrid = false
+    @State private var editingCategory: FoodCategory? = nil
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Subtitle
-                    Text("Your picks shape everything — map pins, ghost suggestions, and search filters.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    subtitleText
                         .padding(.horizontal, 32)
                         .padding(.top, 8)
 
                     // Pick cards
                     VStack(spacing: 14) {
                         ForEach(picksService.picks) { category in
-                            PickCard(category: category)
+                            let isCustom = category.id.hasPrefix("custom_")
+                            let canRemove = picksService.picks.count > 1
+                            PickCard(
+                                category: category,
+                                isEditable: true,
+                                canRemove: canRemove,
+                                onEdit: { editingCategory = category },
+                                onRemove: {
+                                    withAnimation(.spring()) {
+                                        if isCustom {
+                                            _ = picksService.removeCustomPick(category)
+                                        } else {
+                                            _ = picksService.toggle(category)
+                                        }
+                                    }
+                                }
+                            )
                         }
 
-                        // Empty slots
+                        // Empty slots — tappable to open the selection grid
                         let remaining = UserPicksService.maxPicks - picksService.picks.count
                         if remaining > 0 {
                             ForEach(0..<remaining, id: \.self) { _ in
-                                EmptyPickSlot()
+                                Button { showGrid = true } label: {
+                                    EmptyPickSlot(label: "Add a Flezcal")
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                     .padding(.horizontal)
 
-                    // Change button
+                    // Button
                     Button {
                         showGrid = true
                     } label: {
-                        Label("Change My Picks", systemImage: "slider.horizontal.3")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                        Label(
+                            "Customize My Flezcals",
+                            systemImage: "slider.horizontal.3"
+                        )
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
@@ -49,14 +73,27 @@ struct MyPicksTabView: View {
                 }
                 .padding(.bottom, 32)
             }
-            .navigationTitle("My Picks")
+            .navigationTitle("My Flezcals")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showGrid) {
                 FoodCategoryGridView()
                     .environmentObject(picksService)
+                    .environmentObject(authService)
+                    .presentationDetents([.large])
+            }
+            .sheet(item: $editingCategory) { category in
+                EditCustomCategoryView(category: category)
+                    .environmentObject(picksService)
                     .presentationDetents([.large])
             }
         }
+    }
+
+    private var subtitleText: some View {
+        Text("Your Flezcals shape everything — map pins, ghost suggestions, and search filters. Tap below to customize!")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
     }
 }
 
@@ -64,6 +101,10 @@ struct MyPicksTabView: View {
 
 private struct PickCard: View {
     let category: FoodCategory
+    var isEditable: Bool = false
+    let canRemove: Bool
+    let onEdit: (() -> Void)?
+    let onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -78,16 +119,40 @@ private struct PickCard: View {
                     .font(.title3)
                     .fontWeight(.bold)
 
-                Text(category.mapSearchTerms.prefix(2).joined(separator: " · "))
+                // Show websiteKeywords — the terms used for website scanning
+                Text(category.websiteKeywords.prefix(3).joined(separator: " · "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
 
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(category.color)
+            // Right-side actions
+            if isEditable, let onEdit {
+                // Edit button for custom picks
+                Button {
+                    onEdit()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.body)
+                        .foregroundStyle(category.color)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit search terms for \(category.displayName)")
+            }
+
+            // Remove button — available for all picks when more than 1 remains
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(canRemove ? .secondary : .quaternary)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canRemove)
+            .accessibilityLabel("Remove \(category.displayName)")
         }
         .padding(16)
         .background(
@@ -98,12 +163,16 @@ private struct PickCard: View {
                         .stroke(category.color.opacity(0.25), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(category.displayName), selected\(isEditable ? ", editable" : "")")
     }
 }
 
 // MARK: - Empty slot
 
 private struct EmptyPickSlot: View {
+    let label: String
+
     var body: some View {
         HStack(spacing: 16) {
             RoundedRectangle(cornerRadius: 16)
@@ -115,7 +184,7 @@ private struct EmptyPickSlot: View {
                         .foregroundStyle(.tertiary)
                 )
 
-            Text("Add a pick")
+            Text(label)
                 .font(.body)
                 .foregroundStyle(.tertiary)
 
@@ -131,10 +200,13 @@ private struct EmptyPickSlot: View {
                         .opacity(0.5)
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }
 
 #Preview {
     MyPicksTabView()
         .environmentObject(UserPicksService())
+        .environmentObject(AuthService())
 }

@@ -17,13 +17,12 @@ enum AppConstants {
     /// Bump this when shipping a new build — shown in Profile → About
     static let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
 
-    // ✏️ REQUIRED before App Store submission: replace these with your real hosted URLs.
-    //    Both URLs must be publicly accessible or Apple will reject the app.
-    //    privacyPolicyURL is shown in Profile → About and required by App Store guidelines.
-    static let privacyPolicyURL: URL = URL(string: "https://flezcal.com/privacy")
-        ?? URL(string: "https://example.com")!
-    static let supportURL: URL = URL(string: "https://flezcal.com/support")
-        ?? URL(string: "https://example.com")!
+    // Both URLs must be publicly accessible or Apple will reject the app.
+    // privacyPolicyURL is shown in Profile → About and required by App Store guidelines.
+    static let privacyPolicyURL = URL(string: "https://flezcal.app/privacy")!
+    static let termsURL = URL(string: "https://flezcal.app/terms")!
+    static let supportURL = URL(string: "https://flezcal.app/support")!
+    static let supportEmail = "support@flezcal.app"
 
     // ✏️ Add, remove, or edit taglines here — one is picked at random each launch.
     static let taglines: [String] = [
@@ -48,6 +47,36 @@ enum FirestoreCollections {
     static let customCategories  = "customCategories"
     static let app               = "app"
     static let welcome           = "welcome"    // document under "app" collection
+
+    // Community verification & closure reports
+    static let verifications     = "verifications"
+    static let closureReports    = "closure_reports"
+
+    // User profiles (display names for leaderboard)
+    static let users             = "users"
+
+    // Analytics subcollections (under spots/{id}) and top-level regional averages
+    static let analyticsMonthly  = "analytics_monthly"   // spots/{id}/analytics_monthly/{YYYY-MM}
+    static let viewerLog         = "viewer_log"           // spots/{id}/viewer_log/{userID}
+    static let analyticsRegions  = "analytics_regions"    // top-level: regional averages
+
+    // Admin-only collections (gated by AdminAccess.adminUID in Firestore rules)
+    static let adminRevenue      = "admin_revenue"
+    static let adminCosts        = "admin_costs"
+    static let adminReminders    = "admin_reminders"
+    static let adminNotes        = "admin_notes"
+}
+
+/// Feature flags for phased rollout.
+/// Phase 4: Set broadSearchEnabled = true and maxCustomItems = 3 to unlock full custom search.
+enum FeatureFlags {
+    /// When true, all 21 categories are selectable and custom slots expand to 3.
+    /// When false, only the 3 launch defaults (mezcal, flan, tortillas) are active.
+    static let broadSearchEnabled = true
+    /// Number of custom food/drink items a user can add. Phase 4: increase to 3.
+    static let maxCustomItems = 3
+    /// The IDs of the 3 locked launch categories.
+    static let defaultCategories = ["mezcal", "flan", "tortillas"]
 }
 
 /// Tab index constants — update if tab order changes in ContentView.

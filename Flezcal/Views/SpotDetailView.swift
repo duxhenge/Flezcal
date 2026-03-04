@@ -1,6 +1,5 @@
 import SwiftUI
 import MapKit
-import PhotosUI
 
 struct SpotDetailView: View {
     let spot: Spot
@@ -8,22 +7,45 @@ struct SpotDetailView: View {
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var photoService: PhotoService
     @EnvironmentObject var picksService: UserPicksService
-    @StateObject private var reviewService = ReviewService()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
-    @State private var showWriteReview = false
     @State private var showReportSpotAlert = false
     @State private var showReportConfirmation = false
     @State private var showAddOfferings = false
     @State private var addOfferingsCategory: SpotCategory = .mezcal
-    @State private var showPhotoPicker = false
-    @State private var pickerItem: PhotosPickerItem?
-    @State private var localPhotoURL: String?   // optimistic local update after upload
-
     // Add-category state
     @State private var showAddCategory = false
     @State private var isConfirmingVisit = false
     @State private var showVisitConfirmed = false
+
+    // Community verification
+    @StateObject private var verificationService = VerificationService()
+
+    // Remove-category state
+    @State private var categoryToRemove: SpotCategory?
+    @State private var showRemoveCategoryAlert = false
+
+    // Closure reporting
+    @State private var showClosureReportAlert = false
+    @State private var showClosureReportConfirmation = false
+    @State private var isSubmittingClosureReport = false
+
+    // Sign-in gate
+    @State private var showSignIn = false
+    /// Tracks what the user tried to do before sign-in so we can auto-proceed.
+    @State private var pendingDetailAction: PendingDetailAction? = nil
+
+    private enum PendingDetailAction {
+        case addFlezcal
+        case addOfferings(SpotCategory)
+        case reportSpot
+        case reportClosure
+        case confirmVisit
+    }
+
+    // Owner editing
+    @State private var showOwnerEdit = false
 
     private let websiteChecker = WebsiteCheckService()
 
@@ -33,15 +55,15 @@ struct SpotDetailView: View {
         spotService.spots.first { $0.id == spot.id } ?? spot
     }
 
-    /// Best available photo URL: user upload overrides auto-snapshot
-    private var displayPhotoURL: String? { localPhotoURL ?? liveSpot.displayPhotoURL }
+    /// Best available photo URL for the hero image
+    private var displayPhotoURL: String? { liveSpot.displayPhotoURL }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Hero image — shows user/auto photo if available, otherwise map preview
-                    ZStack(alignment: .bottomTrailing) {
+                    // Hero image — shows auto photo if available, otherwise map preview
+                    Group {
                         if let urlStr = displayPhotoURL, let url = URL(string: urlStr) {
                             AsyncImage(url: url) { phase in
                                 switch phase {
@@ -59,89 +81,86 @@ struct SpotDetailView: View {
                         } else {
                             mapPreview
                         }
-
-                        // Camera button — signed-in users can upload a photo
-                        if authService.isSignedIn {
-                            Button { showPhotoPicker = true } label: {
-                                Group {
-                                    if photoService.isUploading {
-                                        ProgressView().tint(.white)
-                                    } else {
-                                        Image(systemName: "camera.fill")
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                                .padding(10)
-                                .background(.black.opacity(0.5))
-                                .clipShape(Circle())
-                            }
-                            .disabled(photoService.isUploading)
-                            .padding(12)
-                        }
                     }
                     .padding(.horizontal)
-                    .photosPicker(isPresented: $showPhotoPicker, selection: $pickerItem, matching: .images)
-                    .onChange(of: pickerItem) { _, item in
-                        Task {
-                            guard let item,
-                                  let data = try? await item.loadTransferable(type: Data.self),
-                                  let image = UIImage(data: data) else { return }
-                            await photoService.uploadAndSaveUserPhoto(image, spotID: spot.id)
-                            // Refresh local URL so UI updates immediately without re-fetching
-                            if photoService.uploadError == nil {
-                                localPhotoURL = await photoService.fetchUserPhotoURL(spotID: spot.id)
-                            }
-                        }
-                    }
 
                     // Info section
                     VStack(alignment: .leading, spacing: 12) {
-                        // Category badges
-                        HStack {
-                            ForEach(liveSpot.categories) { cat in
-                                HStack(spacing: 4) {
-                                    CategoryIcon(category: cat, size: 16)
-                                    Text(cat.displayName)
-                                }
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(cat.color.opacity(0.15))
-                                .foregroundStyle(cat.color)
-                                .clipShape(Capsule())
-                            }
-                            Spacer()
-                        }
-
                         // ── Import-provenance banners ──────────────────────────
                         if liveSpot.source != nil {
                             importedSpotBanner
                         }
 
-                        // Rating row
-                        AverageRatingView(
-                            averageRating: liveSpot.averageRating,
-                            reviewCount: liveSpot.reviewCount
-                        )
+                        // Consolidated Flezcal section — verification + ratings in one place
+                        if !liveSpot.isClosed {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(liveSpot.categories) { category in
+                                    FlezcalRowView(
+                                        spot: liveSpot,
+                                        category: category,
+                                        verificationService: verificationService,
+                                        canRemove: authService.isSignedIn
+                                            && liveSpot.canRemoveCategory(category, userID: authService.userID),
+                                        onRemoveCategory: {
+                                            categoryToRemove = category
+                                            showRemoveCategoryAlert = true
+                                        }
+                                    )
+                                    if category != liveSpot.categories.last {
+                                        Divider()
+                                    }
+                                }
+
+                                // "Add a Flezcal" button — visible to all users
+                                let allAddable = SpotCategory.allCases.filter { cat in
+                                    !cat.isLegacy && !liveSpot.categories.contains(cat)
+                                }
+                                if !allAddable.isEmpty {
+                                    Divider()
+                                    Button {
+                                        if authService.isSignedIn {
+                                            showAddCategory = true
+                                        } else {
+                                            pendingDetailAction = .addFlezcal
+                                            showSignIn = true
+                                        }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "plus.circle.fill")
+                                                .font(.body)
+                                                .foregroundStyle(.orange)
+                                            Text("Add a Flezcal")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                                .foregroundStyle(.orange)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 14)
+                            .background(Color(.systemGray6).opacity(0.6))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
 
                         // Fun badges row
-                        if liveSpot.isPerfectPairing || liveSpot.isHiddenGem || liveSpot.isRecentlyVerified || reviewService.hasTranscendentReview {
+                        if liveSpot.isHiddenGem || liveSpot.isRecentlyVerified {
                             HStack(spacing: 6) {
-                                if liveSpot.isPerfectPairing {
-                                    SpotBadge(emoji: "🍮🥃", label: "Perfect Pairing", color: .orange)
-                                }
                                 if liveSpot.isHiddenGem {
                                     SpotBadge(emoji: "💎", label: "Hidden Gem", color: .blue)
                                 }
                                 if liveSpot.isRecentlyVerified {
                                     SpotBadge(emoji: "✨", label: "New", color: .green)
                                 }
-                                if reviewService.hasTranscendentReview {
-                                    SpotBadge(emoji: "🌟", label: "Transcendent", color: .purple)
-                                }
                                 Spacer()
                             }
+                        }
+
+                        // Owner Verified badge
+                        if liveSpot.ownerVerified {
+                            OwnerVerifiedBadge()
                         }
 
                         // Name
@@ -155,24 +174,60 @@ struct SpotDetailView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        // Verified business name
-                        Label("Verified: \(spot.mapItemName)", systemImage: "checkmark.seal")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                            .fixedSize(horizontal: false, vertical: true)
+                        // Closure status banners
+                        if liveSpot.isClosed {
+                            Label("Permanently Closed", systemImage: "xmark.circle.fill")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.red)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.red.opacity(0.10))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        } else if liveSpot.closureReportCount > 0 {
+                            Label("Closure reported — accuracy may be uncertain",
+                                  systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.orange.opacity(0.10))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+
+                        // Owner details section (brands, details, reservation)
+                        if liveSpot.ownerVerified {
+                            ownerDetailsSection
+                        }
 
                         // Offerings per category
                         ForEach(liveSpot.categories) { cat in
                             let catOfferings = liveSpot.offerings(for: cat)
+                            let isLocked = liveSpot.isCategoryLocked(cat)
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text(cat.offeringsLabel)
                                         .font(.headline)
+                                    if isLocked {
+                                        Image(systemName: "lock.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                            .help("Locked by owner")
+                                            .accessibilityLabel("Category locked by owner")
+                                    }
                                     Spacer()
-                                    if authService.isSignedIn {
+                                    if !isLocked {
                                         Button {
-                                            addOfferingsCategory = cat
-                                            showAddOfferings = true
+                                            if authService.isSignedIn {
+                                                addOfferingsCategory = cat
+                                                showAddOfferings = true
+                                            } else {
+                                                pendingDetailAction = .addOfferings(cat)
+                                                showSignIn = true
+                                            }
                                         } label: {
                                             Label("Add", systemImage: "plus.circle")
                                                 .font(.caption)
@@ -184,12 +239,7 @@ struct SpotDetailView: View {
                                 if !catOfferings.isEmpty {
                                     ForEach(catOfferings, id: \.self) { item in
                                         HStack(spacing: 6) {
-                                            if cat == .mezcal {
-                                                VeladoraIcon(size: 16)
-                                            } else {
-                                                Text(cat.emoji)
-                                                    .font(.caption)
-                                            }
+                                            CategoryIcon(category: cat, size: 16)
                                             Text(item)
                                                 .font(.subheadline)
                                         }
@@ -202,20 +252,7 @@ struct SpotDetailView: View {
                             }
                         }
 
-                        // Add-category button — shown when user has picks not yet on this spot
-                        let addablePicks = picksService.picks.filter { pick in
-                            !liveSpot.categories.contains(where: { $0.rawValue == pick.id })
-                        }
-                        if authService.isSignedIn && !addablePicks.isEmpty {
-                            Button {
-                                showAddCategory = true
-                            } label: {
-                                Label("Add another category to this spot", systemImage: "plus.circle")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                            }
-                            .foregroundStyle(.orange)
-                        }
+                        // (Add-category button is now inside the Flezcal card above)
                     }
                     .padding(.horizontal)
 
@@ -230,81 +267,89 @@ struct SpotDetailView: View {
                         }
                         .buttonStyle(.bordered)
                         .tint(.orange)
+                    }
+                    .padding(.horizontal)
 
+                    // Owner "Edit Your Spot" button
+                    if liveSpot.isOwner(userID: authService.userID) {
+                        Button {
+                            showOwnerEdit = true
+                        } label: {
+                            Label("Edit Your Spot", systemImage: "pencil.circle.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.orange)
+                        .padding(.horizontal)
+                        .accessibilityLabel("Edit your spot details for \(liveSpot.name)")
+                    }
+
+                    // "Own this spot?" teaser — shown on non-owner-verified spots
+                    if !liveSpot.ownerVerified {
+                        ownThisSpotTeaser
+                    }
+
+                    // Report spot button — visible to all users
+                    HStack {
+                        Spacer()
                         if authService.isSignedIn {
-                            let alreadyRated = reviewService.hasUserReviewed(userID: authService.userID ?? "")
-                            Button {
-                                showWriteReview = true
-                            } label: {
-                                Label(alreadyRated ? "Rated" : "Rate", systemImage: alreadyRated ? "checkmark" : "flame")
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
+                            let userID = authService.userID ?? ""
+                            let alreadyReported = liveSpot.reportedByUserIDs.contains(userID)
+                            let isOwnSpot = liveSpot.addedByUserID == userID
+
+                            if isOwnSpot {
+                                EmptyView()
+                            } else if alreadyReported {
+                                Label("Spot Reported", systemImage: "flag.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button {
+                                    showReportSpotAlert = true
+                                } label: {
+                                    Label("Report Spot", systemImage: "flag")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.orange)
-                            .disabled(alreadyRated)
+                        } else {
+                            Button {
+                                pendingDetailAction = .reportSpot
+                                showSignIn = true
+                            } label: {
+                                Label("Report Spot", systemImage: "flag")
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.horizontal)
 
-                    // Report spot button
-                    if authService.isSignedIn {
-                        let userID = authService.userID ?? ""
-                        let alreadyReported = liveSpot.reportedByUserIDs.contains(userID)
-                        let isOwnSpot = liveSpot.addedByUserID == userID
-
-                        if !isOwnSpot {
-                            HStack {
-                                Spacer()
-                                if alreadyReported {
-                                    Label("Spot Reported", systemImage: "flag.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                    // Report as permanently closed — visible to all users
+                    if !liveSpot.isClosed {
+                        HStack {
+                            Spacer()
+                            Button {
+                                if authService.isSignedIn {
+                                    showClosureReportAlert = true
                                 } else {
-                                    Button {
-                                        showReportSpotAlert = true
-                                    } label: {
-                                        Label("Report Spot", systemImage: "flag")
-                                            .font(.caption)
-                                    }
-                                    .foregroundStyle(.secondary)
+                                    pendingDetailAction = .reportClosure
+                                    showSignIn = true
                                 }
+                            } label: {
+                                Label("Report as permanently closed", systemImage: "building.2.crop.circle.badge.xmark")
+                                    .font(.caption)
                             }
-                            .padding(.horizontal)
+                            .foregroundStyle(.secondary)
                         }
+                        .padding(.horizontal)
                     }
 
                     Divider()
                         .padding(.horizontal)
-
-                    // Ratings section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Ratings")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        if reviewService.isLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else if reviewService.visibleReviews.isEmpty {
-                            Text("No ratings yet. Be the first!")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else {
-                            ForEach(reviewService.visibleReviews) { review in
-                                ReviewCardView(
-                                    review: review,
-                                    reviewService: reviewService,
-                                    currentUserID: authService.userID ?? ""
-                                )
-                                .padding(.horizontal)
-                            }
-                        }
-                    }
-                    .padding(.bottom)
                 }
                 .padding(.vertical)
             }
@@ -315,23 +360,64 @@ struct SpotDetailView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showWriteReview) {
-                WriteReviewView(spot: spot, reviewService: reviewService)
-            }
             .sheet(isPresented: $showAddOfferings) {
                 AddOfferingsSheet(spot: liveSpot, category: addOfferingsCategory)
+            }
+            .sheet(isPresented: $showOwnerEdit) {
+                OwnerEditSheet(spot: liveSpot)
             }
             .sheet(isPresented: $showAddCategory) {
                 AddCategorySheet(
                     spot: liveSpot,
-                    addablePicks: picksService.picks.filter { pick in
-                        !liveSpot.categories.contains(where: { $0.rawValue == pick.id })
+                    addableCategories: SpotCategory.allCases.filter { cat in
+                        !cat.isLegacy && !liveSpot.categories.contains(cat)
                     },
                     websiteChecker: websiteChecker
                 )
             }
+            .sheet(isPresented: $showSignIn) {
+                SignInSheet()
+                    .environmentObject(authService)
+                    .presentationDetents([.medium])
+            }
+            .onChange(of: authService.isSignedIn) { _, signedIn in
+                if signedIn, let action = pendingDetailAction {
+                    pendingDetailAction = nil
+                    // Small delay so the sign-in sheet finishes dismissing
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        switch action {
+                        case .addFlezcal:
+                            showAddCategory = true
+                        case .addOfferings(let cat):
+                            addOfferingsCategory = cat
+                            showAddOfferings = true
+                        case .reportSpot:
+                            showReportSpotAlert = true
+                        case .reportClosure:
+                            showClosureReportAlert = true
+                        case .confirmVisit:
+                            confirmVisit()
+                        }
+                    }
+                }
+            }
             .task {
-                await reviewService.fetchReviews(for: spot.id)
+                AnalyticsService.shared.logSpotView(spotID: spot.id)
+                await verificationService.fetchVerifications(for: spot.id)
+
+                // Backfill: migrate legacy reviews → verifications (idempotent)
+                do {
+                    let migrationReviewService = ReviewService()
+                    await migrationReviewService.fetchReviews(for: spot.id)
+                    let reviews = migrationReviewService.reviews
+                    if !reviews.isEmpty {
+                        await verificationService.migrateReviewsToVerifications(
+                            spotID: spot.id,
+                            reviews: reviews,
+                            spotService: spotService
+                        )
+                    }
+                }
 
                 // Backfill: if this spot has no photo yet, generate one now.
                 // Covers spots that were added before the photo feature existed.
@@ -361,6 +447,59 @@ struct SpotDetailView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Thank you for helping keep \(AppConstants.appName) accurate. We'll review this spot.")
+            }
+            .alert("Report as Permanently Closed", isPresented: $showClosureReportAlert) {
+                Button("Yes, report it", role: .destructive) {
+                    Task {
+                        isSubmittingClosureReport = true
+                        let service = ClosureReportService()
+                        let _ = await service.submitReport(
+                            spotID: spot.id,
+                            spotName: spot.name,
+                            spotAddress: spot.address,
+                            reporterUserID: authService.userID ?? ""
+                        )
+                        isSubmittingClosureReport = false
+                        showClosureReportConfirmation = true
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Are you sure this location has permanently closed? This will be reviewed by our team.")
+            }
+            .alert("Closure Report Submitted", isPresented: $showClosureReportConfirmation) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Thank you for letting us know. We'll review this report and take appropriate action.")
+            }
+            .alert(
+                liveSpot.categories.count <= 1 ? "Remove Spot" : "Remove Category",
+                isPresented: $showRemoveCategoryAlert
+            ) {
+                Button("Remove", role: .destructive) {
+                    if let cat = categoryToRemove {
+                        Task {
+                            if liveSpot.categories.count <= 1 {
+                                // Last category — hide the spot entirely
+                                await spotService.hideSpot(spotID: spot.id)
+                                dismiss()
+                            } else {
+                                _ = await spotService.removeCategory(spotID: spot.id, category: cat)
+                            }
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    categoryToRemove = nil
+                }
+            } message: {
+                if let cat = categoryToRemove {
+                    if liveSpot.categories.count <= 1 {
+                        Text("This is the only category on \(spot.name). Removing \(cat.displayName) will hide the spot. It can be re-added later.")
+                    } else {
+                        Text("Remove \(cat.displayName) from \(spot.name)? This can be re-added later.")
+                    }
+                }
             }
         }
     }
@@ -407,23 +546,26 @@ struct SpotDetailView: View {
                         .fontWeight(.medium)
                         .foregroundStyle(.orange)
 
-                    if authService.isSignedIn {
-                        Button {
+                    Button {
+                        if authService.isSignedIn {
                             confirmVisit()
-                        } label: {
-                            if isConfirmingVisit {
-                                ProgressView()
-                                    .tint(.orange)
-                            } else {
-                                Label("I've been here — confirm this spot",
-                                      systemImage: "checkmark.circle")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                            }
+                        } else {
+                            pendingDetailAction = .confirmVisit
+                            showSignIn = true
                         }
-                        .foregroundStyle(.orange)
-                        .disabled(isConfirmingVisit)
+                    } label: {
+                        if isConfirmingVisit {
+                            ProgressView()
+                                .tint(.orange)
+                        } else {
+                            Label("I've been here — confirm this spot",
+                                  systemImage: "checkmark.circle")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
                     }
+                    .foregroundStyle(.orange)
+                    .disabled(isConfirmingVisit)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
@@ -463,6 +605,91 @@ struct SpotDetailView: View {
         }
     }
 
+    // MARK: - Owner Details Section
+
+    @ViewBuilder
+    private var ownerDetailsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Owner brands
+            if let brands = liveSpot.ownerBrands, !brands.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("What They Serve")
+                        .font(.headline)
+
+                    FlowLayout(spacing: 8) {
+                        ForEach(brands, id: \.self) { brand in
+                            Text(brand)
+                                .font(.subheadline)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.orange.opacity(0.10))
+                                .foregroundStyle(.orange)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+
+            // Owner details text
+            if let details = liveSpot.ownerDetails, !details.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("From the Owner")
+                        .font(.headline)
+
+                    Text(details)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            // Reservation link — uses Button + openURL so we can log the tap
+            if let urlString = liveSpot.reservationURL,
+               let url = URL(string: urlString) {
+                Button {
+                    AnalyticsService.shared.logReservationClick(spotID: spot.id)
+                    openURL(url)
+                } label: {
+                    Label("Make a Reservation", systemImage: "calendar.badge.clock")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color.orange)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .accessibilityLabel("Make a reservation at \(liveSpot.name)")
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - Own This Spot? Teaser
+
+    private var ownThisSpotTeaser: some View {
+        let subject = "Owner Verification Request — \(spot.name)"
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let displayName = authService.displayName
+        let body = "I'd like to claim \(spot.name) as the owner/manager. My username is \(displayName)."
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let mailtoString = "mailto:support@flezcal.app?subject=\(subject)&body=\(body)"
+
+        return HStack {
+            Spacer()
+            if let url = URL(string: mailtoString) {
+                Link(destination: url) {
+                    Label("Own this spot? Contact us to claim it.", systemImage: "building.2.crop.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Contact us to claim ownership of \(spot.name)")
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+    }
+
     /// Marks this imported spot as community-verified in Firestore.
     private func confirmVisit() {
         isConfirmingVisit = true
@@ -498,92 +725,6 @@ struct SpotBadge: View {
         .background(color.opacity(0.12))
         .foregroundStyle(color)
         .clipShape(Capsule())
-    }
-}
-
-// MARK: - Review Card
-
-struct ReviewCardView: View {
-    let review: Review
-    @ObservedObject var reviewService: ReviewService
-    let currentUserID: String
-    @State private var showReportAlert = false
-    @State private var showReportConfirmation = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header: name + rating badge + date
-            HStack {
-                Text(review.userName)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-
-                Spacer()
-
-                RatingLevelBadge(rating: review.rating)
-
-                Text(review.date.formatted(date: .abbreviated, time: .omitted))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Category tag (if present on newer reviews)
-            if let catID = review.category,
-               let cat = SpotCategory(rawValue: catID) {
-                HStack(spacing: 4) {
-                    Text(cat.emoji)
-                    Text(cat.displayName)
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-
-            // Legacy comment (shown if non-empty for old reviews)
-            if !review.comment.isEmpty {
-                Text(review.comment)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-            }
-
-            // Report button (don't show for own reviews)
-            if review.userID != currentUserID {
-                HStack {
-                    Spacer()
-                    if review.reportedByUserIDs.contains(currentUserID) {
-                        Label("Reported", systemImage: "flag.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Button {
-                            showReportAlert = true
-                        } label: {
-                            Label("Report", systemImage: "flag")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .alert("Report Review", isPresented: $showReportAlert) {
-            Button("Report", role: .destructive) {
-                Task {
-                    await reviewService.reportReview(reviewID: review.id, reporterUserID: currentUserID)
-                    showReportConfirmation = true
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Report this rating as inappropriate? Ratings with multiple reports will be automatically hidden.")
-        }
-        .alert("Report Submitted", isPresented: $showReportConfirmation) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Thank you for your report. We'll review this content.")
-        }
     }
 }
 
@@ -635,14 +776,17 @@ struct AddOfferingsSheet: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
+                    let knownOfferings = CommunityOfferings.suggestions(for: category, from: spotService.spots)
+
                     ForEach(newOfferings.indices, id: \.self) { index in
                         HStack {
-                            if category == .mezcal {
-                                MezcalInputField(text: $newOfferings[index], placeholder: "One \(category.offeringSingular) per field")
-                            } else {
-                                TextField("One \(category.offeringSingular) per field", text: $newOfferings[index])
-                                    .textFieldStyle(.roundedBorder)
-                            }
+                            OfferingInputField(
+                                text: $newOfferings[index],
+                                placeholder: "One \(category.offeringSingular) per field",
+                                knownOfferings: knownOfferings,
+                                suggestionIcon: category.icon,
+                                useVeladoraIcon: category == .mezcal
+                            )
 
                             if newOfferings.count > 1 {
                                 Button {
@@ -721,8 +865,8 @@ struct AddOfferingsSheet: View {
 
 // MARK: - Add Category Sheet
 
-/// Sheet presented from SpotDetailView that lets the user add one of their active
-/// picks to an existing confirmed spot.
+/// Sheet presented from SpotDetailView that lets the user add any non-legacy
+/// SpotCategory to an existing confirmed spot.
 ///
 /// Cache-first strategy:
 ///   1. If the spot has a stored websiteURL and it was already scanned this session,
@@ -731,15 +875,15 @@ struct AddOfferingsSheet: View {
 ///      Max ~3 Brave calls, same as a normal ghost-pin tap.
 struct AddCategorySheet: View {
     let spot: Spot
-    /// Picks the user has that this spot doesn't already have
-    let addablePicks: [FoodCategory]
+    /// All non-legacy categories that this spot doesn't already have
+    let addableCategories: [SpotCategory]
     let websiteChecker: WebsiteCheckService
 
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedPick: FoodCategory? = nil
+    @State private var selectedCategory: SpotCategory? = nil
     @State private var checkResult: WebsiteCheckResult? = nil
     @State private var isChecking = false
     @State private var isSaving = false
@@ -764,11 +908,7 @@ struct AddCategorySheet: View {
                     HStack(spacing: 6) {
                         ForEach(spot.categories) { cat in
                             HStack(spacing: 4) {
-                                if let foodCat = FoodCategory(spotCategory: cat) {
-                                    FoodCategoryIcon(category: foodCat, size: 16)
-                                } else {
-                                    Text(cat.emoji).font(.system(size: 13))
-                                }
+                                Text(cat.emoji).font(.system(size: 13))
                                 Text(cat.displayName)
                             }
                             .font(.caption2)
@@ -786,71 +926,72 @@ struct AddCategorySheet: View {
                     Text("Which category would you like to add?")
                         .font(.headline)
 
-                    // Selectable pick cards
+                    // Selectable category cards
                     VStack(spacing: 10) {
-                        ForEach(addablePicks) { pick in
+                        ForEach(addableCategories) { cat in
                             Button {
-                                selectPick(pick)
+                                selectCategory(cat)
                             } label: {
                                 HStack(spacing: 14) {
-                                    FoodCategoryIcon(category: pick, size: 28)
+                                    Text(cat.emoji)
+                                        .font(.system(size: 28))
                                         .frame(width: 50, height: 50)
-                                        .background(selectedPick == pick
-                                                    ? pick.color.opacity(0.2)
+                                        .background(selectedCategory == cat
+                                                    ? cat.color.opacity(0.2)
                                                     : Color(.systemGray6))
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(selectedPick == pick ? pick.color : Color.clear, lineWidth: 2)
+                                                .stroke(selectedCategory == cat ? cat.color : Color.clear, lineWidth: 2)
                                         )
 
-                                    Text(pick.displayName)
+                                    Text(cat.displayName)
                                         .font(.headline)
-                                        .foregroundStyle(selectedPick == pick ? pick.color : .primary)
+                                        .foregroundStyle(selectedCategory == cat ? cat.color : .primary)
 
                                     Spacer()
 
-                                    if selectedPick == pick {
+                                    if selectedCategory == cat {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(pick.color)
+                                            .foregroundStyle(cat.color)
                                     }
                                 }
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14)
-                                        .fill(selectedPick == pick
-                                              ? pick.color.opacity(0.07)
+                                        .fill(selectedCategory == cat
+                                              ? cat.color.opacity(0.07)
                                               : Color(.systemBackground))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14)
-                                                .stroke(selectedPick == pick
-                                                        ? pick.color.opacity(0.3)
+                                                .stroke(selectedCategory == cat
+                                                        ? cat.color.opacity(0.3)
                                                         : Color(.systemGray4).opacity(0.5),
                                                         lineWidth: 1)
                                         )
                                 )
                             }
                             .buttonStyle(.plain)
-                            .animation(.easeInOut(duration: 0.15), value: selectedPick)
+                            .animation(.easeInOut(duration: 0.15), value: selectedCategory)
                         }
                     }
 
                     // Website check result banner
-                    if let pick = selectedPick {
-                        websiteCheckBanner(for: pick)
+                    if let cat = selectedCategory {
+                        websiteCheckBanner(for: cat)
                             .padding(.top, 4)
                     }
 
                     // Confirm button
-                    if let pick = selectedPick {
+                    if let cat = selectedCategory {
                         Button {
-                            confirmCategory(pick)
+                            confirmCategory(cat)
                         } label: {
                             Group {
                                 if isSaving {
                                     ProgressView()
                                 } else {
-                                    Label("Confirm — add \(pick.displayName) to this spot",
+                                    Label("Confirm — add \(cat.displayName) to this spot",
                                           systemImage: "plus.circle.fill")
                                         .fontWeight(.semibold)
                                 }
@@ -859,13 +1000,13 @@ struct AddCategorySheet: View {
                             .frame(height: 50)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(pick.color)
+                        .tint(cat.color)
                         .disabled(isSaving || isChecking)
                     }
                 }
                 .padding()
             }
-            .navigationTitle("Add Category")
+            .navigationTitle("Add Flezcal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -873,17 +1014,17 @@ struct AddCategorySheet: View {
                 }
             }
             .onAppear {
-                selectedPick = addablePicks.first
-                if let first = addablePicks.first { runCheck(for: first) }
+                selectedCategory = addableCategories.first
+                if let first = addableCategories.first { runCheck(for: first) }
             }
             .onDisappear {
                 checkTask?.cancel()
             }
-            .alert("Category Added!", isPresented: $showSuccess) {
+            .alert("Flezcal Added!", isPresented: $showSuccess) {
                 Button("Done") { dismiss() }
             } message: {
-                if let pick = selectedPick {
-                    Text("\(pick.displayName) has been added to \(spot.name).")
+                if let cat = selectedCategory {
+                    Text("\(cat.displayName) has been added to \(spot.name).")
                 }
             }
         }
@@ -892,18 +1033,22 @@ struct AddCategorySheet: View {
     // MARK: - Website check banner
 
     @ViewBuilder
-    private func websiteCheckBanner(for pick: FoodCategory) -> some View {
+    private func websiteCheckBanner(for cat: SpotCategory) -> some View {
+        let name = cat.displayName.lowercased()
         let (icon, color, message): (String, Color, String) = {
             if isChecking {
-                return ("magnifyingglass", .secondary, "Checking their website for \(pick.displayName.lowercased())…")
+                return ("magnifyingglass", .secondary, "Checking their website for \(name)…")
             }
             switch checkResult {
             case .confirmed:
-                return ("checkmark.seal.fill", pick.color,
-                        "We found a mention of \(pick.displayName.lowercased()) on their website.")
+                return ("checkmark.seal.fill", cat.color,
+                        "We found a mention of \(name) on their website.")
+            case .relatedFound(_, let keyword):
+                return ("eye.fill", Color(red: 0.7, green: 0.5, blue: 0.0),
+                        "We found '\(keyword)' on their website — can you verify they have \(name)?")
             case .notFound:
                 return ("questionmark.circle", .secondary,
-                        "No mention of \(pick.displayName.lowercased()) found online — but menus aren't always posted.")
+                        "No mention of \(name) found online — but menus aren't always posted.")
             case .unavailable:
                 return ("wifi.slash", .secondary, "No website found. Add based on your visit.")
             case nil:
@@ -911,27 +1056,42 @@ struct AddCategorySheet: View {
             }
         }()
 
-        Label(message, systemImage: icon)
-            .font(.subheadline)
-            .foregroundStyle(color)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(color.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        VStack(alignment: .leading, spacing: 4) {
+            Label(message, systemImage: icon)
+                .font(.subheadline)
+                .foregroundStyle(color)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(color.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            // Disclaimer — web scans are best-effort
+            Label("Web searches aren't as reliable as your own knowledge — but we'll give it our best shot!", systemImage: "info.circle")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 4)
+        }
     }
 
     // MARK: - Actions
 
-    private func selectPick(_ pick: FoodCategory) {
-        guard pick != selectedPick else { return }
-        selectedPick = pick
+    private func selectCategory(_ cat: SpotCategory) {
+        guard cat != selectedCategory else { return }
+        selectedCategory = cat
         checkResult = nil
-        runCheck(for: pick)
+        runCheck(for: cat)
     }
 
     /// Cache-first website check — no network if URL was already scanned this session.
-    private func runCheck(for pick: FoodCategory) {
+    /// Converts SpotCategory → FoodCategory for the website checker API.
+    private func runCheck(for cat: SpotCategory) {
+        guard let foodCat = FoodCategory(spotCategory: cat) else {
+            isChecking = false
+            checkResult = .unavailable
+            return
+        }
+
         checkTask?.cancel()
         checkResult = nil
         isChecking = true
@@ -939,7 +1099,7 @@ struct AddCategorySheet: View {
         checkTask = Task {
             // Level 1: cache lookup (async actor call, no network)
             if let urlString = spot.websiteURL {
-                let cached = await websiteChecker.cachedResult(for: urlString, pick: pick)
+                let cached = await websiteChecker.cachedResult(for: urlString, pick: foodCat)
                 if let cached {
                     guard !Task.isCancelled else { return }
                     checkResult = cached
@@ -949,13 +1109,12 @@ struct AddCategorySheet: View {
             }
 
             // Level 2: full targeted check (uses Brave Search only if HTML scan misses)
-            // Reconstruct a minimal MKMapItem from stored spot data.
             let placemark = MKPlacemark(coordinate: spot.coordinate, addressDictionary: nil)
             let mapItem = MKMapItem(placemark: placemark)
             mapItem.name = spot.name
 
             let result = await websiteChecker.checkWithBraveSearch(
-                mapItem, for: pick, knownURL: spot.websiteURL
+                mapItem, for: foodCat, knownURL: spot.websiteURL
             )
             guard !Task.isCancelled else { return }
             checkResult = result
@@ -963,11 +1122,10 @@ struct AddCategorySheet: View {
         }
     }
 
-    private func confirmCategory(_ pick: FoodCategory) {
-        guard let spotCat = SpotCategory(rawValue: pick.id) else { return }
+    private func confirmCategory(_ cat: SpotCategory) {
         isSaving = true
         Task {
-            let success = await spotService.addCategories(spotID: spot.id, newCategories: [spotCat])
+            let success = await spotService.addCategories(spotID: spot.id, newCategories: [cat], addedBy: authService.userID ?? "")
             await MainActor.run {
                 isSaving = false
                 if success {
@@ -977,5 +1135,240 @@ struct AddCategorySheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Owner Verified Badge
+
+struct OwnerVerifiedBadge: View {
+    private let goldColor = Color(red: 0.82, green: 0.66, blue: 0.24)
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.caption)
+            Text("Owner Verified")
+                .font(.caption)
+                .fontWeight(.semibold)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(goldColor.opacity(0.15))
+        .foregroundStyle(goldColor)
+        .clipShape(Capsule())
+        .accessibilityLabel("Owner verified spot")
+    }
+}
+
+// MARK: - Owner Edit Sheet
+
+struct OwnerEditSheet: View {
+    let spot: Spot
+    @EnvironmentObject var spotService: SpotService
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var brands: [String]
+    @State private var details: String
+    @State private var reservationURL: String
+    @State private var lockedCategories: Set<String>
+    @State private var newBrand: String = ""
+    @State private var isSaving = false
+    @State private var showSuccess = false
+
+    init(spot: Spot) {
+        self.spot = spot
+        _brands = State(initialValue: spot.ownerBrands ?? [])
+        _details = State(initialValue: spot.ownerDetails ?? "")
+        _reservationURL = State(initialValue: spot.reservationURL ?? "")
+        _lockedCategories = State(initialValue: Set(spot.ownerLockedCategories ?? []))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Brands section
+                Section {
+                    ForEach(brands, id: \.self) { brand in
+                        HStack {
+                            Text(brand)
+                            Spacer()
+                            Button {
+                                brands.removeAll { $0 == brand }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack {
+                        TextField("Add a brand or product", text: $newBrand)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { addBrand() }
+
+                        Button {
+                            addBrand()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .disabled(newBrand.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                } header: {
+                    Text("Brands & Products")
+                } footer: {
+                    Text("Highlight the brands, varieties, or products you want customers to know about.")
+                }
+
+                // Details section
+                Section {
+                    TextEditor(text: $details)
+                        .frame(minHeight: 100)
+                } header: {
+                    Text("About Your Spot")
+                } footer: {
+                    Text("Share your story, hours, specialties, or anything you want customers to know.")
+                }
+
+                // Reservation URL
+                Section {
+                    TextField("https://yoursite.com/reserve", text: $reservationURL)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Reservation Link")
+                } footer: {
+                    Text("Add a link to your reservation system (OpenTable, Resy, your website, etc.)")
+                }
+
+                // Locked categories
+                Section {
+                    ForEach(spot.categories) { cat in
+                        Toggle(isOn: Binding(
+                            get: { lockedCategories.contains(cat.rawValue) },
+                            set: { isOn in
+                                if isOn {
+                                    lockedCategories.insert(cat.rawValue)
+                                } else {
+                                    lockedCategories.remove(cat.rawValue)
+                                }
+                            }
+                        )) {
+                            HStack(spacing: 6) {
+                                CategoryIcon(category: cat, size: 16)
+                                Text(cat.displayName)
+                            }
+                        }
+                        .tint(.orange)
+                    }
+                } header: {
+                    Text("Lock Categories")
+                } footer: {
+                    Text("Locked categories prevent community members from editing the offerings you've set. You can still edit them yourself.")
+                }
+            }
+            .navigationTitle("Edit Your Spot")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        save()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(isSaving)
+                }
+            }
+            .alert("Changes Saved", isPresented: $showSuccess) {
+                Button("Done") { dismiss() }
+            } message: {
+                Text("Your spot information has been updated.")
+            }
+        }
+    }
+
+    private func addBrand() {
+        let trimmed = newBrand.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        if !brands.contains(where: { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }) {
+            brands.append(trimmed)
+        }
+        newBrand = ""
+    }
+
+    private func save() {
+        isSaving = true
+        Task {
+            let success = await spotService.updateOwnerFields(
+                spotID: spot.id,
+                ownerBrands: brands.isEmpty ? nil : brands,
+                ownerDetails: details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : details.trimmingCharacters(in: .whitespacesAndNewlines),
+                reservationURL: reservationURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : reservationURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                ownerLockedCategories: lockedCategories.isEmpty ? nil : Array(lockedCategories)
+            )
+            isSaving = false
+            if success {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                showSuccess = true
+            }
+        }
+    }
+}
+
+// MARK: - Flow Layout (for brand chips)
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = computeLayout(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = computeLayout(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private struct LayoutResult {
+        var positions: [CGPoint]
+        var size: CGSize
+    }
+
+    private func computeLayout(proposal: ProposedViewSize, subviews: Subviews) -> LayoutResult {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalSize: CGSize = .zero
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+
+            positions.append(CGPoint(x: currentX, y: currentY))
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+            totalSize.width = max(totalSize.width, currentX - spacing)
+        }
+
+        totalSize.height = currentY + lineHeight
+        return LayoutResult(positions: positions, size: totalSize)
     }
 }

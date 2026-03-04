@@ -1,7 +1,7 @@
 import SwiftUI
 
 // ============================================================
-// FoodCategory — the curated list that powers "My Picks".
+// FoodCategory — the curated list that powers "My Flezcals".
 //
 // To add a new item: add one entry to `allCategories` below.
 // No other files need editing.
@@ -21,23 +21,31 @@ struct FoodCategory: Identifiable, Codable, Equatable, Hashable {
     /// First entry is also used for Brave Search (Passes 2 & 3).
     let websiteKeywords: [String]
 
+    /// Broad keywords that suggest the item might be present but need user verification.
+    /// When found without a `websiteKeywords` match, the result is `.relatedFound`
+    /// instead of `.confirmed`. E.g. "tortillas" for Handmade Tortillas, "custard" for Flan.
+    let relatedKeywords: [String]
+
     /// Short prompt shown on the Add Spot screen (future use).
     let addSpotPrompt: String
 
     // MARK: - Codable for Color
 
     enum CodingKeys: String, CodingKey {
-        case id, displayName, emoji, colorHex, mapSearchTerms, websiteKeywords, addSpotPrompt
+        case id, displayName, emoji, colorHex, mapSearchTerms, websiteKeywords, relatedKeywords, addSpotPrompt
     }
 
     init(id: String, displayName: String, emoji: String, color: Color,
-         mapSearchTerms: [String], websiteKeywords: [String], addSpotPrompt: String) {
+         mapSearchTerms: [String], websiteKeywords: [String],
+         relatedKeywords: [String] = [],
+         addSpotPrompt: String) {
         self.id = id
         self.displayName = displayName
         self.emoji = emoji
         self.color = color
         self.mapSearchTerms = mapSearchTerms
         self.websiteKeywords = websiteKeywords
+        self.relatedKeywords = relatedKeywords
         self.addSpotPrompt = addSpotPrompt
     }
 
@@ -48,6 +56,7 @@ struct FoodCategory: Identifiable, Codable, Equatable, Hashable {
         emoji          = try c.decode(String.self, forKey: .emoji)
         mapSearchTerms = try c.decode([String].self, forKey: .mapSearchTerms)
         websiteKeywords = try c.decode([String].self, forKey: .websiteKeywords)
+        relatedKeywords = try c.decodeIfPresent([String].self, forKey: .relatedKeywords) ?? []
         addSpotPrompt  = try c.decode(String.self, forKey: .addSpotPrompt)
         let hex = try c.decode(String.self, forKey: .colorHex)
         color = Color(hex: hex)
@@ -60,6 +69,9 @@ struct FoodCategory: Identifiable, Codable, Equatable, Hashable {
         try c.encode(emoji,           forKey: .emoji)
         try c.encode(mapSearchTerms,  forKey: .mapSearchTerms)
         try c.encode(websiteKeywords, forKey: .websiteKeywords)
+        if !relatedKeywords.isEmpty {
+            try c.encode(relatedKeywords, forKey: .relatedKeywords)
+        }
         try c.encode(addSpotPrompt,   forKey: .addSpotPrompt)
         try c.encode(color.hexString, forKey: .colorHex)
     }
@@ -95,86 +107,20 @@ private extension Color {
 
 extension FoodCategory {
 
-    // ── Drinks ────────────────────────────────────────────────────────────────
+    // ── Launch Trio (permanent) ──────────────────────────────────────────────
 
     static let mezcal = FoodCategory(
         id: "mezcal",
         displayName: "Mezcal",
         emoji: "🥃",
         color: .green,
-        mapSearchTerms: ["mezcal", "bar", "restaurante", "restaurant"],
-        websiteKeywords: ["mezcal", "mezcalería", "agave", "mezcales",
-                          "mezcal list", "mezcal menu", "mezcal selection"],
+        mapSearchTerms: ["mezcal", "bar", "liquor store", "restaurante", "restaurant"],
+        websiteKeywords: ["mezcal", "mezcalería", "mezcales",
+                          "mezcal list", "mezcal menu", "mezcal selection",
+                          "agave spirits"],
+        relatedKeywords: ["agave spirit", "agave cocktail"],
         addSpotPrompt: "Search for a bar, restaurant, or store to add it as a mezcal spot."
     )
-
-    static let naturalWine = FoodCategory(
-        id: "natural_wine",
-        displayName: "Natural Wine",
-        emoji: "🍷",
-        color: Color(red: 0.6, green: 0.1, blue: 0.3),
-        mapSearchTerms: ["natural wine", "wine bar", "wine shop"],
-        websiteKeywords: ["natural wine", "natty wine", "orange wine",
-                          "biodynamic wine", "skin contact"],
-        addSpotPrompt: "Search for a wine bar or shop that carries natural wines."
-    )
-
-    static let craftBeer = FoodCategory(
-        id: "craft_beer",
-        displayName: "Craft Beer",
-        emoji: "🍺",
-        color: Color(red: 0.8, green: 0.5, blue: 0.1),
-        mapSearchTerms: ["craft beer", "brewery", "taproom"],
-        websiteKeywords: ["craft beer", "microbrewery", "taproom",
-                          "IPA", "craft ale", "local brew"],
-        addSpotPrompt: "Search for a brewery, taproom, or craft beer bar."
-    )
-
-    static let sake = FoodCategory(
-        id: "sake",
-        displayName: "Sake",
-        emoji: "🍶",
-        color: Color(red: 0.2, green: 0.5, blue: 0.7),
-        mapSearchTerms: ["sake bar", "sake", "japanese restaurant"],
-        websiteKeywords: ["sake", "nihonshu", "junmai", "sake selection",
-                          "sake list", "sake bar"],
-        addSpotPrompt: "Search for a sake bar or Japanese restaurant with a sake program."
-    )
-
-    static let specialtyCoffee = FoodCategory(
-        id: "specialty_coffee",
-        displayName: "Specialty Coffee",
-        emoji: "☕",
-        color: Color(red: 0.4, green: 0.25, blue: 0.1),
-        mapSearchTerms: ["specialty coffee", "coffee shop", "cafe"],
-        websiteKeywords: ["specialty coffee", "single origin", "pour over",
-                          "espresso", "third wave", "direct trade"],
-        addSpotPrompt: "Search for a specialty coffee shop or roastery."
-    )
-
-    static let boba = FoodCategory(
-        id: "boba",
-        displayName: "Boba",
-        emoji: "🧋",
-        color: Color(red: 0.7, green: 0.45, blue: 0.2),
-        mapSearchTerms: ["boba", "bubble tea", "boba tea"],
-        websiteKeywords: ["boba", "bubble tea", "tapioca", "milk tea",
-                          "taro", "boba shop"],
-        addSpotPrompt: "Search for a boba or bubble tea shop."
-    )
-
-    static let cocktails = FoodCategory(
-        id: "cocktails",
-        displayName: "Craft Cocktails",
-        emoji: "🍸",
-        color: Color(red: 0.2, green: 0.3, blue: 0.7),
-        mapSearchTerms: ["cocktail bar", "craft cocktails", "speakeasy"],
-        websiteKeywords: ["craft cocktail", "mixology", "artisan cocktail",
-                          "cocktail menu", "signature cocktail"],
-        addSpotPrompt: "Search for a craft cocktail bar."
-    )
-
-    // ── Desserts & Sweets ─────────────────────────────────────────────────────
 
     static let flan = FoodCategory(
         id: "flan",
@@ -182,120 +128,109 @@ extension FoodCategory {
         emoji: "🍮",
         color: .orange,
         mapSearchTerms: ["flan", "bakery", "restaurant"],
-        websiteKeywords: ["flan", "flan casero", "postre", "custard",
-                          "caramel custard"],
+        websiteKeywords: ["flan", "flan casero"],
+        relatedKeywords: ["custard", "caramel custard", "postre"],
         addSpotPrompt: "Search for a restaurant or bakery to add it as a flan spot."
     )
 
-    static let mochi = FoodCategory(
-        id: "mochi",
-        displayName: "Mochi",
-        emoji: "🍡",
-        color: Color(red: 0.9, green: 0.5, blue: 0.7),
-        mapSearchTerms: ["mochi", "mochi ice cream", "japanese dessert"],
-        websiteKeywords: ["mochi", "daifuku", "mochi ice cream",
-                          "wagashi", "japanese sweets"],
-        addSpotPrompt: "Search for a mochi shop or Japanese sweets cafe."
+    static let tortillas = FoodCategory(
+        id: "tortillas",
+        displayName: "Handmade Tortillas",
+        emoji: "🫓",
+        color: Color(red: 0.85, green: 0.65, blue: 0.2),
+        mapSearchTerms: ["handmade tortillas", "tortilleria", "fresh tortillas", "tortillas"],
+        websiteKeywords: ["handmade tortillas", "tortillas hechas a mano", "fresh tortillas",
+                          "tortilleria", "house-made tortillas", "homemade tortillas"],
+        relatedKeywords: ["tortillas", "corn tortillas", "flour tortillas"],
+        addSpotPrompt: "Search for a restaurant or tortilleria that makes handmade tortillas."
     )
 
-    static let churros = FoodCategory(
-        id: "churros",
-        displayName: "Churros",
-        emoji: "🍩",
-        color: Color(red: 0.85, green: 0.55, blue: 0.1),
-        mapSearchTerms: ["churros", "churro", "mexican bakery"],
-        websiteKeywords: ["churros", "churro", "churrería", "churros con chocolate"],
-        addSpotPrompt: "Search for a churro shop or Mexican bakery."
+    // ── Drinks ───────────────────────────────────────────────────────────────
+
+    static let bourbon = FoodCategory(
+        id: "bourbon",
+        displayName: "Bourbon",
+        emoji: "🥃",
+        color: Color(red: 0.72, green: 0.45, blue: 0.1),
+        mapSearchTerms: ["bourbon", "whiskey bar", "bourbon bar", "liquor store"],
+        websiteKeywords: ["bourbon", "kentucky bourbon", "small batch bourbon",
+                          "single barrel bourbon", "bourbon selection"],
+        relatedKeywords: ["whiskey", "rye whiskey"],
+        addSpotPrompt: "Search for a bar or restaurant with a bourbon selection."
     )
 
-    static let gelato = FoodCategory(
-        id: "gelato",
-        displayName: "Gelato",
-        emoji: "🍨",
-        color: Color(red: 0.4, green: 0.7, blue: 0.9),
-        mapSearchTerms: ["gelato", "gelateria", "italian ice cream"],
-        websiteKeywords: ["gelato", "gelateria", "artigianale",
-                          "italian gelato", "artisan gelato"],
-        addSpotPrompt: "Search for a gelateria or artisan ice cream shop."
+    static let fernetBranca = FoodCategory(
+        id: "fernet_branca",
+        displayName: "Fernet Branca",
+        emoji: "🌿",
+        color: Color(red: 0.1, green: 0.35, blue: 0.15),
+        mapSearchTerms: ["fernet", "cocktail bar", "bar", "liquor store"],
+        websiteKeywords: ["fernet", "fernet branca", "fernet-branca",
+                          "amaro", "digestif"],
+        relatedKeywords: ["amaro", "digestivo", "bitter"],
+        addSpotPrompt: "Search for a bar that serves Fernet Branca."
     )
 
-    static let crepes = FoodCategory(
-        id: "crepes",
-        displayName: "Crepes",
-        emoji: "🥞",
-        color: Color(red: 0.9, green: 0.75, blue: 0.4),
-        mapSearchTerms: ["crepes", "creperie", "french crepes"],
-        websiteKeywords: ["crepes", "crêpes", "creperie", "crêperie",
-                          "sweet crepes", "savory crepes"],
-        addSpotPrompt: "Search for a creperie or cafe that serves crepes."
+    static let newEnglandIPA = FoodCategory(
+        id: "new_england_ipa",
+        displayName: "New England IPA",
+        emoji: "🍺",
+        color: Color(red: 0.85, green: 0.65, blue: 0.15),
+        mapSearchTerms: ["IPA", "craft beer", "brewery", "taproom", "liquor store"],
+        websiteKeywords: ["new england ipa", "neipa", "hazy ipa",
+                          "juicy ipa", "hazy pale ale"],
+        relatedKeywords: ["ipa", "craft beer", "hazy"],
+        addSpotPrompt: "Search for a brewery or taproom with New England IPAs."
     )
 
-    // ── Savory ────────────────────────────────────────────────────────────────
-
-    static let sushi = FoodCategory(
-        id: "sushi",
-        displayName: "Sushi",
-        emoji: "🍣",
-        color: Color(red: 0.9, green: 0.3, blue: 0.3),
-        mapSearchTerms: ["sushi", "sushi bar", "japanese restaurant"],
-        websiteKeywords: ["sushi", "omakase", "nigiri", "sashimi",
-                          "sushi bar", "maki", "sushi roll"],
-        addSpotPrompt: "Search for a sushi bar or Japanese restaurant."
+    static let singleMaltScotch = FoodCategory(
+        id: "single_malt_scotch",
+        displayName: "Single Malt Scotch",
+        emoji: "🥃",
+        color: Color(red: 0.55, green: 0.3, blue: 0.05),
+        mapSearchTerms: ["scotch", "whisky bar", "whiskey bar", "liquor store"],
+        websiteKeywords: ["single malt", "scotch whisky", "single malt scotch",
+                          "speyside", "islay", "highland scotch"],
+        relatedKeywords: ["scotch", "whisky", "malt whisky"],
+        addSpotPrompt: "Search for a bar with a single malt scotch selection."
     )
 
-    static let ramen = FoodCategory(
-        id: "ramen",
-        displayName: "Ramen",
-        emoji: "🍜",
-        color: Color(red: 0.85, green: 0.2, blue: 0.1),
-        mapSearchTerms: ["ramen", "ramen restaurant", "ramen shop"],
-        websiteKeywords: ["ramen", "tonkotsu", "shoyu ramen", "miso ramen",
-                          "ramen shop", "noodle soup"],
-        addSpotPrompt: "Search for a ramen restaurant."
+    // ── Savory ───────────────────────────────────────────────────────────────
+
+    static let peamealBacon = FoodCategory(
+        id: "peameal_bacon",
+        displayName: "Peameal Bacon",
+        emoji: "🥓",
+        color: Color(red: 0.7, green: 0.4, blue: 0.2),
+        mapSearchTerms: ["peameal bacon", "canadian bacon", "breakfast restaurant"],
+        websiteKeywords: ["peameal bacon", "peameal", "canadian bacon",
+                          "back bacon", "cornmeal bacon"],
+        relatedKeywords: ["bacon sandwich", "breakfast sandwich"],
+        addSpotPrompt: "Search for a restaurant or deli that serves peameal bacon."
     )
 
-    static let tacos = FoodCategory(
-        id: "tacos",
-        displayName: "Tacos",
-        emoji: "🌮",
-        color: Color(red: 0.95, green: 0.6, blue: 0.0),
-        mapSearchTerms: ["tacos", "taqueria", "taco truck"],
-        websiteKeywords: ["tacos", "taqueria", "al pastor", "birria tacos",
-                          "taco", "mexican street food"],
-        addSpotPrompt: "Search for a taqueria or taco spot."
-    )
-
-    static let dimSum = FoodCategory(
-        id: "dim_sum",
-        displayName: "Dim Sum",
-        emoji: "🥟",
-        color: Color(red: 0.8, green: 0.15, blue: 0.15),
-        mapSearchTerms: ["dim sum", "dim sum restaurant", "yum cha"],
-        websiteKeywords: ["dim sum", "yum cha", "har gow", "siu mai",
-                          "dumplings", "dim sum menu"],
-        addSpotPrompt: "Search for a dim sum restaurant."
-    )
-
-    static let pizza = FoodCategory(
-        id: "pizza",
-        displayName: "Neapolitan Pizza",
+    static let woodFiredPizza = FoodCategory(
+        id: "wood_fired_pizza",
+        displayName: "Wood-Fired Pizza",
         emoji: "🍕",
         color: Color(red: 0.8, green: 0.2, blue: 0.1),
-        mapSearchTerms: ["neapolitan pizza", "wood fired pizza", "pizzeria"],
-        websiteKeywords: ["neapolitan", "wood fired", "napoletana",
-                          "pizza napoletana", "00 flour", "fior di latte"],
-        addSpotPrompt: "Search for a Neapolitan or wood-fired pizzeria."
+        mapSearchTerms: ["wood fired pizza", "pizzeria", "neapolitan pizza"],
+        websiteKeywords: ["wood fired", "wood-fired", "wood oven", "brick oven",
+                          "neapolitan", "napoletana", "pizza napoletana"],
+        relatedKeywords: ["00 flour", "fior di latte", "pizzaiolo"],
+        addSpotPrompt: "Search for a wood-fired pizzeria."
     )
 
-    static let birria = FoodCategory(
-        id: "birria",
-        displayName: "Birria",
-        emoji: "🫕",
-        color: Color(red: 0.7, green: 0.1, blue: 0.0),
-        mapSearchTerms: ["birria", "birria tacos", "birrieria"],
-        websiteKeywords: ["birria", "birrieria", "consomé",
-                          "birria tacos", "quesabirria"],
-        addSpotPrompt: "Search for a birria restaurant or truck."
+    static let paella = FoodCategory(
+        id: "paella",
+        displayName: "Paella",
+        emoji: "🥘",
+        color: Color(red: 0.9, green: 0.7, blue: 0.1),
+        mapSearchTerms: ["paella", "spanish restaurant", "tapas"],
+        websiteKeywords: ["paella", "paella valenciana", "paella mixta",
+                          "arroz", "bomba rice"],
+        relatedKeywords: ["spanish rice", "arroz con mariscos"],
+        addSpotPrompt: "Search for a restaurant that serves paella."
     )
 
     static let oysters = FoodCategory(
@@ -305,7 +240,8 @@ extension FoodCategory {
         color: Color(red: 0.2, green: 0.45, blue: 0.5),
         mapSearchTerms: ["oysters", "oyster bar", "seafood restaurant"],
         websiteKeywords: ["oysters", "oyster bar", "fresh oysters",
-                          "raw bar", "oyster selection", "shucked"],
+                          "oyster selection", "shucked"],
+        relatedKeywords: ["raw bar"],
         addSpotPrompt: "Search for an oyster bar or raw bar restaurant."
     )
 
@@ -315,44 +251,322 @@ extension FoodCategory {
         emoji: "🍲",
         color: Color(red: 0.6, green: 0.35, blue: 0.1),
         mapSearchTerms: ["pho", "vietnamese restaurant", "pho restaurant"],
-        websiteKeywords: ["pho", "phở", "vietnamese noodle",
-                          "beef noodle soup", "pho menu"],
+        websiteKeywords: ["pho", "phở", "pho menu"],
+        relatedKeywords: ["vietnamese noodle", "beef noodle soup"],
         addSpotPrompt: "Search for a pho or Vietnamese noodle restaurant."
     )
 
+    static let pozole = FoodCategory(
+        id: "pozole",
+        displayName: "Pozole",
+        emoji: "🍲",
+        color: Color(red: 0.7, green: 0.2, blue: 0.15),
+        mapSearchTerms: ["pozole", "mexican restaurant", "pozoleria"],
+        websiteKeywords: ["pozole", "pozole rojo", "pozole verde",
+                          "pozole blanco", "pozolería"],
+        relatedKeywords: ["hominy", "mexican soup"],
+        addSpotPrompt: "Search for a restaurant that serves pozole."
+    )
+
+    static let tartare = FoodCategory(
+        id: "tartare",
+        displayName: "Tartare",
+        emoji: "🥩",
+        color: Color(red: 0.6, green: 0.1, blue: 0.1),
+        mapSearchTerms: ["tartare", "french restaurant", "steak tartare"],
+        websiteKeywords: ["tartare", "steak tartare", "beef tartare",
+                          "tuna tartare", "salmon tartare"],
+        relatedKeywords: ["crudo", "carpaccio", "raw beef"],
+        addSpotPrompt: "Search for a restaurant that serves tartare."
+    )
+
+    static let fugu = FoodCategory(
+        id: "fugu",
+        displayName: "Fugu",
+        emoji: "🐡",
+        color: Color(red: 0.15, green: 0.4, blue: 0.65),
+        mapSearchTerms: ["fugu", "japanese restaurant", "pufferfish"],
+        websiteKeywords: ["fugu", "pufferfish", "blowfish",
+                          "fugu sashimi", "tessa"],
+        relatedKeywords: ["puffer fish", "torafugu"],
+        addSpotPrompt: "Search for a Japanese restaurant that serves fugu."
+    )
+
+    static let bibimbap = FoodCategory(
+        id: "bibimbap",
+        displayName: "Bibimbap",
+        emoji: "🍚",
+        color: Color(red: 0.8, green: 0.25, blue: 0.15),
+        mapSearchTerms: ["bibimbap", "korean restaurant", "korean food"],
+        websiteKeywords: ["bibimbap", "dolsot bibimbap", "stone pot bibimbap",
+                          "mixed rice bowl"],
+        relatedKeywords: ["korean rice", "gochujang"],
+        addSpotPrompt: "Search for a Korean restaurant that serves bibimbap."
+    )
+
+    static let ibericoHam = FoodCategory(
+        id: "iberico_ham",
+        displayName: "Iberico Ham",
+        emoji: "🍖",
+        color: Color(red: 0.65, green: 0.15, blue: 0.25),
+        mapSearchTerms: ["iberico", "jamon", "spanish restaurant", "tapas"],
+        websiteKeywords: ["iberico", "ibérico", "jamón ibérico", "jamon iberico",
+                          "pata negra", "bellota"],
+        relatedKeywords: ["jamon", "jamón", "cured ham"],
+        addSpotPrompt: "Search for a restaurant or shop that serves Iberico ham."
+    )
+
+    static let caviar = FoodCategory(
+        id: "caviar",
+        displayName: "Caviar",
+        emoji: "🫧",
+        color: Color(red: 0.15, green: 0.2, blue: 0.3),
+        mapSearchTerms: ["caviar", "seafood restaurant", "fine dining"],
+        websiteKeywords: ["caviar", "osetra", "beluga caviar",
+                          "sturgeon caviar", "caviar service"],
+        relatedKeywords: ["fish roe", "sturgeon"],
+        addSpotPrompt: "Search for a restaurant with a caviar service."
+    )
+
+    static let pierogi = FoodCategory(
+        id: "pierogi",
+        displayName: "Pierogi",
+        emoji: "🥟",
+        color: Color(red: 0.8, green: 0.6, blue: 0.15),
+        mapSearchTerms: ["pierogi", "polish restaurant", "polish food"],
+        websiteKeywords: ["pierogi", "pierog", "pierogy", "pierogies",
+                          "polish dumplings", "ruskie"],
+        relatedKeywords: ["polish food", "dumplings"],
+        addSpotPrompt: "Search for a restaurant that serves pierogi."
+    )
+
+    static let lobsterRolls = FoodCategory(
+        id: "lobster_rolls",
+        displayName: "Lobster Rolls",
+        emoji: "🦞",
+        color: Color(red: 0.85, green: 0.3, blue: 0.2),
+        mapSearchTerms: ["lobster roll", "lobster shack", "seafood restaurant"],
+        websiteKeywords: ["lobster roll", "lobster rolls", "lobster sandwich",
+                          "maine lobster roll", "connecticut lobster roll"],
+        relatedKeywords: ["lobster", "seafood shack"],
+        addSpotPrompt: "Search for a seafood spot that serves lobster rolls."
+    )
+
+    static let smashburgers = FoodCategory(
+        id: "smashburgers",
+        displayName: "Smashburgers",
+        emoji: "🍔",
+        color: Color(red: 0.8, green: 0.15, blue: 0.1),
+        mapSearchTerms: ["smashburger", "burger restaurant", "burgers"],
+        websiteKeywords: ["smashburger", "smash burger", "smashed burger",
+                          "smash patty", "crispy edges"],
+        relatedKeywords: ["burger", "cheeseburger"],
+        addSpotPrompt: "Search for a restaurant that serves smashburgers."
+    )
+
+    // ── Sweets & Specialty ───────────────────────────────────────────────────
+
+    static let mapleSyrup = FoodCategory(
+        id: "maple_syrup",
+        displayName: "Maple Syrup",
+        emoji: "🍁",
+        color: Color(red: 0.72, green: 0.4, blue: 0.08),
+        mapSearchTerms: ["maple syrup", "sugar shack", "maple farm"],
+        websiteKeywords: ["maple syrup", "pure maple", "maple sugar",
+                          "sugar shack", "cabane à sucre", "grade a maple"],
+        relatedKeywords: ["maple", "sirop d'érable"],
+        addSpotPrompt: "Search for a spot that serves or sells real maple syrup."
+    )
+
+    static let artisanChocolate = FoodCategory(
+        id: "artisan_chocolate",
+        displayName: "Artisan Chocolate",
+        emoji: "🍫",
+        color: Color(red: 0.35, green: 0.18, blue: 0.08),
+        mapSearchTerms: ["artisan chocolate", "chocolatier", "chocolate shop"],
+        websiteKeywords: ["artisan chocolate", "bean to bar", "craft chocolate",
+                          "single origin chocolate", "chocolatier", "cacao"],
+        relatedKeywords: ["chocolate", "truffles", "bonbon"],
+        addSpotPrompt: "Search for a chocolatier or artisan chocolate shop."
+    )
+
+    // ── Legacy definitions (kept for backward compat with Firestore) ────────
+    // These are NOT in allCategories (won't appear in picker grid)
+    // but ARE in allKnownCategories so existing spots still decode.
+
+    static let naturalWine = FoodCategory(
+        id: "natural_wine", displayName: "Natural Wine", emoji: "🍷",
+        color: Color(red: 0.6, green: 0.1, blue: 0.3),
+        mapSearchTerms: ["natural wine", "wine shop", "liquor store"], websiteKeywords: ["natural wine"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let craftBeer = FoodCategory(
+        id: "craft_beer", displayName: "Craft Beer", emoji: "🍺",
+        color: Color(red: 0.8, green: 0.5, blue: 0.1),
+        mapSearchTerms: ["craft beer", "brewery", "liquor store"], websiteKeywords: ["craft beer"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let sake = FoodCategory(
+        id: "sake", displayName: "Sake", emoji: "🍶",
+        color: Color(red: 0.2, green: 0.5, blue: 0.7),
+        mapSearchTerms: ["sake", "japanese restaurant", "liquor store"], websiteKeywords: ["sake"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let specialtyCoffee = FoodCategory(
+        id: "specialty_coffee", displayName: "Specialty Coffee", emoji: "☕",
+        color: Color(red: 0.4, green: 0.25, blue: 0.1),
+        mapSearchTerms: ["specialty coffee"], websiteKeywords: ["specialty coffee"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let boba = FoodCategory(
+        id: "boba", displayName: "Boba", emoji: "🧋",
+        color: Color(red: 0.7, green: 0.45, blue: 0.2),
+        mapSearchTerms: ["boba"], websiteKeywords: ["boba"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let cocktails = FoodCategory(
+        id: "cocktails", displayName: "Craft Cocktails", emoji: "🍸",
+        color: Color(red: 0.2, green: 0.3, blue: 0.7),
+        mapSearchTerms: ["cocktail bar", "bar", "liquor store"], websiteKeywords: ["craft cocktail"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let mochi = FoodCategory(
+        id: "mochi", displayName: "Mochi", emoji: "🍡",
+        color: Color(red: 0.9, green: 0.5, blue: 0.7),
+        mapSearchTerms: ["mochi"], websiteKeywords: ["mochi"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let churros = FoodCategory(
+        id: "churros", displayName: "Churros", emoji: "🍩",
+        color: Color(red: 0.85, green: 0.55, blue: 0.1),
+        mapSearchTerms: ["churros"], websiteKeywords: ["churros"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let gelato = FoodCategory(
+        id: "gelato", displayName: "Gelato", emoji: "🍨",
+        color: Color(red: 0.4, green: 0.7, blue: 0.9),
+        mapSearchTerms: ["gelato"], websiteKeywords: ["gelato"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let crepes = FoodCategory(
+        id: "crepes", displayName: "Crepes", emoji: "🥞",
+        color: Color(red: 0.9, green: 0.75, blue: 0.4),
+        mapSearchTerms: ["crepes"], websiteKeywords: ["crepes"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let sushi = FoodCategory(
+        id: "sushi", displayName: "Sushi", emoji: "🍣",
+        color: Color(red: 0.9, green: 0.3, blue: 0.3),
+        mapSearchTerms: ["sushi"], websiteKeywords: ["sushi"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let ramen = FoodCategory(
+        id: "ramen", displayName: "Ramen", emoji: "🍜",
+        color: Color(red: 0.85, green: 0.2, blue: 0.1),
+        mapSearchTerms: ["ramen"], websiteKeywords: ["ramen"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let tacos = FoodCategory(
+        id: "tacos", displayName: "Tacos", emoji: "🌮",
+        color: Color(red: 0.95, green: 0.6, blue: 0.0),
+        mapSearchTerms: ["tacos"], websiteKeywords: ["tacos"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let dimSum = FoodCategory(
+        id: "dim_sum", displayName: "Dim Sum", emoji: "🥟",
+        color: Color(red: 0.8, green: 0.15, blue: 0.15),
+        mapSearchTerms: ["dim sum"], websiteKeywords: ["dim sum"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let pizza = FoodCategory(
+        id: "pizza", displayName: "Neapolitan Pizza", emoji: "🍕",
+        color: Color(red: 0.8, green: 0.2, blue: 0.1),
+        mapSearchTerms: ["pizza"], websiteKeywords: ["neapolitan"],
+        addSpotPrompt: "Legacy category."
+    )
+    static let birria = FoodCategory(
+        id: "birria", displayName: "Birria", emoji: "🫕",
+        color: Color(red: 0.7, green: 0.1, blue: 0.0),
+        mapSearchTerms: ["birria"], websiteKeywords: ["birria"],
+        addSpotPrompt: "Legacy category."
+    )
     static let baklava = FoodCategory(
-        id: "baklava",
-        displayName: "Baklava",
-        emoji: "🍯",
+        id: "baklava", displayName: "Baklava", emoji: "🍯",
         color: Color(red: 0.75, green: 0.55, blue: 0.1),
-        mapSearchTerms: ["baklava", "turkish bakery", "middle eastern bakery"],
-        websiteKeywords: ["baklava", "baklawa", "turkish sweets",
-                          "pistachio baklava", "pastry", "middle eastern sweets"],
-        addSpotPrompt: "Search for a bakery or shop that makes baklava."
+        mapSearchTerms: ["baklava"], websiteKeywords: ["baklava"],
+        addSpotPrompt: "Legacy category."
     )
 
     // MARK: - Full catalogue (order = display order in the grid)
     //
-    // 10 Common + 10 Trendy/Hip. Flan and Mezcal are permanent (origin story).
-    // The split is conceptual — all 20 are equal in the app.
+    // Launch trio + 20 curated Flezcals.
 
     static let allCategories: [FoodCategory] = [
-        // ── Common (widely recognized food categories) ──
-        tacos, pizza, ramen, sushi, pho,
-        craftBeer, specialtyCoffee, gelato, oysters, dimSum,
-        // ── Trendy / Hip (emerging, niche, or culturally specific) ──
-        mezcal, flan,          // permanent — the origin story
-        birria, naturalWine, boba, baklava,
-        mochi, cocktails, sake, churros,
+        // ── Launch trio (permanent) ──
+        mezcal, flan, tortillas,
+        // ── Curated Flezcals ──
+        peamealBacon, bourbon, fernetBranca, woodFiredPizza,
+        paella, mapleSyrup, newEnglandIPA, oysters,
+        artisanChocolate, pho, pozole, tartare,
+        fugu, bibimbap, ibericoHam, caviar,
+        pierogi, singleMaltScotch, lobsterRolls, smashburgers,
     ]
 
     /// All categories including legacy ones that may still exist in Firestore.
     /// Use `allCategories` for the picker grid; use this for decoding/lookup.
-    static let allKnownCategories: [FoodCategory] = allCategories + [crepes]
+    static let allKnownCategories: [FoodCategory] = allCategories + [
+        naturalWine, craftBeer, sake, specialtyCoffee, boba, cocktails,
+        mochi, churros, gelato, crepes, sushi, ramen, tacos, dimSum,
+        pizza, birria, baklava,
+    ]
+
+    // MARK: - User picks registration (for website scanning)
+
+    /// Custom picks registered by the user — merged into scanning loops.
+    /// Set by UserPicksService when picks change.
+    private(set) static var activeCustomPicks: [FoodCategory] = []
+
+    /// Built-in picks whose websiteKeywords have been edited by the user.
+    /// Keyed by category ID. These override the static defaults in allScannable.
+    private(set) static var modifiedBuiltInPicks: [String: FoodCategory] = [:]
+
+    /// All scannable categories: the 20 built-in (with user overrides) + custom picks.
+    /// Used by WebsiteCheckService.scanForCategories() to include user-edited
+    /// keywords and user-created categories in HTML keyword matching.
+    static var allScannable: [FoodCategory] {
+        let builtIn = allCategories.map { cat in
+            modifiedBuiltInPicks[cat.id] ?? cat
+        }
+        return builtIn + activeCustomPicks
+    }
+
+    /// Registers the user's picks so modified keywords are included in website scanning.
+    /// Custom picks (custom_ prefix) are added alongside the built-in categories.
+    /// Modified built-in picks override their static counterparts during scanning.
+    static func registerUserPicks(_ picks: [FoodCategory]) {
+        activeCustomPicks = picks.filter { $0.id.hasPrefix("custom_") }
+        modifiedBuiltInPicks = [:]
+        for pick in picks where !pick.id.hasPrefix("custom_") {
+            if let original = allCategories.first(where: { $0.id == pick.id }),
+               original.websiteKeywords != pick.websiteKeywords {
+                modifiedBuiltInPicks[pick.id] = pick
+            }
+        }
+    }
 
     // MARK: - Default picks (used when user hasn't chosen yet)
 
-    static let defaultPicks: [FoodCategory] = [mezcal, flan]
+    static let defaultPicks: [FoodCategory] = [mezcal, flan, tortillas]
+
+    // MARK: - Launch categories (locked, non-removable)
+
+    /// The 3 categories locked for launch. Always active for every user.
+    static let launchCategories: [FoodCategory] = [mezcal, flan, tortillas]
+
+    /// Whether a category is one of the 3 locked launch defaults.
+    static func isLaunchCategory(_ category: FoodCategory) -> Bool {
+        FeatureFlags.defaultCategories.contains(category.id)
+    }
 
     // MARK: - Lookup helpers
 

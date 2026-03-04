@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import FirebaseFirestore
 
 @MainActor
@@ -137,16 +138,137 @@ class ReviewService: ObservableObject {
         return Double(total) / Double(reviews.count)
     }
 
+    // MARK: - Per-Category Rating Helpers
+
+    /// Average rating for reviews tagged with a specific category
+    func averageRating(for category: SpotCategory) -> Double {
+        let relevant = visibleReviews.filter { $0.category == category.rawValue }
+        guard !relevant.isEmpty else { return 0 }
+        return Double(relevant.reduce(0) { $0 + $1.rating }) / Double(relevant.count)
+    }
+
+    /// Number of visible reviews tagged with a specific category
+    func reviewCount(for category: SpotCategory) -> Int {
+        visibleReviews.filter { $0.category == category.rawValue }.count
+    }
+
+    // MARK: - Delete a Review (admin only)
+
+    /// Deletes a review and recalculates the spot's per-category and overall ratings.
+    /// Pass spotService so the spot document in Firestore stays in sync.
+    func deleteReview(reviewID: String, spotID: String, spotService: SpotService) async -> Bool {
+        // Capture the deleted review's category before removing it from the local array
+        let deletedCategory = reviews.first(where: { $0.id == reviewID })?.category
+
+        do {
+            try await db.collection(collectionName).document(reviewID).delete()
+            withAnimation {
+                reviews.removeAll { $0.id == reviewID }
+            }
+
+            // Recalculate per-category ratings from remaining visible reviews
+            let remaining = reviews.filter { !$0.isHidden }
+
+            if remaining.isEmpty {
+                // No reviews left — reset everything
+                await spotService.updateSpotRating(spotID: spotID, newAverage: 0.0, newCount: 0)
+            } else if let catKey = deletedCategory {
+                // Recalculate just the affected category — updateCategoryRating
+                // handles the overall weighted average recalculation automatically
+                let catReviews = remaining.filter { $0.category == catKey }
+                let catCount = catReviews.count
+                let catAverage: Double = catCount > 0
+                    ? Double(catReviews.reduce(0) { $0 + $1.rating }) / Double(catCount)
+                    : 0.0
+
+                await spotService.updateCategoryRating(
+                    spotID: spotID,
+                    category: catKey,
+                    newAverage: catAverage,
+                    newCount: catCount
+                )
+            } else {
+                // Legacy uncategorized review — recalculate overall from all reviews
+                let newCount = remaining.count
+                let newAverage = Double(remaining.reduce(0) { $0 + $1.rating }) / Double(newCount)
+                await spotService.updateSpotRating(spotID: spotID, newAverage: newAverage, newCount: newCount)
+            }
+
+            return true
+        } catch {
+            errorMessage = "Failed to delete review: \(error.localizedDescription)"
+            #if DEBUG
+            print("⚠️ Delete review failed: \(error.localizedDescription)")
+            #endif
+            return false
+        }
+    }
+
+    // MARK: - Legacy Migration: Auto-Tag Single-Category Reviews
+
+    /// For spots with exactly one category, assigns that category to any untagged
+    /// legacy reviews. Updates both Firestore and the per-category aggregates on
+    /// the spot document. Safe to call repeatedly — no-ops when nothing to migrate.
+    func migrateUntaggedReviews(spot: Spot, spotService: SpotService) async {
+        // Only auto-assign when the spot has exactly one category — for multi-category
+        // spots we can't guess which food/drink the reviewer was rating.
+        guard spot.categories.count == 1,
+              let category = spot.categories.first else { return }
+
+        let untagged = reviews.filter { $0.category == nil }
+        guard !untagged.isEmpty else { return }
+
+        let categoryKey = category.rawValue
+
+        for review in untagged {
+            do {
+                try await db.collection(collectionName).document(review.id)
+                    .updateData(["category": categoryKey])
+                if let index = reviews.firstIndex(where: { $0.id == review.id }) {
+                    reviews[index].category = categoryKey
+                }
+            } catch {
+                #if DEBUG
+                print("[ReviewService] category backfill failed for \(review.id): \(error.localizedDescription)")
+                #endif
+                // Non-fatal — will retry on next view
+            }
+        }
+
+        // Recalculate per-category aggregate from all visible reviews now that they're tagged
+        let visible = reviews.filter { !$0.isHidden && $0.category == categoryKey }
+        let count = visible.count
+        let average: Double = count > 0
+            ? Double(visible.reduce(0) { $0 + $1.rating }) / Double(count)
+            : 0.0
+
+        await spotService.updateCategoryRating(
+            spotID: spot.id,
+            category: categoryKey,
+            newAverage: average,
+            newCount: count
+        )
+
+        #if DEBUG
+        print("[ReviewService] migrated \(untagged.count) untagged review(s) to '\(categoryKey)' on \(spot.name)")
+        #endif
+    }
+
     // MARK: - Check if User Already Reviewed
 
     func hasUserReviewed(userID: String) -> Bool {
         reviews.contains { $0.userID == userID }
     }
 
-    // MARK: - Transcendent Badge
+    /// Returns true if the user has already reviewed a specific category on this spot.
+    func hasUserReviewed(userID: String, category: SpotCategory) -> Bool {
+        reviews.contains { $0.userID == userID && $0.category == category.rawValue }
+    }
 
-    /// True if any visible review for this spot uses the word "transcendent"
-    var hasTranscendentReview: Bool {
-        visibleReviews.contains { $0.isTranscendent }
+    /// Returns the categories on this spot that the user has NOT yet rated.
+    func unratedCategories(userID: String, spotCategories: [SpotCategory]) -> [SpotCategory] {
+        spotCategories.filter { cat in
+            !reviews.contains { $0.userID == userID && $0.category == cat.rawValue }
+        }
     }
 }

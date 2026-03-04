@@ -27,6 +27,8 @@ struct WelcomeView: View {
                 .tint(.orange)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Loading welcome screen")
     }
 
     // MARK: - Content
@@ -42,10 +44,12 @@ struct WelcomeView: View {
                                 .scaledToFill()
                                 .frame(width: 120, height: 120)
                                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .accessibilityHidden(true)
 
                             Text("🍮")
                                 .font(.system(size: 90))
                                 .frame(width: 120, height: 120)
+                                .accessibilityHidden(true)
                         }
                         .padding(.top, 32)
 
@@ -61,6 +65,24 @@ struct WelcomeView: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
+                        }
+                        .accessibilityElement(children: .combine)
+
+                        // What is Flezcal?
+                        if !content.tagline.isEmpty {
+                            VStack(spacing: 8) {
+                                Text("What is Flezcal?")
+                                    .font(.headline)
+                                    .fontWeight(.bold)
+
+                                Text(content.tagline)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.horizontal, 24)
+                            .accessibilityElement(children: .combine)
                         }
 
                         // Feature / update bullets
@@ -81,6 +103,21 @@ struct WelcomeView: View {
                             .padding(.horizontal, 24)
                         }
 
+                        // Own a Spot? card
+                        WelcomeInfoCard(
+                            icon: "storefront",
+                            tint: .orange,
+                            headline: "Own a Spot?",
+                            message: "If you own or manage a place that serves the best version of these foods and drinks, you can update your spot information just like any other user — for free. Want to take it further? Contact us to become an Owner Verified spot. You'll get a verified badge, the ability to lock your menu details, list your brands, and add a reservation link.",
+                            linkText: "Contact us at support@flezcal.app",
+                            linkURL: "mailto:support@flezcal.app"
+                        )
+                        .padding(.horizontal, 24)
+
+                        // Shape Flezcal card
+                        WelcomeShapeCard()
+                            .padding(.horizontal, 24)
+
                         // Change note — shown when the welcome screen reappears after an update
                         if !content.changeNote.isEmpty {
                             VStack(spacing: 6) {
@@ -97,6 +134,7 @@ struct WelcomeView: View {
                             }
                             .padding(.horizontal, 24)
                             .padding(.top, 4)
+                            .accessibilityElement(children: .combine)
                         }
 
                         // Footer — only shown when non-empty
@@ -126,6 +164,7 @@ struct WelcomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .padding()
                 }
+                .accessibilityLabel("Dismiss welcome screen")
                 .background(Color(.systemBackground))
             }
         }
@@ -143,6 +182,7 @@ private struct WelcomeItemRow: View {
                 .font(.title3)
                 .foregroundStyle(.orange)
                 .frame(width: 28)
+                .accessibilityHidden(true)
 
             Text(item.text)
                 .font(.body)
@@ -150,6 +190,7 @@ private struct WelcomeItemRow: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -176,6 +217,7 @@ private struct WelcomePageCard: View {
                 .font(.system(size: 36))
                 .foregroundStyle(tint)
                 .frame(height: 44)
+                .accessibilityHidden(true)
 
             Text(page.headline)
                 .font(.headline)
@@ -191,6 +233,100 @@ private struct WelcomePageCard: View {
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
         .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Info Card (used for "Own a Spot?")
+
+private struct WelcomeInfoCard: View {
+    let icon: String
+    let tint: Color
+    let headline: String
+    let message: String
+    var linkText: String? = nil
+    var linkURL: String? = nil
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 36))
+                .foregroundStyle(tint)
+                .frame(height: 44)
+                .accessibilityHidden(true)
+
+            Text(headline)
+                .font(.headline)
+                .fontWeight(.bold)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let linkText, let linkURL, let url = URL(string: linkURL) {
+                Link(destination: url) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "envelope.fill")
+                            .font(.caption)
+                        Text(linkText)
+                            .font(.footnote)
+                    }
+                    .foregroundStyle(.orange)
+                }
+                .accessibilityLabel(linkText)
+                .padding(.top, 4)
+            }
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Shape Flezcal Card
+
+private struct WelcomeShapeCard: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(.yellow)
+                .frame(height: 44)
+                .accessibilityHidden(true)
+
+            Text("Shape Flezcal")
+                .font(.headline)
+                .fontWeight(.bold)
+
+            Text("Have a suggestion for the next food or drink to track? The app will track all the custom searches and look for trends.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Email link
+            Link(destination: URL(string: "mailto:support@flezcal.app")!) {
+                HStack(spacing: 6) {
+                    Image(systemName: "envelope.fill")
+                        .font(.caption)
+                    Text("Comments? Email us at support@flezcal.app")
+                        .font(.footnote)
+                }
+                .foregroundStyle(.orange)
+            }
+            .accessibilityLabel("Email support at support@flezcal.app")
+            .padding(.top, 4)
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(Color.yellow.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }

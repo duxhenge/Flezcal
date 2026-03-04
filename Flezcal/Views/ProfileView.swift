@@ -37,6 +37,7 @@ struct SignedOutProfileView: View {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 80))
                 .foregroundStyle(.orange)
+                .accessibilityHidden(true)
 
             Text("Welcome to \(AppConstants.appName)")
                 .font(.title2)
@@ -121,13 +122,19 @@ struct SignedInProfileView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
     @StateObject private var reviewService = ReviewService()
+    @StateObject private var verificationService = VerificationService()
     var onShowWhatsNew: (() -> Void)? = nil
     @State private var showSignOutConfirmation = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var showReauthAlert = false
     @State private var showEditName = false
     @State private var editedName = ""
     @State private var isSavingName = false
     @State private var myStats: ContributorStats?
     @State private var myRank: Int?
+    @State private var showAdmin = false
+    @State private var userVerifications: [Verification] = []
 
     var body: some View {
         List {
@@ -137,6 +144,7 @@ struct SignedInProfileView: View {
                     Image(systemName: "person.circle.fill")
                         .font(.system(size: 50))
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(authService.displayName)
@@ -209,11 +217,11 @@ struct SignedInProfileView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Label("Mezcal Brands Listed", systemImage: "list.bullet")
-                        .badge("\(stats.mezcalBrandsAdded)")
+                    Label("Brands Listed", systemImage: "list.bullet")
+                        .badge("\(stats.brandsLogged)")
 
                     Label("Ratings Given", systemImage: "flame")
-                        .badge("\(stats.reviewsWritten)")
+                        .badge("\(stats.ratingsGiven)")
                 }
             } else {
                 // Fallback while loading
@@ -222,6 +230,60 @@ struct SignedInProfileView: View {
                         .badge("--")
                     Label("Ratings Given", systemImage: "flame")
                         .badge("--")
+                }
+            }
+
+            // Verification & Rating history
+            if !userVerifications.isEmpty {
+                Section("Your Verifications & Ratings") {
+                    ForEach(userVerifications.prefix(20)) { verification in
+                        if let cat = SpotCategory(rawValue: verification.category) {
+                            let spotName = spotService.spots.first(where: { $0.id == verification.spotID })?.name ?? "Unknown Spot"
+                            NavigationLink {
+                                if let spot = spotService.spots.first(where: { $0.id == verification.spotID }) {
+                                    SpotDetailView(spot: spot)
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Text(cat.emoji)
+                                        .font(.title3)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(cat.displayName)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+
+                                        Text(spotName)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    // Thumbs icon
+                                    Image(systemName: verification.vote ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+                                        .foregroundStyle(verification.vote ? .green : .red)
+                                        .font(.caption)
+
+                                    // Rating if present
+                                    if let rating = verification.rating {
+                                        HStack(spacing: 1) {
+                                            Text("🍮")
+                                                .font(.caption2)
+                                            Text("\(rating)")
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                        }
+                                    }
+
+                                    // Date
+                                    Text(verification.date, style: .date)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -236,6 +298,11 @@ struct SignedInProfileView: View {
 
                 Label("Version", systemImage: "info.circle")
                     .badge(AppConstants.appVersion)
+                    .onLongPressGesture(minimumDuration: 2) {
+                        if AdminAccess.isAdmin(uid: authService.userID) {
+                            showAdmin = true
+                        }
+                    }
 
                 Link(destination: AppConstants.privacyPolicyURL) {
                     Label("Privacy Policy", systemImage: "hand.raised")
@@ -251,6 +318,28 @@ struct SignedInProfileView: View {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
+
+            // Delete account
+            Section {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    if isDeletingAccount {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Deleting account...")
+                        }
+                    } else {
+                        Label("Delete Account", systemImage: "trash")
+                    }
+                }
+                .disabled(isDeletingAccount)
+            }
+        }
+        .fullScreenCover(isPresented: $showAdmin) {
+            AdminDashboardView()
+                .environmentObject(spotService)
         }
         .alert("Sign Out", isPresented: $showSignOutConfirmation) {
             Button("Sign Out", role: .destructive) {
@@ -271,22 +360,49 @@ struct SignedInProfileView: View {
         } message: {
             Text("This name appears on the leaderboard.")
         }
+        .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
+            Button("Delete Everything", role: .destructive) {
+                performAccountDeletion()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete your account and all associated data (ratings, spots, verifications). This cannot be undone.")
+        }
+        .alert("Sign In Again", isPresented: $showReauthAlert) {
+            Button("OK", role: .cancel) {
+                authService.signOut()
+            }
+        } message: {
+            Text("For security, please sign in again and then retry deleting your account.")
+        }
         .task {
             await loadStats()
         }
     }
 
+    private func performAccountDeletion() {
+        isDeletingAccount = true
+        Task {
+            do {
+                try await authService.deleteAccount()
+            } catch {
+                isDeletingAccount = false
+                let code = (error as NSError).code
+                if code == AuthErrorCode.requiresRecentLogin.rawValue {
+                    showReauthAlert = true
+                } else {
+                    authService.errorMessage = "Failed to delete account: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
     private func saveDisplayName() {
         let name = editedName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty, let user = authService.user else { return }
+        guard !name.isEmpty else { return }
         isSavingName = true
         Task { @MainActor in
-            let changeRequest = user.createProfileChangeRequest()
-            changeRequest.displayName = name
-            try? await changeRequest.commitChanges()
-            try? await user.reload()
-            // Reload from FirebaseAuth to pick up the new displayName
-            authService.user = FirebaseAuth.Auth.auth().currentUser
+            await authService.saveDisplayNameToFirestore(name)
             isSavingName = false
         }
     }
@@ -295,16 +411,25 @@ struct SignedInProfileView: View {
         guard let userID = authService.userID else { return }
         await reviewService.fetchAllReviews()
 
+        // Fetch user's verification history for the profile section
+        let fetchedVerifications = await verificationService.fetchUserVerifications(userID: userID)
+        userVerifications = fetchedVerifications
+
         myStats = ContributorStatsBuilder.buildForUser(
             userID: userID,
             spots: spotService.spots,
             reviews: reviewService.allReviews,
+            verifications: fetchedVerifications,
             displayName: authService.displayName
         )
 
+        // Fetch all verifications for leaderboard ranking
+        await verificationService.fetchAllVerifications()
+
         let allStats = ContributorStatsBuilder.buildAll(
             spots: spotService.spots,
-            reviews: reviewService.allReviews
+            reviews: reviewService.allReviews,
+            verifications: verificationService.allVerifications
         )
         myRank = ContributorStatsBuilder.rankPosition(userID: userID, allStats: allStats)
     }

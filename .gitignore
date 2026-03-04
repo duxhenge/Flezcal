@@ -22,3 +22,6 @@ xcuserdata/
 
 # macOS
 .DS_Store
+service-account-key.json
+seed-welcome*.py
+seed-welcome*.js

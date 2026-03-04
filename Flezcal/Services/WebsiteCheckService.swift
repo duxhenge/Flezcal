@@ -7,10 +7,19 @@ enum WebsiteCheckResult: Equatable {
     /// Keywords were found — high confidence the venue carries this item.
     /// Associated value is the FoodCategory whose keywords matched.
     case confirmed(FoodCategory)
+    /// A broad/related keyword matched but the specific keywords didn't.
+    /// The user should verify. `keyword` is the matched term (e.g. "tortillas").
+    case relatedFound(FoodCategory, keyword: String)
     /// The website was reachable but no keywords matched.
     case notFound
     /// No website URL available, the fetch failed, or the response was unreadable.
     case unavailable
+}
+
+/// A broad keyword match that needs user verification.
+struct RelatedMatch: Equatable {
+    let category: FoodCategory
+    let keyword: String
 }
 
 /// Result of checking a venue's website against ALL of the user's active picks.
@@ -18,6 +27,8 @@ enum WebsiteCheckResult: Equatable {
 struct MultiCategoryCheckResult: Equatable {
     /// Categories (from the user's active picks) confirmed on the website.
     let confirmed: [FoodCategory]
+    /// Categories where only broad/related keywords matched — needs user verification.
+    let relatedFound: [RelatedMatch]
     /// Categories checked but not found.
     let notFound: [FoodCategory]
     /// The primary category (the one that produced the ghost pin).
@@ -26,6 +37,17 @@ struct MultiCategoryCheckResult: Equatable {
     let primaryResult: WebsiteCheckResult
     /// True when no website URL was available at all.
     let websiteUnavailable: Bool
+}
+
+/// Per-URL HTML scan result: confirmed category IDs and related-match info.
+struct HTMLScanResult {
+    var confirmed: Set<String>       // category IDs with websiteKeyword matches
+    var related: [String: String]    // category ID → first matched relatedKeyword
+
+    /// All category IDs with any kind of match (confirmed or related).
+    var allMatchedIDs: Set<String> { confirmed.union(Set(related.keys)) }
+
+    static let empty = HTMLScanResult(confirmed: [], related: [:])
 }
 
 /// Fetches a venue's website in the background and searches the raw HTML for
@@ -52,11 +74,20 @@ actor WebsiteCheckService {
     // because many sites (Joomla, Wix, etc.) return 403 without one.
     private let webSession: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest  = 8
-        config.timeoutIntervalForResource = 10
+        config.timeoutIntervalForRequest  = 6
+        config.timeoutIntervalForResource = 8
+        // Limit concurrent connections to avoid overwhelming the device's
+        // network stack when pre-screening many venues at once. Without this,
+        // 10+ simultaneous connections to slow/unresponsive restaurant sites
+        // cause connection timeouts to pile up, stalling the entire session.
+        config.httpMaximumConnectionsPerHost = 2
         config.httpAdditionalHeaders = [
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
         ]
+        // Disable URL caching — we maintain our own in-memory htmlCache and
+        // don't want stale disk-cached responses consuming storage.
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
 
@@ -64,14 +95,14 @@ actor WebsiteCheckService {
     // API key header isn't interfered with.
     private let apiSession: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest  = 8
-        config.timeoutIntervalForResource = 10
+        config.timeoutIntervalForRequest  = 6
+        config.timeoutIntervalForResource = 8
         return URLSession(configuration: config)
     }()
 
-    /// HTML cache: URL string → set of matched FoodCategory IDs (empty set = page
-    /// fetched with no matches). nil entry = page not yet fetched.
-    private var htmlCache: [String: Set<String>] = [:]
+    /// HTML cache: URL string → scan result with confirmed and related matches
+    /// (empty result = page fetched with no matches). nil entry = page not yet fetched.
+    private var htmlCache: [String: HTMLScanResult] = [:]
 
     /// Tracks which URLs were detected as JS-heavy (homepage was a JS shell).
     /// Used so cache hits in `checkWithBraveSearch` can still expand Pass 2.
@@ -91,10 +122,13 @@ actor WebsiteCheckService {
     /// Returns nil if the URL has never been fetched (caller should run a full check).
     /// Call this before checkWithBraveSearch to avoid unnecessary network calls.
     func cachedResult(for urlString: String, pick: FoodCategory) -> WebsiteCheckResult? {
-        guard let matched = htmlCache[urlString] else { return nil }
-        // Cache hit — check whether the requested category was matched
-        if matched.contains(pick.id) {
+        guard let cached = htmlCache[urlString] else { return nil }
+        // Cache hit — check confirmed first, then related
+        if cached.confirmed.contains(pick.id) {
             return .confirmed(pick)
+        }
+        if let keyword = cached.related[pick.id] {
+            return .relatedFound(pick, keyword: keyword)
         }
         return .notFound
     }
@@ -124,8 +158,11 @@ actor WebsiteCheckService {
             }
             let key = url.absoluteString
             if let cached = htmlCache[key] {
-                // Already scanned — filter to user's picks
-                let relevant = cached.intersection(pickIDs)
+                // Already scanned — filter to user's picks.
+                // Only confirmed (websiteKeyword) matches count for pre-screen ranking.
+                // Related (relatedKeyword) matches are too weak — e.g. "agave" on a
+                // breakfast menu would falsely promote a non-mezcal venue.
+                let relevant = cached.confirmed.intersection(pickIDs)
                 if !relevant.isEmpty {
                     results[suggestion.id] = relevant
                 }
@@ -134,19 +171,21 @@ actor WebsiteCheckService {
             }
         }
 
-        // Fetch uncached homepages concurrently (max 10 at a time)
+        // Fetch uncached homepages concurrently (max 6 at a time).
+        // Reduced from 10 — too many simultaneous connections to slow
+        // restaurant servers cause network timeouts to pile up, stalling
+        // the URLSession and making the app feel frozen.
         if !toFetch.isEmpty {
             let fetched = await withTaskGroup(
-                of: (String, URL, Set<String>)?.self,
-                returning: [(String, URL, Set<String>)].self
+                of: (String, URL, HTMLScanResult)?.self,
+                returning: [(String, URL, HTMLScanResult)].self
             ) { group in
-                // Limit concurrency to 10 by batching
                 var pending = 0
                 var index = 0
-                var collected: [(String, URL, Set<String>)] = []
+                var collected: [(String, URL, HTMLScanResult)] = []
 
                 while index < toFetch.count {
-                    while pending < 10 && index < toFetch.count {
+                    while pending < 6 && index < toFetch.count {
                         let item = toFetch[index]
                         index += 1
                         pending += 1
@@ -155,8 +194,8 @@ actor WebsiteCheckService {
                                   isValid else {
                                 return nil
                             }
-                            let matched = await self.scanForCategories(in: html)
-                            return (item.id, item.url, matched)
+                            let scanResult = await self.scanForCategories(in: html)
+                            return (item.id, item.url, scanResult)
                         }
                     }
                     // Wait for one to finish before adding more
@@ -172,18 +211,94 @@ actor WebsiteCheckService {
                 return collected
             }
 
-            // Cache results and filter to picks
-            for (id, url, matched) in fetched {
-                htmlCache[url.absoluteString] = matched
-                let relevant = matched.intersection(pickIDs)
+            // Cache results and filter to picks.
+            // Only confirmed matches drive pre-screen ranking (not related).
+            for (id, url, scanResult) in fetched {
+                htmlCache[url.absoluteString] = scanResult
+                let relevant = scanResult.confirmed.intersection(pickIDs)
                 if !relevant.isEmpty {
                     results[id] = relevant
                 }
             }
         }
 
+        #if DEBUG
         print("[PreScreen] scanned \(toFetch.count) homepages, \(results.count) likely matches")
+        #endif
         return results
+    }
+
+    /// Pre-screen MKMapItems for Explore result re-ranking.
+    /// Returns a set of MKMapItem indices (position in the input array) that
+    /// had at least one keyword match (confirmed or related) for the user's picks.
+    /// Homepage-only, no Brave API calls, no subpage crawling.
+    func batchPreScreenMapItems(
+        _ mapItems: [MKMapItem],
+        picks: [FoodCategory]
+    ) async -> Set<Int> {
+        let pickIDs = Set(picks.map(\.id))
+        var matchedIndices = Set<Int>()
+
+        // Separate cached vs needs-fetch
+        var toFetch: [(index: Int, url: URL)] = []
+
+        for (index, item) in mapItems.enumerated() {
+            guard let url = item.url, !isSocialMediaURL(url) else { continue }
+            let key = url.absoluteString
+            if let cached = htmlCache[key] {
+                if !cached.confirmed.intersection(pickIDs).isEmpty {
+                    matchedIndices.insert(index)
+                }
+            } else {
+                toFetch.append((index: index, url: url))
+            }
+        }
+
+        // Fetch uncached homepages concurrently (max 6 at a time).
+        // Keeps connection count manageable to avoid timeout pile-ups.
+        if !toFetch.isEmpty {
+            let fetched = await withTaskGroup(
+                of: (Int, URL, HTMLScanResult)?.self,
+                returning: [(Int, URL, HTMLScanResult)].self
+            ) { group in
+                var pending = 0
+                var idx = 0
+                var collected: [(Int, URL, HTMLScanResult)] = []
+                while idx < toFetch.count {
+                    while pending < 6 && idx < toFetch.count {
+                        let item = toFetch[idx]
+                        idx += 1
+                        pending += 1
+                        group.addTask { [self] in
+                            guard let (html, isValid) = await self.fetchPage(item.url),
+                                  isValid else { return nil }
+                            let scanResult = await self.scanForCategories(in: html)
+                            return (item.index, item.url, scanResult)
+                        }
+                    }
+                    if let result = await group.next() {
+                        pending -= 1
+                        if let r = result { collected.append(r) }
+                    }
+                }
+                for await result in group {
+                    if let r = result { collected.append(r) }
+                }
+                return collected
+            }
+
+            for (index, url, scanResult) in fetched {
+                htmlCache[url.absoluteString] = scanResult
+                if !scanResult.confirmed.intersection(pickIDs).isEmpty {
+                    matchedIndices.insert(index)
+                }
+            }
+        }
+
+        #if DEBUG
+        print("[PreScreen] Explore: scanned \(toFetch.count) homepages, \(matchedIndices.count) matches")
+        #endif
+        return matchedIndices
     }
 
     /// Check a single tapped venue — uses Brave Search as fallback when
@@ -221,36 +336,63 @@ actor WebsiteCheckService {
         knownURL: String? = nil
     ) async -> (WebsiteCheckResult, URL?) {
         let venueName = mapItem.name ?? ""
+        #if DEBUG
         print("[WebCheck] \(venueName): checking \(pick.displayName)")
+        #endif
 
         let url = await resolveURL(mapItem: mapItem, knownURL: knownURL)
+        #if DEBUG
         print("[WebCheck]   url=\(url?.absoluteString ?? "nil")")
+        #endif
 
         // Pass 1: homepage HTML scan — scans ALL categories at once, caches results.
         // Then checks if the requested pick was matched.
         var jsHeavy = false
         var pass1FoundOtherCategories = false
+        var relatedKeyword: String?  // Track if a broad related keyword was found in Pass 1
         if let url {
             // Check cache first before fetching
             let key = url.absoluteString
             if let cached = htmlCache[key] {
-                if cached.contains(pick.id) { return (.confirmed(pick), url) }
-                // Cache says page was fetched but pick not found — fall through to Brave passes.
+                if cached.confirmed.contains(pick.id) { return (.confirmed(pick), url) }
+                // Check for related match
+                if let keyword = cached.related[pick.id] {
+                    relatedKeyword = keyword
+                }
+                // Cache says page was fetched but pick not confirmed — fall through to Brave passes.
                 // Restore JS-heavy flag from cache so Pass 2 behaves consistently.
                 jsHeavy = jsHeavyCache.contains(key)
-                pass1FoundOtherCategories = !cached.isEmpty
+                // "Other categories" means OTHER confirmed categories (not related-only for this pick)
+                let otherConfirmed = cached.confirmed.subtracting([pick.id])
+                pass1FoundOtherCategories = !otherConfirmed.isEmpty
             } else {
                 // Not cached — fetch and scan all categories
-                let (scanned, isJSHeavy) = await fetchAndScanAllCategories(url)
+                let (scanned, isJSHeavy, hasPDFMenus) = await fetchAndScanAllCategories(url)
                 jsHeavy = isJSHeavy
-                pass1FoundOtherCategories = !scanned.isEmpty
-                print("[WebCheck]   Pass 1: \(scanned.isEmpty ? "no matches" : "matched: \(scanned)")\(jsHeavy ? " (JS-heavy → expanded Pass 2)" : "")")
-                if let fresh = htmlCache[key], fresh.contains(pick.id) {
-                    return (.confirmed(pick), url)
+                // Treat PDF-menu sites as "HTML worked" — the site has menu content,
+                // it's just in PDFs we can't scan. This prevents Pass 2 from running
+                // expanded keyword searches that produce false positives.
+                pass1FoundOtherCategories = hasPDFMenus
+                if let fresh = htmlCache[key] {
+                    if fresh.confirmed.contains(pick.id) {
+                        return (.confirmed(pick), url)
+                    }
+                    if let keyword = fresh.related[pick.id] {
+                        relatedKeyword = keyword
+                    }
+                    // Check if OTHER categories were confirmed (not just related for current pick)
+                    let otherConfirmed = fresh.confirmed.subtracting([pick.id])
+                    if !otherConfirmed.isEmpty { pass1FoundOtherCategories = true }
                 }
+                #if DEBUG
+                print("[WebCheck]   Pass 1: \(scanned.confirmed.isEmpty && scanned.related.isEmpty ? "no matches" : "confirmed: \(scanned.confirmed), related: \(scanned.related)")\(jsHeavy ? " (JS-heavy → expanded Pass 2)" : "")")
+                #endif
             }
 
             // Pass 2: site-scoped Brave Search for the specific pick.
+            // Uses ONLY websiteKeywords (never relatedKeywords) — Brave Search
+            // with broad terms like "tortillas" would match every Mexican restaurant.
+            //
             // Normal sites: try first 2 keywords (e.g. "mezcal" then "agave").
             // JS-heavy sites: try ALL keywords since HTML scanning is unreliable
             // on React/Vue/Toast pages where the real menu content is rendered
@@ -259,11 +401,13 @@ actor WebsiteCheckService {
             // Skip Pass 2 entirely when:
             //   a) Chain/multi-location domains with 4+ path segments — `site:domain`
             //      searches thousands of unrelated pages (Dunkin' false positive).
-            //   b) Pass 1 found OTHER categories but NOT this pick — the HTML is
+            //   b) Pass 1 confirmed OTHER categories but NOT this pick — the HTML is
             //      clearly readable, so if the keyword isn't there, it's not on
             //      the menu. Brave may still index SEO metadata, review snippets,
             //      or cross-referenced content that mentions the keyword without
             //      the venue actually serving it (Tuxpan/Cielito false positive).
+            //      Note: a related-only match for the CURRENT pick does NOT count
+            //      as "HTML worked" — we still want Pass 2 to try specific keywords.
             let domain = url.host ?? ""
             let pathSegments = url.pathComponents.filter { $0 != "/" }
             let isChainLocationPage = pathSegments.count >= 4
@@ -276,14 +420,20 @@ actor WebsiteCheckService {
                     let query = "\(keyword) site:\(domain)"
                     let found = await braveSearchHasResults(query: query)
                     if found {
+                        #if DEBUG
                         print("[WebCheck]   Pass 2 HIT: \(query)")
+                        #endif
                         return (.confirmed(pick), url)
                     }
                 }
             } else if isChainLocationPage {
+                #if DEBUG
                 print("[WebCheck]   Pass 2: SKIPPED (chain location page)")
+                #endif
             } else if htmlWorkedButPickMissing {
+                #if DEBUG
                 print("[WebCheck]   Pass 2: SKIPPED (HTML readable, found other categories but not \(pick.displayName))")
+                #endif
             }
         }
 
@@ -297,14 +447,27 @@ actor WebsiteCheckService {
                 let query = "\(keyword) \"\(venueName)\""
                 let found = await braveSearchHasResults(query: query)
                 if found {
+                    #if DEBUG
                     print("[WebCheck]   Pass 3 HIT: \(query)")
+                    #endif
                     return (.confirmed(pick), url)
                 }
             }
         }
 
+        // If Pass 1 found a related keyword but Passes 2/3 didn't confirm,
+        // return .relatedFound so the UI can show a verification prompt.
+        if let keyword = relatedKeyword {
+            #if DEBUG
+            print("[WebCheck]   \(venueName): \(pick.displayName) → relatedFound(\(keyword))")
+            #endif
+            return (.relatedFound(pick, keyword: keyword), url)
+        }
+
         let result: WebsiteCheckResult = url == nil ? .unavailable : .notFound
+        #if DEBUG
         print("[WebCheck]   \(venueName): \(pick.displayName) → \(result)")
+        #endif
         return (result, url)
     }
 
@@ -337,34 +500,54 @@ actor WebsiteCheckService {
         }
 
         // Check all picks against the HTML cache (zero API cost).
+        // Three buckets: confirmed, relatedFound, notFound.
         var confirmed: [FoodCategory] = []
+        var relatedFound: [RelatedMatch] = []
         var notFound: [FoodCategory] = []
 
         for pick in allPicks {
+            let result: WebsiteCheckResult
             if pick == primaryPick {
-                if case .confirmed = primaryResult {
-                    confirmed.append(pick)
-                } else {
-                    notFound.append(pick)
-                }
-                continue
-            }
-            // Non-primary picks: cache-only check
-            if let url, let cached = cachedResult(for: url.absoluteString, pick: pick) {
-                if case .confirmed = cached {
-                    confirmed.append(pick)
-                } else {
-                    notFound.append(pick)
+                result = primaryResult
+            } else if let url, let cached = cachedResult(for: url.absoluteString, pick: pick) {
+                // Secondary picks only get confirmed from cache — never relatedFound.
+                // relatedFound is inherently noisy for secondary picks because:
+                //   1. They didn't go through the full 3-pass (no Brave confirmation).
+                //   2. Broad related keywords (e.g. "agave" for mezcal) match
+                //      incidental HTML content (agave syrup on a breakfast menu).
+                //   3. The user is investigating the PRIMARY pick — showing uncertain
+                //      matches for secondary picks creates false confidence.
+                // Only the primary pick's relatedFound result is meaningful because
+                // it was the user's intent to investigate that specific category.
+                switch cached {
+                case .confirmed:
+                    result = cached
+                case .relatedFound:
+                    result = .notFound  // demote to notFound for secondary picks
+                default:
+                    result = cached
                 }
             } else {
+                result = .notFound
+            }
+
+            switch result {
+            case .confirmed:
+                confirmed.append(pick)
+            case .relatedFound(_, let keyword):
+                relatedFound.append(RelatedMatch(category: pick, keyword: keyword))
+            default:
                 notFound.append(pick)
             }
         }
 
-        print("[WebCheck] allPicks: confirmed=\(confirmed.map(\.id)), notFound=\(notFound.map(\.id))")
+        #if DEBUG
+        print("[WebCheck] allPicks: confirmed=\(confirmed.map(\.id)), related=\(relatedFound.map(\.category.id)), notFound=\(notFound.map(\.id))")
+        #endif
 
         return MultiCategoryCheckResult(
             confirmed: confirmed,
+            relatedFound: relatedFound,
             notFound: notFound,
             primaryPick: primaryPick,
             primaryResult: primaryResult,
@@ -398,23 +581,54 @@ actor WebsiteCheckService {
     /// Returns (matched category IDs, looksJSHeavy). The JS flag tells the caller
     /// to try more Brave Search keywords in Pass 2, since HTML scanning is unreliable
     /// on JS-rendered sites (React, Vue, Toast, etc.).
-    private func fetchAndScanAllCategories(_ url: URL) async -> (Set<String>, Bool) {
+    /// Returns (matchedCategories, isJSHeavy, hasPDFMenus).
+    /// `hasPDFMenus` is true when the homepage links to PDF menu files
+    /// (e.g. menu-lunch.pdf, menu-dessert.pdf). These can't be HTML-scanned,
+    /// so the caller should treat the site as "readable but pick not found"
+    /// rather than "empty / JS-heavy", preventing false-positive Brave searches.
+    private func fetchAndScanAllCategories(_ url: URL) async -> (HTMLScanResult, Bool, Bool) {
         let key = url.absoluteString
 
         // Step 1: fetch and scan the homepage
         guard let (homeHTML, isValid) = await fetchPage(url), isValid else {
-            htmlCache[key] = []
-            return ([], false)
+            htmlCache[key] = .empty
+            return (.empty, false, false)
         }
         var matched = scanForCategories(in: homeHTML)
+
+        // Detect PDF menu links — sites like Mustards Grill host menus as
+        // downloadable PDFs (.pdf) that our HTML scanner can't read. When we
+        // find these, we know the site HAS menu content even though we can't
+        // scan it. This prevents the JS-heavy heuristic from triggering and
+        // stops Pass 2 from running expanded keyword searches.
+        let lower = homeHTML.lowercased()
+        let menuPDFTerms = ["menu", "food", "dessert", "drink", "dinner", "lunch", "brunch"]
+        let hasPDFMenus: Bool = {
+            // Look for href="...something-menu...pdf" patterns
+            guard let pdfRegex = try? NSRegularExpression(
+                pattern: #"href\s*=\s*["'][^"']*\.pdf["']"#,
+                options: [.caseInsensitive]
+            ) else { return false }
+            let nsRange = NSRange(lower.startIndex..., in: lower)
+            let pdfMatches = pdfRegex.matches(in: lower, range: nsRange)
+            for match in pdfMatches {
+                guard let range = Range(match.range, in: lower) else { continue }
+                let href = String(lower[range])
+                if menuPDFTerms.contains(where: { href.contains($0) }) {
+                    return true
+                }
+            }
+            return false
+        }()
 
         // Detect JS-heavy pages: high script-to-content ratio suggests the real
         // menu content is rendered client-side and invisible to our HTML scan.
         // Only flagged when the homepage itself has few matches — if we already
         // found categories, the HTML is clearly working fine.
+        // Also suppressed when PDF menus are present — the site is readable,
+        // its menu content is just locked in PDFs.
         let looksJSHeavy: Bool
-        if matched.isEmpty {
-            let lower = homeHTML.lowercased()
+        if matched.confirmed.isEmpty && matched.related.isEmpty && !hasPDFMenus {
             let scriptCount = lower.components(separatedBy: "<script").count - 1
             let bodyText = lower.replacingOccurrences(
                 of: "<script[^>]*>[\\s\\S]*?</script>", with: "", options: .regularExpression
@@ -428,7 +642,7 @@ actor WebsiteCheckService {
             looksJSHeavy = false
         }
 
-        // Step 2: find menu-related links on the homepage
+        // Step 2: find menu-related links on the homepage (PDF links are now filtered out)
         var menuURLs = extractMenuLinks(from: homeHTML, baseURL: url)
 
         // Track all URLs we've already fetched or queued to avoid duplicates
@@ -447,7 +661,13 @@ actor WebsiteCheckService {
 
             // Check if already cached from a previous check
             if let cached = htmlCache[menuKey] {
-                matched.formUnion(cached)
+                matched.confirmed.formUnion(cached.confirmed)
+                // Merge related: only add if not already confirmed
+                for (catID, keyword) in cached.related where !matched.confirmed.contains(catID) {
+                    if matched.related[catID] == nil {
+                        matched.related[catID] = keyword
+                    }
+                }
                 crawlCount += 1
                 continue
             }
@@ -458,9 +678,23 @@ actor WebsiteCheckService {
             }
             let subMatched = scanForCategories(in: subHTML)
             htmlCache[menuKey] = subMatched
-            matched.formUnion(subMatched)
+            // Merge: confirmed takes precedence
+            matched.confirmed.formUnion(subMatched.confirmed)
+            // Remove from related if now confirmed on any page
+            for confirmedID in subMatched.confirmed {
+                matched.related.removeValue(forKey: confirmedID)
+            }
+            // Add new related matches (only if not already confirmed)
+            for (catID, keyword) in subMatched.related where !matched.confirmed.contains(catID) {
+                if matched.related[catID] == nil {
+                    matched.related[catID] = keyword
+                }
+            }
             crawlCount += 1
-            print("[WebCheck]   subpage \(menuURL.path): \(subMatched.isEmpty ? "0" : "\(subMatched.count)") matches")
+            #if DEBUG
+            let subTotal = subMatched.confirmed.count + subMatched.related.count
+            print("[WebCheck]   subpage \(menuURL.path): \(subTotal == 0 ? "0" : "\(subMatched.confirmed.count) confirmed, \(subMatched.related.count) related") matches")
+            #endif
 
             // Depth-2: if this subpage has its own menu links we haven't seen,
             // append them to the queue. This handles multi-location sites where
@@ -475,9 +709,12 @@ actor WebsiteCheckService {
 
         htmlCache[key] = matched
         if looksJSHeavy { jsHeavyCache.insert(key) }
+        #if DEBUG
         let jsNote = looksJSHeavy ? " (JS-heavy)" : ""
-        print("[WebCheck]   scan done: \(crawlCount) subpages, \(matched.count) categories: \(matched)\(jsNote)")
-        return (matched, looksJSHeavy)
+        let pdfNote = hasPDFMenus ? " (PDF menus)" : ""
+        print("[WebCheck]   scan done: \(crawlCount) subpages, confirmed: \(matched.confirmed), related: \(matched.related)\(jsNote)\(pdfNote)")
+        #endif
+        return (matched, looksJSHeavy, hasPDFMenus)
     }
 
     /// Fetches a single page. Returns (html, isValid) or nil on failure.
@@ -514,31 +751,55 @@ actor WebsiteCheckService {
         }
     }
 
-    /// Scans raw HTML for all FoodCategory keywords and returns matched category IDs.
+    /// Scans raw HTML for all FoodCategory keywords and returns an `HTMLScanResult`
+    /// with both confirmed (websiteKeywords) and related (relatedKeywords) matches.
+    ///
     /// Uses word-boundary matching (`\b`) so that short keywords like "flan" don't
     /// false-positive on "flank steak", "flannel", CSS class names, etc.
-    private func scanForCategories(in html: String) -> Set<String> {
+    /// Scans `allScannable` (built-in 20 + user's custom picks) so custom food
+    /// categories are detected during Pass 1 HTML scanning.
+    ///
+    /// For each category:
+    ///   1. First scan `websiteKeywords` — if any match → confirmed (skip relatedKeywords).
+    ///   2. Only if no websiteKeyword matched AND relatedKeywords is non-empty →
+    ///      scan relatedKeywords → add to related dict with the matched keyword.
+    private func scanForCategories(in html: String) -> HTMLScanResult {
         let lower = html.lowercased()
-        var matched = Set<String>()
-        for category in FoodCategory.allCategories {
+        var result = HTMLScanResult.empty
+
+        for category in FoodCategory.allScannable {
+            // Step 1: check specific websiteKeywords first
+            var foundSpecific = false
             for keyword in category.websiteKeywords {
-                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword.lowercased()))\\b"
-                guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-                    // Fall back to contains() if regex fails (shouldn't happen)
-                    if lower.contains(keyword.lowercased()) {
-                        matched.insert(category.id)
-                        break
-                    }
-                    continue
-                }
-                let range = NSRange(lower.startIndex..., in: lower)
-                if regex.firstMatch(in: lower, range: range) != nil {
-                    matched.insert(category.id)
+                if matchKeyword(keyword, in: lower) {
+                    result.confirmed.insert(category.id)
+                    foundSpecific = true
                     break
                 }
             }
+
+            // Step 2: only check relatedKeywords if no specific keyword matched
+            if !foundSpecific && !category.relatedKeywords.isEmpty {
+                for keyword in category.relatedKeywords {
+                    if matchKeyword(keyword, in: lower) {
+                        result.related[category.id] = keyword
+                        break
+                    }
+                }
+            }
         }
-        return matched
+        return result
+    }
+
+    /// Word-boundary regex match for a single keyword in lowercased HTML.
+    private func matchKeyword(_ keyword: String, in lowerHTML: String) -> Bool {
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword.lowercased()))\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            // Fall back to contains() if regex fails (shouldn't happen)
+            return lowerHTML.contains(keyword.lowercased())
+        }
+        let range = NSRange(lowerHTML.startIndex..., in: lowerHTML)
+        return regex.firstMatch(in: lowerHTML, range: range) != nil
     }
 
     /// Parses HTML for same-domain href values whose **URL path** or **visible
@@ -597,6 +858,10 @@ actor WebsiteCheckService {
             guard resolved.host == baseURL.host else { return }
             let path = resolved.path.lowercased()
             if path == "/" || path == baseURL.path.lowercased() { return }
+
+            // Skip non-HTML files — PDFs, images, and documents can't be scanned
+            let skipExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".doc", ".docx", ".xls", ".xlsx"]
+            if skipExtensions.contains(where: { path.hasSuffix($0) }) { return }
 
             // Skip non-content paths
             if skipPaths.contains(where: { path.hasPrefix($0) }) { return }

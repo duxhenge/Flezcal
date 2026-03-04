@@ -1,20 +1,22 @@
 import Foundation
 
 /// Tracks a user's contributions to the Flezcal community.
-/// Rankings are computed from the spots collection data.
+/// Rankings are computed from the spots, ratings, and verifications data.
 struct ContributorStats: Identifiable {
     let id: String          // User ID
     let displayName: String
     let spotsAdded: Int     // Total locations added
     let flanSpotsAdded: Int // Flan spots added
     let mezcalSpotsAdded: Int // Mezcal spots added
-    let mezcalBrandsAdded: Int // Total unique mezcal brands contributed
-    let reviewsWritten: Int
+    let categoriesIdentified: Int // Total food/drink categories identified across all spots
+    let brandsLogged: Int   // Total unique brands/varieties contributed
+    let ratingsGiven: Int
+    let verificationsGiven: Int // Distinct spot/category combos verified
 
     /// Overall contribution score for ranking.
-    /// Each spot = 10 points, each mezcal brand = 3 points, each review = 5 points.
+    /// Spot +10, Rating +5, Find (category ID) +3, Brand +1, Verify +1
     var score: Int {
-        (spotsAdded * 10) + (mezcalBrandsAdded * 3) + (reviewsWritten * 5)
+        (spotsAdded * 10) + (ratingsGiven * 5) + (categoriesIdentified * 3) + (brandsLogged * 1) + (verificationsGiven * 1)
     }
 
     /// Contributor rank title based on score.
@@ -24,8 +26,8 @@ struct ContributorStats: Identifiable {
     /// SF Symbol icon for the rank
     var rankIcon: String { RankConfig.icon(for: score) }
 
-    /// Whether the user has earned the Brand Collector badge (10+ unique mezcal brands)
-    var isBrandCollector: Bool { mezcalBrandsAdded >= RankConfig.brandCollectorThreshold }
+    /// Whether the user has earned the Brand Collector badge (10+ unique brands logged)
+    var isBrandCollector: Bool { brandsLogged >= RankConfig.brandCollectorThreshold }
 }
 
 // MARK: - Rank Configuration
@@ -55,26 +57,42 @@ enum RankConfig {
     }
 }
 
-/// Builds contributor stats from the existing spots and reviews data.
+/// Builds contributor stats from the existing spots, ratings, and verifications data.
 enum ContributorStatsBuilder {
 
-    /// Build stats for all contributors from spots and reviews.
-    /// Pass a `userNames` dict (userID → display name) built from reviews to show real names.
-    static func buildAll(spots: [Spot], reviews: [Review], userNames: [String: String] = [:]) -> [ContributorStats] {
-        // Group spots by user
+    /// Build stats for all contributors from spots, ratings, and verifications.
+    /// Pass a `userNames` dict (userID → display name) built from ratings to show real names.
+    /// Ratings are counted from both legacy reviews AND verification.rating, deduplicated
+    /// per user + spotID + category to avoid double-counting.
+    static func buildAll(spots: [Spot], reviews: [Review], verifications: [Verification] = [], userNames: [String: String] = [:]) -> [ContributorStats] {
+        // Group spots by user — exclude imported/seeded spots (source != nil)
         var userSpots: [String: [Spot]] = [:]
-        for spot in spots where !spot.isHidden {
+        for spot in spots where !spot.isHidden && spot.source == nil {
             userSpots[spot.addedByUserID, default: []].append(spot)
         }
 
-        // Group reviews by user
-        var userReviews: [String: Int] = [:]
+        // Count ratings from both sources, deduplicated per user+spot+category
+        var userRatingKeys: [String: Set<String>] = [:]  // userID → set of "spotID_category"
         for review in reviews where !review.isHidden {
-            userReviews[review.userID, default: 0] += 1
+            let key = "\(review.spotID)_\(review.category ?? "legacy")"
+            userRatingKeys[review.userID, default: []].insert(key)
+        }
+        for verification in verifications where verification.rating != nil {
+            let key = "\(verification.spotID)_\(verification.category)"
+            userRatingKeys[verification.userID, default: []].insert(key)
         }
 
-        // Collect all user IDs
-        let allUserIDs = Set(userSpots.keys).union(userReviews.keys)
+        // Count distinct verification combos per user (spotID + category)
+        var userVerifications: [String: Set<String>] = [:]
+        for verification in verifications {
+            let key = "\(verification.spotID)_\(verification.category)"
+            userVerifications[verification.userID, default: []].insert(key)
+        }
+
+        // Collect all user IDs — exclude the import script sentinel
+        let excludedUserIDs: Set<String> = ["IMPORT_SCRIPT"]
+        let allUserIDs = Set(userSpots.keys).union(userRatingKeys.keys).union(userVerifications.keys)
+            .subtracting(excludedUserIDs)
 
         // Build stats for each user
         var allStats: [ContributorStats] = []
@@ -83,12 +101,17 @@ enum ContributorStatsBuilder {
             let flanCount = spots.filter { $0.hasFlan }.count
             let mezcalCount = spots.filter { $0.hasMezcal }.count
 
-            // Count unique mezcal brands this user contributed
+            // Count total category identifications (sum of categories.count per spot)
+            let totalCategories = spots.reduce(0) { $0 + $1.categories.count }
+
+            // Count unique brands/varieties across all categories
             var uniqueBrands: Set<String> = []
             for spot in spots {
-                if let offerings = spot.mezcalOfferings {
-                    for brand in offerings {
-                        uniqueBrands.insert(brand.lowercased())
+                if let allOfferings = spot.offerings {
+                    for (_, items) in allOfferings {
+                        for item in items {
+                            uniqueBrands.insert(item.lowercased())
+                        }
                     }
                 }
             }
@@ -101,29 +124,55 @@ enum ContributorStatsBuilder {
                 spotsAdded: spots.count,
                 flanSpotsAdded: flanCount,
                 mezcalSpotsAdded: mezcalCount,
-                mezcalBrandsAdded: uniqueBrands.count,
-                reviewsWritten: userReviews[userID] ?? 0
+                categoriesIdentified: totalCategories,
+                brandsLogged: uniqueBrands.count,
+                ratingsGiven: userRatingKeys[userID]?.count ?? 0,
+                verificationsGiven: userVerifications[userID]?.count ?? 0
             ))
         }
 
-        // Sort by score descending
-        return allStats.sorted { $0.score > $1.score }
+        // Filter out zero-score entries and orphaned UIDs (no resolved name AND no user-added spots)
+        return allStats
+            .filter { $0.score > 0 && !($0.displayName == "Contributor" && $0.spotsAdded == 0) }
+            .sorted { $0.score > $1.score }
     }
 
-    /// Build stats for a specific user
-    static func buildForUser(userID: String, spots: [Spot], reviews: [Review], displayName: String) -> ContributorStats {
-        let userSpots = spots.filter { $0.addedByUserID == userID && !$0.isHidden }
+    /// Build stats for a specific user.
+    /// Ratings are counted from both legacy reviews AND verification.rating,
+    /// deduplicated per spotID + category.
+    static func buildForUser(userID: String, spots: [Spot], reviews: [Review], verifications: [Verification] = [], displayName: String) -> ContributorStats {
+        let userSpots = spots.filter { $0.addedByUserID == userID && !$0.isHidden && $0.source == nil }
         let flanCount = userSpots.filter { $0.hasFlan }.count
         let mezcalCount = userSpots.filter { $0.hasMezcal }.count
-        let reviewCount = reviews.filter { $0.userID == userID && !$0.isHidden }.count
 
+        // Count ratings from both sources, deduplicated
+        var ratingKeys: Set<String> = []
+        for review in reviews where review.userID == userID && !review.isHidden {
+            ratingKeys.insert("\(review.spotID)_\(review.category ?? "legacy")")
+        }
+        for v in verifications where v.userID == userID && v.rating != nil {
+            ratingKeys.insert("\(v.spotID)_\(v.category)")
+        }
+
+        // Count total category identifications
+        let totalCategories = userSpots.reduce(0) { $0 + $1.categories.count }
+
+        // Count unique brands/varieties across all categories
         var uniqueBrands: Set<String> = []
         for spot in userSpots {
-            if let offerings = spot.mezcalOfferings {
-                for brand in offerings {
-                    uniqueBrands.insert(brand.lowercased())
+            if let allOfferings = spot.offerings {
+                for (_, items) in allOfferings {
+                    for item in items {
+                        uniqueBrands.insert(item.lowercased())
+                    }
                 }
             }
+        }
+
+        // Count distinct verification combos
+        var verificationKeys: Set<String> = []
+        for v in verifications where v.userID == userID {
+            verificationKeys.insert("\(v.spotID)_\(v.category)")
         }
 
         return ContributorStats(
@@ -132,8 +181,10 @@ enum ContributorStatsBuilder {
             spotsAdded: userSpots.count,
             flanSpotsAdded: flanCount,
             mezcalSpotsAdded: mezcalCount,
-            mezcalBrandsAdded: uniqueBrands.count,
-            reviewsWritten: reviewCount
+            categoriesIdentified: totalCategories,
+            brandsLogged: uniqueBrands.count,
+            ratingsGiven: ratingKeys.count,
+            verificationsGiven: verificationKeys.count
         )
     }
 

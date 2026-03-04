@@ -22,6 +22,8 @@ struct WelcomeContent: Codable {
     let version: String
     let title: String
     let subtitle: String
+    /// "What is Flezcal?" explanation shown below the subtitle.
+    let tagline: String
     let items: [WelcomeItem]
     let pages: [WelcomePage]
     let footer: String
@@ -34,21 +36,22 @@ struct WelcomeContent: Codable {
     static let fallback = WelcomeContent(
         version: "0",
         title: "Welcome to Flezcal 🍮",
-        subtitle: "A global guide to sentimental favorite food and drink establishments starting, obviously, with flan and mezcal.",
+        subtitle: "Discover the Flezcals you crave and the spots that serve them — starting with mezcal, flan, and handmade tortillas.",
+        tagline: "Flezcal is a combination of Flan and Mezcal. Two favorite foods and drinks. Flezcal is now a word that means \"Favorite Food and/or Drink\".",
         items: [
-            WelcomeItem(icon: "map",             text: "Discover spots on an interactive map"),
-            WelcomeItem(icon: "plus.circle",      text: "Add new flan & mezcal spots for the community"),
-            WelcomeItem(icon: "star.fill",        text: "Rate and review your favorite spots"),
-            WelcomeItem(icon: "trophy",           text: "Climb the leaderboard as you contribute"),
-            WelcomeItem(icon: "sparkles",         text: "Ghost pins show unconfirmed places — help verify them"),
-            WelcomeItem(icon: "heart.fill",       text: "Share the joy and have fun"),
+            WelcomeItem(icon: "map",             text: "🗺️ Discover Flezcals on an interactive map"),
+            WelcomeItem(icon: "plus.circle",      text: "➕ Add your Flezcal spots. Who does it best?"),
+            WelcomeItem(icon: "star.fill",        text: "⭐ Rate your favorite Flezcals at the spots that offer them"),
+            WelcomeItem(icon: "trophy",           text: "🏆 Climb the leaderboard as you contribute"),
+            WelcomeItem(icon: "sparkles",         text: "✨ Ghost pins show unconfirmed spots — help verify them"),
+            WelcomeItem(icon: "heart.fill",       text: "❤️ Share the joy and have fun"),
         ],
         pages: [
-            WelcomePage(icon: "map.fill",             headline: "Explore the Map",      description: "Pan and zoom to discover ghost pins — places that might have what you're craving. Tap 'Search This Area' after moving the map to find more.", color: "orange"),
-            WelcomePage(icon: "magnifyingglass",      headline: "Search by Name",       description: "Go to the Spots tab and use Explore to search any restaurant by name. Tap a result to check their menu, or tap the map icon to see it on the map.", color: "blue"),
-            WelcomePage(icon: "heart.circle.fill",    headline: "Pick Your Cravings",   description: "Choose up to 3 categories — flan, mezcal, birria, ramen, and more. We'll find spots near you that serve them.", color: "pink"),
-            WelcomePage(icon: "checkmark.seal.fill",  headline: "We Check for You",     description: "When you tap a spot, we scan their actual website to confirm they serve what you're looking for.", color: "green"),
-            WelcomePage(icon: "plus.circle.fill",     headline: "Grow the Guide",       description: "Add spots, rate them, upload photos. Climb the leaderboard as you contribute to the community.", color: "purple"),
+            WelcomePage(icon: "map.fill",             headline: "Explore the Map",        description: "Pan and zoom to discover ghost pins — places that might have what you're craving. Tap 'Search This Area' after moving the map to find more. Search becomes more powerful over time with community input.", color: "orange"),
+            WelcomePage(icon: "magnifyingglass",      headline: "Search by Name",         description: "Go to the Spots tab and use Explore to search any restaurant, bar or store by name. Tap a result to check their offerings, or tap the map icon to see it on the map.", color: "blue"),
+            WelcomePage(icon: "heart.circle.fill",    headline: "Pick Your Cravings",     description: "We are launching a number of items we're passionate about, starting with mezcal, flan, and handmade tortillas. Plus you can add one custom Flezcal of your own. Over time, the list will grow based on community feedback.", color: "pink"),
+            WelcomePage(icon: "checkmark.seal.fill",  headline: "Community Verified",     description: "Vote to confirm a spot has what you are looking for or check what others have verified. The community builds the guide together.", color: "green"),
+            WelcomePage(icon: "plus.circle.fill",     headline: "Grow the Guide",         description: "Add spots that offer the best version of your Flezcals. Climb the leaderboard as you contribute to the community.", color: "purple"),
         ],
         footer: "",
         changeNote: "",

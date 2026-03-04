@@ -133,7 +133,7 @@ def geocode_nominatim(name: str, address: str, city: str, state: str, country: s
         "countrycodes": country.lower() if country else "",
         "addressdetails": 1,
     }
-    headers = {"User-Agent": "Flezcal-Importer/1.0 (import script; contact: admin@flezcal.com)"}
+    headers = {"User-Agent": "Flezcal-Importer/1.0 (import script; contact: admin@flezcal.app)"}
 
     try:
         resp = requests.get(

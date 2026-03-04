@@ -5,6 +5,11 @@ struct ContentView: View {
     /// Stores the version string of the last welcome screen the user dismissed.
     /// When Firestore's "version" field changes, the welcome screen re-appears.
     @AppStorage("lastSeenWelcomeVersion") private var lastSeenWelcomeVersion: String = ""
+    @EnvironmentObject var networkMonitor: NetworkMonitor
+    /// Used ONLY for the display-name prompt — `needsDisplayNamePrompt` changes at
+    /// most once per session, so this does NOT cause continuous re-renders like
+    /// locationManager would. See the comment on `let locationManager` below.
+    @EnvironmentObject var authService: AuthService
     @StateObject private var welcomeService = WelcomeService()
     @StateObject private var picksService = UserPicksService()
     @State private var showWelcome = false
@@ -12,6 +17,8 @@ struct ContentView: View {
     /// Set by the .showOnMap notification — MapTabView picks this up,
     /// centers the camera, and shows the ghost pin sheet.
     @State private var pendingMapSuggestion: SuggestedSpot? = nil
+    @State private var showDisplayNamePrompt = false
+    @State private var promptedName = ""
 
     // Plain (non-reactive) reference — intentionally NOT @EnvironmentObject.
     // ContentView never reads locationManager.userLocation in its body, so
@@ -22,30 +29,50 @@ struct ContentView: View {
     let locationManager: LocationManager
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            MapTabView(pendingMapSuggestion: $pendingMapSuggestion)
-                .environmentObject(picksService)
-                .tabItem { Label("Explore", systemImage: "map") }
-                .tag(AppTab.explore)
+        ZStack(alignment: .top) {
+            TabView(selection: $selectedTab) {
+                MapTabView(pendingMapSuggestion: $pendingMapSuggestion)
+                    .environmentObject(picksService)
+                    .tabItem { Label("Explore", systemImage: "map") }
+                    .tag(AppTab.explore)
 
-            MyPicksTabView()
-                .environmentObject(picksService)
-                .tabItem { Label("My Picks", systemImage: "heart.circle") }
-                .tag(AppTab.myPicks)
+                MyPicksTabView()
+                    .environmentObject(picksService)
+                    .tabItem { Label("My Flezcals", systemImage: "heart.circle") }
+                    .tag(AppTab.myPicks)
 
-            ListTabView(locationManager: locationManager, picksService: picksService)
-                .tabItem { Label("Spots", systemImage: "list.bullet") }
-                .tag(AppTab.spots)
+                ListTabView(locationManager: locationManager, picksService: picksService)
+                    .tabItem { Label("Spots", systemImage: "list.bullet") }
+                    .tag(AppTab.spots)
 
-            LeaderboardView()
-                .tabItem { Label("Leaderboard", systemImage: "trophy") }
-                .tag(AppTab.leaderboard)
+                LeaderboardView()
+                    .tabItem { Label("Leaderboard", systemImage: "trophy") }
+                    .tag(AppTab.leaderboard)
 
-            ProfileView(onShowWhatsNew: { showWelcome = true })
-                .tabItem { Label("Profile", systemImage: "person.circle") }
-                .tag(AppTab.profile)
+                ProfileView(onShowWhatsNew: { showWelcome = true })
+                    .tabItem { Label("Profile", systemImage: "person.circle") }
+                    .tag(AppTab.profile)
+            }
+            .tint(.orange)
+
+            // Offline banner
+            if !networkMonitor.isConnected {
+                HStack(spacing: 6) {
+                    Image(systemName: "wifi.slash")
+                        .font(.caption2)
+                    Text("You're offline. Changes will sync when you reconnect.")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(Color.secondary)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: networkMonitor.isConnected)
+                .accessibilityLabel("You are offline. Changes will sync when you reconnect.")
+            }
         }
-        .tint(.orange)
         .onReceive(NotificationCenter.default.publisher(for: .switchToSpots)) { _ in
             selectedTab = AppTab.spots
         }
@@ -70,6 +97,25 @@ struct ContentView: View {
             if let version = welcomeService.content?.version, version != lastSeenWelcomeVersion {
                 showWelcome = true
             }
+        }
+        .onChange(of: authService.needsDisplayNamePrompt) { _, needsPrompt in
+            if needsPrompt {
+                promptedName = ""
+                showDisplayNamePrompt = true
+            }
+        }
+        .alert("What should we call you?", isPresented: $showDisplayNamePrompt) {
+            TextField("Your name", text: $promptedName)
+                .autocorrectionDisabled()
+            Button("Save") {
+                Task { await authService.saveDisplayNameToFirestore(promptedName) }
+            }
+            .disabled(promptedName.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button("Skip", role: .cancel) {
+                authService.needsDisplayNamePrompt = false
+            }
+        } message: {
+            Text("This name appears on the leaderboard. You can change it later in Profile.")
         }
     }
 }
@@ -180,4 +226,6 @@ extension View {
 
 #Preview {
     ContentView(locationManager: LocationManager())
+        .environmentObject(NetworkMonitor.shared)
+        .environmentObject(AuthService())
 }

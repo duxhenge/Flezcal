@@ -56,6 +56,48 @@ struct MapTabView: View {
     private typealias RegionBounds = (minLat: Double, maxLat: Double,
                                       minLon: Double, maxLon: Double)
 
+    /// Shift factor: the pin's coordinate sits this fraction from the top of the
+    /// visible map.  0.25 = 3/4 up the screen, leaving the bottom 3/4 for the sheet.
+    private static let pinVerticalFraction: Double = 0.25
+
+    /// Returns a camera region whose center is shifted south so that `coordinate`
+    /// appears roughly 3/4 of the way up the visible map area.  The bottom quarter
+    /// of the map is expected to be covered by the slide-up sheet.
+    private func cameraRegion(centeredAbove coordinate: CLLocationCoordinate2D,
+                              span: MKCoordinateSpan = MKCoordinateSpan(latitudeDelta: 0.01,
+                                                                        longitudeDelta: 0.01)
+    ) -> MKCoordinateRegion {
+        // Move the center south by half the span minus the desired offset.
+        // With fraction = 0.25, the pin sits 25% from the top → center shifts
+        // south by 25% of the span height.
+        let offset = span.latitudeDelta * Self.pinVerticalFraction
+        let shifted = CLLocationCoordinate2D(
+            latitude: coordinate.latitude - offset,
+            longitude: coordinate.longitude
+        )
+        return MKCoordinateRegion(center: shifted, span: span)
+    }
+
+    /// Chooses the best primary pick for the full 3-pass website check.
+    /// If the pin is green (pre-screen found matches), prefer one of the
+    /// matched categories — that's what the user expects the check to verify.
+    /// Falls back to suggestedCategory if no pre-screen data (yellow pins).
+    private func bestPrimaryPick(for suggestion: SuggestedSpot) -> FoodCategory {
+        guard let matches = suggestion.preScreenMatches, !matches.isEmpty else {
+            return suggestion.suggestedCategory
+        }
+        // Prefer a matched category that's in the user's active picks
+        if let pickMatch = picksService.picks.first(where: { matches.contains($0.id) }) {
+            return pickMatch
+        }
+        // Fallback: first matched category from allScannable
+        if let matchID = matches.first,
+           let cat = FoodCategory.allScannable.first(where: { $0.id == matchID }) {
+            return cat
+        }
+        return suggestion.suggestedCategory
+    }
+
     private static let fetchMoveThresholdMeters: Double = 50
 
     private func shouldFetch(for newCenter: CLLocationCoordinate2D) -> Bool {
@@ -80,7 +122,13 @@ struct MapTabView: View {
             preScreenBannerMessage = nil
             suggestionService.preScreenComplete = false
             isPreScreening = true
-            let suggestions = suggestionService.suggestions
+            var suggestions = suggestionService.suggestions
+            // Include showOnMapPin in the pre-screen batch so it gets
+            // scanned along with the other ghost pins.
+            if let pinned = showOnMapPin,
+               !suggestions.contains(where: { $0.id == pinned.id }) {
+                suggestions.append(pinned)
+            }
             preScreenTask = Task {
                 let results = await websiteChecker.batchPreScreen(
                     suggestions: suggestions,
@@ -91,13 +139,23 @@ struct MapTabView: View {
                     return
                 }
                 suggestionService.applyPreScreenResults(results)
+                // Update showOnMapPin's pre-screen status if it was scanned
+                if let pinned = showOnMapPin {
+                    if let matched = results[pinned.id] {
+                        showOnMapPin?.preScreenMatches = matched
+                    } else if pinned.preScreenMatches == nil {
+                        showOnMapPin?.preScreenMatches = Set()
+                    }
+                }
                 isPreScreening = false
                 // Show "no quick matches" banner if zero green pins
                 let likelyCount = suggestionService.suggestions.filter {
                     $0.preScreenMatches?.isEmpty == false
                 }.count
                 let totalCount = suggestionService.suggestions.count
+                #if DEBUG
                 print("[PreScreen] Done. \(likelyCount) likely out of \(totalCount) suggestions.")
+                #endif
                 if totalCount > 0 {
                     if likelyCount == 0 {
                         preScreenBannerMessage = "No quick matches — tap any pin to search deeper"
@@ -175,6 +233,7 @@ struct MapTabView: View {
                     } label: {
                         Image(systemName: showListView ? "map" : "list.bullet")
                     }
+                    .accessibilityLabel(showListView ? "Show map" : "Show list")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if !showListView {
@@ -185,12 +244,14 @@ struct MapTabView: View {
                         } label: {
                             Image(systemName: "location.fill")
                         }
+                        .accessibilityLabel("Center on my location")
                     }
                     Button {
                         Task { await spotService.fetchSpots() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
+                    .accessibilityLabel("Refresh spots")
                 }
             }
             .sheet(item: $selectedSpot) { spot in
@@ -207,7 +268,8 @@ struct MapTabView: View {
                     onDismiss: {
                         suggestionService.dismiss(suggestion)
                         multiCheckResult = nil
-                    }
+                    },
+                    userPicks: picksService.picks
                 )
                 .presentationDetents([.medium, .large])
             }
@@ -247,13 +309,20 @@ struct MapTabView: View {
                                 .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                         )
                             .onTapGesture {
+                                // Shift camera so the pin sits 3/4 up the map,
+                                // above the slide-up sheet.
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    cameraPosition = .region(
+                                        cameraRegion(centeredAbove: suggestion.coordinate)
+                                    )
+                                }
                                 websiteCheckTask?.cancel()
                                 multiCheckResult = nil
                                 selectedSuggestion = suggestion
                                 // Check the primary category (full 3-pass) then check
                                 // all remaining user picks against the HTML cache — zero
                                 // extra API cost for the additional picks.
-                                let primaryPick = suggestion.suggestedCategory
+                                let primaryPick = bestPrimaryPick(for: suggestion)
                                 let allPicks = picksService.picks
                                 websiteCheckTask = Task {
                                     let result = await websiteChecker.checkAllPicks(
@@ -275,12 +344,39 @@ struct MapTabView: View {
                    !suggestionService.suggestions.contains(where: { $0.id == pinned.id }) {
                     Annotation("", coordinate: pinned.coordinate) {
                         VStack(spacing: 0) {
-                            GhostPinView(category: pinned.suggestedCategory)
+                            GhostPinView(
+                                category: pinned.suggestedCategory,
+                                isLikely: pinned.preScreenMatches?.isEmpty == false,
+                                likelyCategories: (pinned.preScreenMatches ?? [])
+                                    .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
+                            )
                                 .scaleEffect(1.3)
                             Image(systemName: "arrowtriangle.down.fill")
                                 .font(.system(size: 8))
                                 .foregroundStyle(pinned.suggestedCategory.color.opacity(0.85))
                                 .offset(y: -2)
+                        }
+                        .onTapGesture {
+                            // Shift camera so the pin sits 3/4 up the map
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                cameraPosition = .region(
+                                    cameraRegion(centeredAbove: pinned.coordinate)
+                                )
+                            }
+                            websiteCheckTask?.cancel()
+                            multiCheckResult = nil
+                            selectedSuggestion = pinned
+                            let primaryPick = bestPrimaryPick(for: pinned)
+                            let allPicks = picksService.picks
+                            websiteCheckTask = Task {
+                                let result = await websiteChecker.checkAllPicks(
+                                    pinned.mapItem,
+                                    picks: allPicks,
+                                    primaryPick: primaryPick
+                                )
+                                guard !Task.isCancelled else { return }
+                                multiCheckResult = result
+                            }
                         }
                     }
                 }
@@ -326,7 +422,7 @@ struct MapTabView: View {
                 fetchAndPreScreen(in: region, picks: activePicks)
             }
             .onChange(of: picksService.picks) { _, _ in
-                // User changed their picks in My Picks tab — re-fetch with new picks
+                // User changed their picks in My Flezcals tab — re-fetch with new picks
                 selectedPickFilter = nil   // reset to "All" when picks change
                 showSearchHereButton = false
                 guard let region = visibleRegion else { return }
@@ -337,18 +433,17 @@ struct MapTabView: View {
                 guard let suggestion = newValue else { return }
                 pendingMapSuggestion = nil   // consume immediately
 
-                // Center camera on the venue
-                cameraPosition = .region(MKCoordinateRegion(
-                    center: suggestion.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                ))
+                // Center camera with the venue at 3/4 up the map (above the sheet)
+                cameraPosition = .region(
+                    cameraRegion(centeredAbove: suggestion.coordinate)
+                )
 
                 // Open the ghost pin sheet + run website check (same as ghost pin tap)
                 websiteCheckTask?.cancel()
                 multiCheckResult = nil
                 showOnMapPin = suggestion  // persist pin after sheet dismissal
                 selectedSuggestion = suggestion
-                let primaryPick = suggestion.suggestedCategory
+                let primaryPick = bestPrimaryPick(for: suggestion)
                 let allPicks = picksService.picks
                 websiteCheckTask = Task {
                     let result = await websiteChecker.checkAllPicks(
@@ -381,6 +476,7 @@ struct MapTabView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "sparkles")
                                     .font(.caption2)
+                                    .accessibilityHidden(true)
                                 Text("\(visibleSuggestions.count) suggested")
                                     .font(.caption2)
                                     .fontWeight(.medium)
@@ -396,26 +492,42 @@ struct MapTabView: View {
             }
             .padding(.top, 8)
 
-            // "Search This Area" button — shown after the user pans/zooms
+            // "Search This Area" / "Zoom in to search" — shown after the user pans/zooms.
+            // maxSearchSpan prevents wasteful continent-scale searches that return
+            // scattered results. 2.0° ≈ 140 miles — generous enough for metro areas.
             if showSearchHereButton {
+                let tooWide = (visibleRegion?.span.latitudeDelta ?? 0) > 2.0
                 VStack {
                     Spacer()
-                    Button {
-                        showSearchHereButton = false
-                        guard let region = visibleRegion else { return }
-                        lastFetchedCenter = region.center
-                        fetchAndPreScreen(in: region, picks: activePicks)
-                    } label: {
-                        Label("Search This Area", systemImage: "magnifyingglass")
+                    if tooWide {
+                        Label("Zoom in to search", systemImage: "arrow.down.right.and.arrow.up.left")
                             .font(.subheadline)
-                            .fontWeight(.semibold)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
                             .background(.ultraThinMaterial)
                             .clipShape(Capsule())
                             .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                            .padding(.bottom, 24)
+                    } else {
+                        Button {
+                            showSearchHereButton = false
+                            guard let region = visibleRegion else { return }
+                            lastFetchedCenter = region.center
+                            fetchAndPreScreen(in: region, picks: activePicks)
+                        } label: {
+                            Label("Search This Area", systemImage: "magnifyingglass")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                        }
+                        .padding(.bottom, 24)
                     }
-                    .padding(.bottom, 24)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeInOut(duration: 0.25), value: showSearchHereButton)
@@ -507,47 +619,58 @@ struct MapTabView: View {
                 }
             }
 
-            // Empty state
+            // Empty state — compact banner near top so it doesn't cover ghost pins.
+            // Hidden when ghost pins (suggestions) or a "Show on Map" pin are visible,
+            // since the user is intentionally viewing suggested venues.
             if !spotService.isLoading && spotService.errorMessage == nil
-                && visibleSpots.isEmpty && !emptyStateDismissed {
-                ZStack(alignment: .topTrailing) {
-                    VStack(spacing: 16) {
+                && visibleSpots.isEmpty && visibleSuggestions.isEmpty
+                && showOnMapPin == nil && !emptyStateDismissed {
+                VStack {
+                    HStack(spacing: 12) {
                         FoodCategoryIcon(
                             category: selectedPickFilter ?? picksService.picks.first ?? .mezcal,
-                            size: 56
+                            size: 28
                         )
-                        Text("No spots here yet")
-                            .font(.headline)
-                        Text("Be the first to add a \(selectedPickFilter?.displayName.lowercased() ?? "spot") here!")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("No spots here yet")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            Text("Be the first to add a \(selectedPickFilter?.displayName.lowercased() ?? "spot") here!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
                         Button {
                             NotificationCenter.default.post(name: .switchToSpots, object: nil)
                         } label: {
-                            Label("Search for a Spot", systemImage: "magnifyingglass")
+                            Image(systemName: "magnifyingglass")
+                                .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 10)
+                                .padding(8)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.orange)
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) { emptyStateDismissed = true }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel("Dismiss empty state")
                     }
-                    .padding(24)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("No spots here yet. Be the first to add a spot.")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.1), radius: 3, y: 2)
+                    .padding(.horizontal, 16)
 
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) { emptyStateDismissed = true }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                            .padding(8)
-                    }
+                    Spacer()
                 }
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 40)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 80)
             }
         }
     }
@@ -559,6 +682,7 @@ struct MapTabView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search spots...", text: $searchText)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
@@ -567,6 +691,7 @@ struct MapTabView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(10)
@@ -603,6 +728,7 @@ struct MapTabView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                .accessibilityElement(children: .combine)
                 .padding()
                 Spacer()
             } else {
@@ -687,6 +813,9 @@ struct SpotPinView: View {
                 .foregroundStyle(spot.primaryCategory.color)
                 .offset(y: -3)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(spot.name), \(spot.categories.map(\.displayName).joined(separator: " and "))")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -726,8 +855,19 @@ struct SpotListRowView: View {
                         .monospacedDigit()
                         .fixedSize()
                 }
-                if spot.reviewCount > 0,
+                if let catRating = bestCategoryRating,
+                   let level = RatingLevel.from(max(1, min(5, Int(catRating.average.rounded())))) {
+                    // Per-category rating display
+                    HStack(spacing: 2) {
+                        Text(level.emoji)
+                            .font(.caption2)
+                        Text(level.label)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                } else if spot.reviewCount > 0,
                    let level = RatingLevel.from(max(1, min(5, Int(spot.averageRating.rounded())))) {
+                    // Legacy fallback
                     HStack(spacing: 2) {
                         Text(level.emoji)
                             .font(.caption2)
@@ -745,6 +885,16 @@ struct SpotListRowView: View {
             .frame(minWidth: 60, alignment: .trailing)
         }
         .padding(.vertical, 4)
+    }
+
+    /// Best category rating to display — first category with reviews
+    private var bestCategoryRating: CategoryRating? {
+        for cat in spot.categories {
+            if let rating = spot.rating(for: cat), rating.count > 0 {
+                return rating
+            }
+        }
+        return nil
     }
 }
 

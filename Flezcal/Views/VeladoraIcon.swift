@@ -262,22 +262,55 @@ struct FoodCategoryIcon: View {
     }
 }
 
-/// Shows all category icons for a spot side-by-side.
-/// For a single-category spot, shows one icon at full size.
-/// For a dual-category spot, shows both icons at a smaller size.
+/// Shows category icons for a spot, scaling gracefully from 1 to many categories.
+///
+/// Designed to fit inside a container ~1.6× the `size` parameter (e.g. size 28 in
+/// a 44pt frame, or size 22 in a 40pt circle).
+///
+/// Layout by count:
+/// - **1 category**: single icon at full size
+/// - **2 categories**: side-by-side at 70% size
+/// - **3 categories**: side-by-side at 50% size
+/// - **4+ categories**: first 2 icons at 55% size plus a "+N" overflow badge
 struct SpotIcons: View {
     let categories: [SpotCategory]
     var size: CGFloat = 28
 
     var body: some View {
-        if categories.count > 1 {
+        switch categories.count {
+        case 0:
+            CategoryIcon(category: .flan, size: size)
+        case 1:
+            CategoryIcon(category: categories[0], size: size)
+        case 2:
             HStack(spacing: size * 0.08) {
                 ForEach(categories) { cat in
                     CategoryIcon(category: cat, size: size * 0.7)
                 }
             }
-        } else {
-            CategoryIcon(category: categories.first ?? .flan, size: size)
+        case 3:
+            // 3 icons at 50% — fits within 1.6× container
+            HStack(spacing: size * 0.04) {
+                ForEach(categories) { cat in
+                    CategoryIcon(category: cat, size: size * 0.50)
+                }
+            }
+        default:
+            // 4+ categories: show first 2 icons + "+N" badge
+            let visible = Array(categories.prefix(2))
+            let overflow = categories.count - 2
+
+            HStack(spacing: size * 0.04) {
+                ForEach(visible) { cat in
+                    CategoryIcon(category: cat, size: size * 0.50)
+                }
+                Text("+\(overflow)")
+                    .font(.system(size: size * 0.28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(width: size * 0.42, height: size * 0.42)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
         }
     }
 }
@@ -326,18 +359,34 @@ struct SpotIcons: View {
 
         Divider()
 
-        HStack(spacing: 30) {
+        HStack(spacing: 20) {
             VStack {
                 SpotIcons(categories: [.flan], size: 44)
-                Text("Flan only").font(.caption)
-            }
-            VStack {
-                SpotIcons(categories: [.mezcal], size: 44)
-                Text("Mezcal only").font(.caption)
+                    .frame(width: 56, height: 56)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                Text("1 pick").font(.caption)
             }
             VStack {
                 SpotIcons(categories: [.flan, .mezcal], size: 44)
-                Text("Both").font(.caption)
+                    .frame(width: 56, height: 56)
+                    .background(Color.green.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                Text("2 picks").font(.caption)
+            }
+            VStack {
+                SpotIcons(categories: [.flan, .mezcal, .tacos], size: 44)
+                    .frame(width: 56, height: 56)
+                    .background(Color.green.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                Text("3 picks").font(.caption)
+            }
+            VStack {
+                SpotIcons(categories: [.flan, .mezcal, .tacos, .ramen, .birria], size: 44)
+                    .frame(width: 56, height: 56)
+                    .background(Color.green.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                Text("5 picks").font(.caption)
             }
         }
     }

@@ -8,7 +8,21 @@
 
 /* Begin PBXBuildFile section */
 		1B519847CE56C3A05B91F87B /* ExploreSearchUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */; };
+		4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */; };
+		65327E3F685BFF9B52AB64AC /* CustomCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB135D53650572B2339AC0B /* CustomCategory.swift */; };
+		756E836F41CC53C867C035C4 /* EditCustomCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */; };
+		AD0000010000000000000001 /* AdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000001 /* AdminModels.swift */; };
+		AD0000010000000000000002 /* AdminViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000002 /* AdminViewModel.swift */; };
+		AD0000010000000000000003 /* AdminAccessGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000003 /* AdminAccessGate.swift */; };
+		AD0000010000000000000004 /* AdminDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000004 /* AdminDashboardView.swift */; };
+		AD0000010000000000000005 /* AdminOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000005 /* AdminOverviewView.swift */; };
+		AD0000010000000000000006 /* AdminRevenueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000006 /* AdminRevenueView.swift */; };
+		AD0000010000000000000007 /* AdminCostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000007 /* AdminCostsView.swift */; };
+		AD0000010000000000000008 /* AdminDeadlinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000008 /* AdminDeadlinesView.swift */; };
+		AD0000010000000000000009 /* AdminNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000009 /* AdminNotesView.swift */; };
+		AE0000010000000000000001 /* AgeVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000020000000000000001 /* AgeVerificationView.swift */; };
 		AEEA3812748D3BDFDA62D68D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4A8B31AA11DC786E5093A4F /* Foundation.framework */; };
+		AN0000010000000000000001 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AN0000020000000000000001 /* AnalyticsService.swift */; };
 		B10000010000000000000001 /* FlezcalApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* FlezcalApp.swift */; };
 		B10000010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000002 /* ContentView.swift */; };
 		B10000010000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000003 /* Assets.xcassets */; };
@@ -31,7 +45,7 @@
 		B10000010000000000000015 /* BusinessSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000014 /* BusinessSearchView.swift */; };
 		B10000010000000000000016 /* ReviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000015 /* ReviewService.swift */; };
 		B10000010000000000000017 /* StarRatingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000016 /* StarRatingView.swift */; };
-		B10000010000000000000018 /* WriteReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000017 /* WriteReviewView.swift */; };
+
 		B10000010000000000000019 /* MezcalBrands.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000018 /* MezcalBrands.swift */; };
 		B1000001000000000000001A /* MezcalInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000019 /* MezcalInputField.swift */; };
 		B1000001000000000000001B /* ContributorStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001A /* ContributorStats.swift */; };
@@ -39,6 +53,7 @@
 		B1000001000000000000001D /* VeladoraIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001C /* VeladoraIcon.swift */; };
 		B1000001000000000000001E /* SuggestionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001D /* SuggestionService.swift */; };
 		B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001E /* SuggestedSpotSheet.swift */; };
+		SI0000020000000000000001 /* SignInSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SI0000010000000000000001 /* SignInSheet.swift */; };
 		B10000010000000000000020 /* WelcomeContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001F /* WelcomeContent.swift */; };
 		B10000010000000000000021 /* WelcomeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000020 /* WelcomeService.swift */; };
 		B10000010000000000000022 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000021 /* WelcomeView.swift */; };
@@ -52,9 +67,18 @@
 		B100000100000000000000B3 /* MyPicksTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B3 /* MyPicksTabView.swift */; };
 		B100000100000000000000B4 /* FoodCategoryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000B4 /* FoodCategoryGridView.swift */; };
 		B853A5AFCE7241ADF4E8E09A /* LocationUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22355A4714E4831AF36DB21 /* LocationUtils.swift */; };
-		65327E3F685BFF9B52AB64AC /* CustomCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB135D53650572B2339AC0B /* CustomCategory.swift */; };
-		4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */; };
 		CAB4B65A1D3A48DB38C9BB7A /* CreateCustomCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */; };
+		CR0000010000000000000001 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = CR0000020000000000000001 /* FirebaseCrashlytics */; };
+		GH0000010000000000000001 /* Geohash.swift in Sources */ = {isa = PBXBuildFile; fileRef = GH0000020000000000000001 /* Geohash.swift */; };
+		NM0000010000000000000001 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = NM0000020000000000000001 /* NetworkMonitor.swift */; };
+		VF0000010000000000000001 /* Verification.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000001 /* Verification.swift */; };
+		VF0000010000000000000002 /* ClosureReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000002 /* ClosureReport.swift */; };
+		VF0000010000000000000003 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000003 /* VerificationService.swift */; };
+		VF0000010000000000000004 /* ClosureReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000004 /* ClosureReportService.swift */; };
+
+		VF0000010000000000000006 /* AdminClosureReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000006 /* AdminClosureReportsView.swift */; };
+		FR0000010000000000000001 /* FlezcalRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR0000020000000000000001 /* FlezcalRowView.swift */; };
+		FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR0000020000000000000002 /* InlineRatingPicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -68,7 +92,20 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategoryService.swift; sourceTree = "<group>"; };
 		576765802F466666004D05B3 /* Flezcal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flezcal.entitlements; sourceTree = "<group>"; };
+		96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCustomCategoryView.swift; sourceTree = "<group>"; };
+		AD0000020000000000000001 /* AdminModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminModels.swift; sourceTree = "<group>"; };
+		AD0000020000000000000002 /* AdminViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminViewModel.swift; sourceTree = "<group>"; };
+		AD0000020000000000000003 /* AdminAccessGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAccessGate.swift; sourceTree = "<group>"; };
+		AD0000020000000000000004 /* AdminDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminDashboardView.swift; sourceTree = "<group>"; };
+		AD0000020000000000000005 /* AdminOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOverviewView.swift; sourceTree = "<group>"; };
+		AD0000020000000000000006 /* AdminRevenueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminRevenueView.swift; sourceTree = "<group>"; };
+		AD0000020000000000000007 /* AdminCostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminCostsView.swift; sourceTree = "<group>"; };
+		AD0000020000000000000008 /* AdminDeadlinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminDeadlinesView.swift; sourceTree = "<group>"; };
+		AD0000020000000000000009 /* AdminNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminNotesView.swift; sourceTree = "<group>"; };
+		AE0000020000000000000001 /* AgeVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeVerificationView.swift; sourceTree = "<group>"; };
+		AN0000020000000000000001 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		B20000010000000000000001 /* FlezcalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalApp.swift; sourceTree = "<group>"; };
 		B20000010000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B20000010000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -89,7 +126,7 @@
 		B20000010000000000000014 /* BusinessSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusinessSearchView.swift; sourceTree = "<group>"; };
 		B20000010000000000000015 /* ReviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewService.swift; sourceTree = "<group>"; };
 		B20000010000000000000016 /* StarRatingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRatingView.swift; sourceTree = "<group>"; };
-		B20000010000000000000017 /* WriteReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteReviewView.swift; sourceTree = "<group>"; };
+
 		B20000010000000000000018 /* MezcalBrands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalBrands.swift; sourceTree = "<group>"; };
 		B20000010000000000000019 /* MezcalInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalInputField.swift; sourceTree = "<group>"; };
 		B2000001000000000000001A /* ContributorStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContributorStats.swift; sourceTree = "<group>"; };
@@ -97,6 +134,7 @@
 		B2000001000000000000001C /* VeladoraIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeladoraIcon.swift; sourceTree = "<group>"; };
 		B2000001000000000000001D /* SuggestionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionService.swift; sourceTree = "<group>"; };
 		B2000001000000000000001E /* SuggestedSpotSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestedSpotSheet.swift; sourceTree = "<group>"; };
+		SI0000010000000000000001 /* SignInSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInSheet.swift; sourceTree = "<group>"; };
 		B2000001000000000000001F /* WelcomeContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeContent.swift; sourceTree = "<group>"; };
 		B20000010000000000000020 /* WelcomeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeService.swift; sourceTree = "<group>"; };
 		B20000010000000000000021 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
@@ -110,14 +148,23 @@
 		B200000100000000000000B3 /* MyPicksTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyPicksTabView.swift; sourceTree = "<group>"; };
 		B200000100000000000000B4 /* FoodCategoryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodCategoryGridView.swift; sourceTree = "<group>"; };
 		B30000010000000000000001 /* Flezcal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flezcal.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BEB135D53650572B2339AC0B /* CustomCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategory.swift; sourceTree = "<group>"; };
 		BF0000010000000000000001 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		C5D47E4635307A1F26126CC4 /* FlezcalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlezcalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D22355A4714E4831AF36DB21 /* LocationUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationUtils.swift; sourceTree = "<group>"; };
 		E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExploreSearchUITest.swift; sourceTree = "<group>"; };
+		EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditCustomCategoryView.swift; sourceTree = "<group>"; };
 		F4A8B31AA11DC786E5093A4F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		BEB135D53650572B2339AC0B /* CustomCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategory.swift; sourceTree = "<group>"; };
-		1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategoryService.swift; sourceTree = "<group>"; };
-		96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCustomCategoryView.swift; sourceTree = "<group>"; };
+		GH0000020000000000000001 /* Geohash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geohash.swift; sourceTree = "<group>"; };
+		NM0000020000000000000001 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		VF0000020000000000000001 /* Verification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Verification.swift; sourceTree = "<group>"; };
+		VF0000020000000000000002 /* ClosureReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureReport.swift; sourceTree = "<group>"; };
+		VF0000020000000000000003 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
+		VF0000020000000000000004 /* ClosureReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureReportService.swift; sourceTree = "<group>"; };
+
+		VF0000020000000000000006 /* AdminClosureReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClosureReportsView.swift; sourceTree = "<group>"; };
+		FR0000020000000000000001 /* FlezcalRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalRowView.swift; sourceTree = "<group>"; };
+		FR0000020000000000000002 /* InlineRatingPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineRatingPicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +183,7 @@
 				B1000001000000000000000D /* FirebaseAuth in Frameworks */,
 				B1000001000000000000000E /* FirebaseFirestore in Frameworks */,
 				B1000001000000000000000F2 /* FirebaseStorage in Frameworks */,
+				CR0000010000000000000001 /* FirebaseCrashlytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +196,23 @@
 				F4A8B31AA11DC786E5093A4F /* Foundation.framework */,
 			);
 			name = iOS;
+			sourceTree = "<group>";
+		};
+		AD0000030000000000000001 /* Admin */ = {
+			isa = PBXGroup;
+			children = (
+				AD0000020000000000000003 /* AdminAccessGate.swift */,
+				AD0000020000000000000001 /* AdminModels.swift */,
+				AD0000020000000000000002 /* AdminViewModel.swift */,
+				AD0000020000000000000004 /* AdminDashboardView.swift */,
+				AD0000020000000000000005 /* AdminOverviewView.swift */,
+				AD0000020000000000000006 /* AdminRevenueView.swift */,
+				AD0000020000000000000007 /* AdminCostsView.swift */,
+				AD0000020000000000000008 /* AdminDeadlinesView.swift */,
+				AD0000020000000000000009 /* AdminNotesView.swift */,
+				VF0000020000000000000006 /* AdminClosureReportsView.swift */,
+			);
+			path = Admin;
 			sourceTree = "<group>";
 		};
 		B50000010000000000000001 = {
@@ -171,6 +236,7 @@
 				B50000010000000000000003 /* Models */,
 				B50000010000000000000004 /* Views */,
 				B50000010000000000000005 /* Services */,
+				AD0000030000000000000001 /* Admin */,
 				B20000010000000000000003 /* Assets.xcassets */,
 				B2000001000000000000000C /* Info.plist */,
 				B2000001000000000000000D /* GoogleService-Info.plist */,
@@ -190,6 +256,8 @@
 				B2000001000000000000001F /* WelcomeContent.swift */,
 				B200000100000000000000B1 /* FoodCategory.swift */,
 				BEB135D53650572B2339AC0B /* CustomCategory.swift */,
+				VF0000020000000000000001 /* Verification.swift */,
+				VF0000020000000000000002 /* ClosureReport.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -204,16 +272,22 @@
 				B20000010000000000000013 /* SpotDetailView.swift */,
 				B20000010000000000000014 /* BusinessSearchView.swift */,
 				B20000010000000000000016 /* StarRatingView.swift */,
-				B20000010000000000000017 /* WriteReviewView.swift */,
+
 				B20000010000000000000019 /* MezcalInputField.swift */,
 				B2000001000000000000001B /* LeaderboardView.swift */,
 				B2000001000000000000001C /* VeladoraIcon.swift */,
 				B2000001000000000000001E /* SuggestedSpotSheet.swift */,
+				SI0000010000000000000001 /* SignInSheet.swift */,
 				B20000010000000000000021 /* WelcomeView.swift */,
 				B20000010000000000000023 /* EmailAuthView.swift */,
 				B200000100000000000000B3 /* MyPicksTabView.swift */,
 				B200000100000000000000B4 /* FoodCategoryGridView.swift */,
 				96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */,
+				EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */,
+				AE0000020000000000000001 /* AgeVerificationView.swift */,
+
+				FR0000020000000000000001 /* FlezcalRowView.swift */,
+				FR0000020000000000000002 /* InlineRatingPicker.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -233,6 +307,11 @@
 				B20000010000000000000022 /* SpotService.swift */,
 				D22355A4714E4831AF36DB21 /* LocationUtils.swift */,
 				1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */,
+				VF0000020000000000000003 /* VerificationService.swift */,
+				VF0000020000000000000004 /* ClosureReportService.swift */,
+				NM0000020000000000000001 /* NetworkMonitor.swift */,
+				AN0000020000000000000001 /* AnalyticsService.swift */,
+				GH0000020000000000000001 /* Geohash.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -251,7 +330,6 @@
 			children = (
 				E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */,
 			);
-			name = FlezcalUITests;
 			path = FlezcalUITests;
 			sourceTree = "<group>";
 		};
@@ -291,6 +369,8 @@
 				B70000010000000000000001 /* Sources */,
 				B40000010000000000000001 /* Frameworks */,
 				B90000010000000000000001 /* Resources */,
+				CR0000030000000000000001 /* Upload dSYMs to Crashlytics */,
+				DS0000010000000000000001 /* Deploy Firestore Rules */,
 			);
 			buildRules = (
 			);
@@ -301,6 +381,7 @@
 				BD0000010000000000000001 /* FirebaseAuth */,
 				BD0000010000000000000002 /* FirebaseFirestore */,
 				BD0000010000000000000003 /* FirebaseStorage */,
+				CR0000020000000000000001 /* FirebaseCrashlytics */,
 			);
 			productName = Flezcal;
 			productReference = B30000010000000000000001 /* Flezcal.app */;
@@ -362,6 +443,50 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		CR0000030000000000000001 /* Upload dSYMs to Crashlytics */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(DWARF_DSYM_FOLDER_PATH)/$(DWARF_DSYM_FILE_NAME)",
+				"$(DWARF_DSYM_FOLDER_PATH)/$(DWARF_DSYM_FILE_NAME)/Contents/Resources/DWARF/$(PRODUCT_NAME)",
+				"$(DWARF_DSYM_FOLDER_PATH)/$(DWARF_DSYM_FILE_NAME)/Contents/Info.plist",
+			);
+			name = "Upload dSYMs to Crashlytics";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"";
+		};
+		DS0000010000000000000001 /* Deploy Firestore Rules */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/firestore.rules",
+			);
+			name = "Deploy Firestore Rules";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/deploy_firestore_rules.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		9F7AFC8713B488F046620A21 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -393,7 +518,7 @@
 				B10000010000000000000015 /* BusinessSearchView.swift in Sources */,
 				B10000010000000000000016 /* ReviewService.swift in Sources */,
 				B10000010000000000000017 /* StarRatingView.swift in Sources */,
-				B10000010000000000000018 /* WriteReviewView.swift in Sources */,
+
 				B10000010000000000000019 /* MezcalBrands.swift in Sources */,
 				B1000001000000000000001A /* MezcalInputField.swift in Sources */,
 				B1000001000000000000001B /* ContributorStats.swift in Sources */,
@@ -402,6 +527,7 @@
 				B1000001000000000000001E /* SuggestionService.swift in Sources */,
 				B100000100000000000000A1 /* WebsiteCheckService.swift in Sources */,
 				B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */,
+				SI0000020000000000000001 /* SignInSheet.swift in Sources */,
 				B10000010000000000000020 /* WelcomeContent.swift in Sources */,
 				B10000010000000000000021 /* WelcomeService.swift in Sources */,
 				B10000010000000000000022 /* WelcomeView.swift in Sources */,
@@ -416,6 +542,28 @@
 				65327E3F685BFF9B52AB64AC /* CustomCategory.swift in Sources */,
 				4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */,
 				CAB4B65A1D3A48DB38C9BB7A /* CreateCustomCategoryView.swift in Sources */,
+				756E836F41CC53C867C035C4 /* EditCustomCategoryView.swift in Sources */,
+				AE0000010000000000000001 /* AgeVerificationView.swift in Sources */,
+				AD0000010000000000000001 /* AdminModels.swift in Sources */,
+				AD0000010000000000000002 /* AdminViewModel.swift in Sources */,
+				AD0000010000000000000003 /* AdminAccessGate.swift in Sources */,
+				AD0000010000000000000004 /* AdminDashboardView.swift in Sources */,
+				AD0000010000000000000005 /* AdminOverviewView.swift in Sources */,
+				AD0000010000000000000006 /* AdminRevenueView.swift in Sources */,
+				AD0000010000000000000007 /* AdminCostsView.swift in Sources */,
+				AD0000010000000000000008 /* AdminDeadlinesView.swift in Sources */,
+				AD0000010000000000000009 /* AdminNotesView.swift in Sources */,
+				VF0000010000000000000001 /* Verification.swift in Sources */,
+				VF0000010000000000000002 /* ClosureReport.swift in Sources */,
+				VF0000010000000000000003 /* VerificationService.swift in Sources */,
+				VF0000010000000000000004 /* ClosureReportService.swift in Sources */,
+
+				VF0000010000000000000006 /* AdminClosureReportsView.swift in Sources */,
+				NM0000010000000000000001 /* NetworkMonitor.swift in Sources */,
+				AN0000010000000000000001 /* AnalyticsService.swift in Sources */,
+				GH0000010000000000000001 /* Geohash.swift in Sources */,
+				FR0000010000000000000001 /* FlezcalRowView.swift in Sources */,
+				FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -573,12 +721,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Flezcal/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Flezcal;
@@ -591,7 +741,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flezcal.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -607,12 +757,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Flezcal/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Flezcal;
@@ -625,7 +777,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flezcal.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -709,6 +861,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		CR0000020000000000000001 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BE0000010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

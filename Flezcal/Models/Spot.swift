@@ -1,6 +1,12 @@
 import Foundation
 import CoreLocation
 
+/// Per-category rating aggregate stored on the Spot document.
+struct CategoryRating: Codable, Hashable {
+    var average: Double
+    var count: Int
+}
+
 struct Spot: Identifiable, Codable, Hashable {
     static func == (lhs: Spot, rhs: Spot) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -16,6 +22,10 @@ struct Spot: Identifiable, Codable, Hashable {
     let addedDate: Date
     var averageRating: Double
     var reviewCount: Int
+
+    // Per-category rating aggregates. Key: SpotCategory.rawValue
+    // e.g. { "mezcal": { average: 4.8, count: 6 }, "flan": { average: 3.2, count: 4 } }
+    var categoryRatings: [String: CategoryRating]?
 
     // Category offerings — brands, styles, varieties contributed by users.
     // Originally mezcal-only ("mezcalOfferings"), now generalised to all categories.
@@ -56,6 +66,40 @@ struct Spot: Identifiable, Codable, Hashable {
     /// Flips to true the first time a real Flezcal user confirms this spot exists
     var communityVerified: Bool = false
 
+    // Per-category attribution — tracks which user added each category.
+    // Key: SpotCategory.rawValue, Value: userID who added that category.
+    // nil for pre-existing spots (backward compat — falls back to addedByUserID).
+    var categoryAddedBy: [String: String]?
+
+    // Community verification tallies — keyed by SpotCategory.rawValue
+    // e.g. {"mezcal": 5, "flan": 2}
+    var verificationUpCount: [String: Int]?
+    var verificationDownCount: [String: Int]?
+    var lastVerificationDate: Date?
+    var verificationUserCount: Int = 0  // distinct users who have voted
+
+    // Categories detected by website check but not yet verified by a user.
+    // When a ghost pin is confirmed, categories from the website scan are stored here.
+    // Once a user verifies a category (thumbs up), it moves from "potential" to "verified".
+    var websiteDetectedCategories: [String]?
+
+    // Closure reporting
+    var closureReportCount: Int = 0
+    var locationStatus: String?  // nil = open, "closed" = confirmed closed by admin
+
+    // Owner Verified — manually set by admin; owner fields editable by ownerUserId
+    var ownerVerified: Bool = false
+    var ownerUserId: String?
+    var ownerBrands: [String]?        // Brands/products the owner wants to highlight
+    var ownerDetails: String?         // Free-text from the owner (hours, story, etc.)
+    var reservationURL: String?       // Link to reservation system
+    var ownerLockedCategories: [String]?  // Categories the owner has locked from community edits
+
+    // Silent analytics counters — incremented by AnalyticsService, never shown in v1.0 UI.
+    var analyticsViewCount: Int = 0           // All-time spot detail views
+    var analyticsReservationClicks: Int = 0   // All-time reservation URL taps
+    var geohash4: String?                     // 4-char geohash (~20 km cell) for regional grouping
+
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
@@ -68,9 +112,17 @@ struct Spot: Identifiable, Codable, Hashable {
     /// Whether this spot has mezcal
     var hasMezcal: Bool { categories.contains(.mezcal) }
 
+    /// Whether this spot has handmade tortillas
+    var hasTortillas: Bool { categories.contains(.tortillas) }
+
     /// Offerings for a specific category on this spot
     func offerings(for category: SpotCategory) -> [String] {
         offerings?[category.rawValue] ?? []
+    }
+
+    /// Per-category rating for a specific category
+    func rating(for category: SpotCategory) -> CategoryRating? {
+        categoryRatings?[category.rawValue]
     }
 
     /// Whether this spot has any offerings listed for any category
@@ -94,8 +146,13 @@ struct Spot: Identifiable, Codable, Hashable {
 
     // MARK: - Fun Badges
 
-    /// "Hidden Gem": high average rating but few reviews — a great undiscovered spot
-    var isHiddenGem: Bool { averageRating >= 4.5 && reviewCount > 0 && reviewCount <= 3 }
+    /// "Hidden Gem": any category rated 4.5+ with few reviews — a great undiscovered item
+    var isHiddenGem: Bool {
+        if let ratings = categoryRatings {
+            return ratings.values.contains { $0.average >= 4.5 && $0.count > 0 && $0.count <= 3 }
+        }
+        return averageRating >= 4.5 && reviewCount > 0 && reviewCount <= 3
+    }
 
     /// "Recently Verified": added within the last 30 days
     var isRecentlyVerified: Bool {
@@ -103,8 +160,52 @@ struct Spot: Identifiable, Codable, Hashable {
         return addedDate > thirtyDaysAgo
     }
 
-    /// "Perfect Pairing": serves both flan AND mezcal
-    var isPerfectPairing: Bool { hasFlan && hasMezcal }
+    /// Whether this spot has been confirmed as permanently closed by admin
+    var isClosed: Bool { locationStatus == "closed" }
+
+    /// Verification status for a specific category based on running tallies.
+    ///
+    /// Threshold logic:
+    /// - 0 votes + in websiteDetectedCategories → `.potential` (website mentions only)
+    /// - 0 votes otherwise → `.unverified`
+    /// - 1+ thumbs-up, total < 10 → `.confirmed` (1 user can verify instantly)
+    /// - 10+ votes, 70%+ positive → `.confirmed`
+    /// - 10+ votes, < 70% positive → `.unverified`
+    func verificationStatus(for category: SpotCategory) -> VerificationStatus {
+        let ups = verificationUpCount?[category.rawValue] ?? 0
+        let downs = verificationDownCount?[category.rawValue] ?? 0
+        let total = ups + downs
+
+        // No votes at all
+        guard total > 0 else {
+            // Check if website scan detected this category
+            if websiteDetectedCategories?.contains(category.rawValue) == true {
+                return .potential
+            }
+            return .unverified
+        }
+
+        // Fewer than 10 total votes: 1 thumbs-up = confirmed
+        if total < 10 {
+            return ups > 0 ? .confirmed : .unverified
+        }
+
+        // 10+ votes: apply 70% threshold
+        let percentage = Double(ups) / Double(total)
+        return percentage >= 0.70 ? .confirmed : .unverified
+    }
+
+    /// Whether a specific category is verified (confirmed) on this spot
+    func isVerified(for category: SpotCategory) -> Bool {
+        verificationStatus(for: category) == .confirmed
+    }
+
+    /// Whether any category on this spot has been community-verified via the voting system
+    var hasAnyVerificationVotes: Bool {
+        let totalUps = verificationUpCount?.values.reduce(0, +) ?? 0
+        let totalDowns = verificationDownCount?.values.reduce(0, +) ?? 0
+        return (totalUps + totalDowns) > 0
+    }
 
     // MARK: - Backward Compatibility
 
@@ -113,13 +214,20 @@ struct Spot: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, name, address, latitude, longitude, mapItemName
         case categories, category  // "category" for old data
-        case addedByUserID, addedDate, averageRating, reviewCount
+        case addedByUserID, addedDate, averageRating, reviewCount, categoryRatings
         case offerings            // new: { "mezcal": [...], "pizza": [...] }
         case mezcalOfferings      // legacy: [String] — auto-migrated on read
         case websiteURL
         case photoURL, userPhotoURL
         case isReported, reportCount, reportedByUserIDs, isHidden
-        case source, importDate, communityVerified
+        case source, importDate, communityVerified, categoryAddedBy
+        case verificationUpCount, verificationDownCount
+        case lastVerificationDate, verificationUserCount
+        case websiteDetectedCategories
+        case closureReportCount, locationStatus
+        case ownerVerified, ownerUserId, ownerBrands, ownerDetails
+        case reservationURL, ownerLockedCategories
+        case analyticsViewCount, analyticsReservationClicks, geohash4
     }
 
     init(id: String = UUID().uuidString,
@@ -128,13 +236,31 @@ struct Spot: Identifiable, Codable, Hashable {
          mapItemName: String, categories: [SpotCategory],
          addedByUserID: String, addedDate: Date,
          averageRating: Double, reviewCount: Int,
+         categoryRatings: [String: CategoryRating]? = nil,
          offerings: [String: [String]]? = nil,
          websiteURL: String? = nil,
          photoURL: String? = nil,
          userPhotoURL: String? = nil,
          source: String? = nil,
          importDate: Date? = nil,
-         communityVerified: Bool = false) {
+         communityVerified: Bool = false,
+         categoryAddedBy: [String: String]? = nil,
+         verificationUpCount: [String: Int]? = nil,
+         verificationDownCount: [String: Int]? = nil,
+         lastVerificationDate: Date? = nil,
+         verificationUserCount: Int = 0,
+         websiteDetectedCategories: [String]? = nil,
+         closureReportCount: Int = 0,
+         locationStatus: String? = nil,
+         ownerVerified: Bool = false,
+         ownerUserId: String? = nil,
+         ownerBrands: [String]? = nil,
+         ownerDetails: String? = nil,
+         reservationURL: String? = nil,
+         ownerLockedCategories: [String]? = nil,
+         analyticsViewCount: Int = 0,
+         analyticsReservationClicks: Int = 0,
+         geohash4: String? = nil) {
         self.id = id
         self.name = name
         self.address = address
@@ -146,6 +272,7 @@ struct Spot: Identifiable, Codable, Hashable {
         self.addedDate = addedDate
         self.averageRating = averageRating
         self.reviewCount = reviewCount
+        self.categoryRatings = categoryRatings
         self.offerings = offerings
         self.websiteURL = websiteURL
         self.photoURL = photoURL
@@ -153,6 +280,23 @@ struct Spot: Identifiable, Codable, Hashable {
         self.source = source
         self.importDate = importDate
         self.communityVerified = communityVerified
+        self.categoryAddedBy = categoryAddedBy
+        self.verificationUpCount = verificationUpCount
+        self.verificationDownCount = verificationDownCount
+        self.lastVerificationDate = lastVerificationDate
+        self.verificationUserCount = verificationUserCount
+        self.websiteDetectedCategories = websiteDetectedCategories
+        self.closureReportCount = closureReportCount
+        self.locationStatus = locationStatus
+        self.ownerVerified = ownerVerified
+        self.ownerUserId = ownerUserId
+        self.ownerBrands = ownerBrands
+        self.ownerDetails = ownerDetails
+        self.reservationURL = reservationURL
+        self.ownerLockedCategories = ownerLockedCategories
+        self.analyticsViewCount = analyticsViewCount
+        self.analyticsReservationClicks = analyticsReservationClicks
+        self.geohash4 = geohash4
     }
 
     init(from decoder: Decoder) throws {
@@ -177,6 +321,7 @@ struct Spot: Identifiable, Codable, Hashable {
         addedDate = try container.decode(Date.self, forKey: .addedDate)
         averageRating = try container.decode(Double.self, forKey: .averageRating)
         reviewCount = try container.decode(Int.self, forKey: .reviewCount)
+        categoryRatings = try container.decodeIfPresent([String: CategoryRating].self, forKey: .categoryRatings)
         // Read new "offerings" dict first, fall back to legacy "mezcalOfferings" array
         if let dict = try? container.decodeIfPresent([String: [String]].self, forKey: .offerings) {
             offerings = dict
@@ -195,6 +340,23 @@ struct Spot: Identifiable, Codable, Hashable {
         source = try container.decodeIfPresent(String.self, forKey: .source)
         importDate = try container.decodeIfPresent(Date.self, forKey: .importDate)
         communityVerified = try container.decodeIfPresent(Bool.self, forKey: .communityVerified) ?? false
+        categoryAddedBy = try container.decodeIfPresent([String: String].self, forKey: .categoryAddedBy)
+        verificationUpCount = try container.decodeIfPresent([String: Int].self, forKey: .verificationUpCount)
+        verificationDownCount = try container.decodeIfPresent([String: Int].self, forKey: .verificationDownCount)
+        lastVerificationDate = try container.decodeIfPresent(Date.self, forKey: .lastVerificationDate)
+        verificationUserCount = try container.decodeIfPresent(Int.self, forKey: .verificationUserCount) ?? 0
+        websiteDetectedCategories = try container.decodeIfPresent([String].self, forKey: .websiteDetectedCategories)
+        closureReportCount = try container.decodeIfPresent(Int.self, forKey: .closureReportCount) ?? 0
+        locationStatus = try container.decodeIfPresent(String.self, forKey: .locationStatus)
+        ownerVerified = try container.decodeIfPresent(Bool.self, forKey: .ownerVerified) ?? false
+        ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId)
+        ownerBrands = try container.decodeIfPresent([String].self, forKey: .ownerBrands)
+        ownerDetails = try container.decodeIfPresent(String.self, forKey: .ownerDetails)
+        reservationURL = try container.decodeIfPresent(String.self, forKey: .reservationURL)
+        ownerLockedCategories = try container.decodeIfPresent([String].self, forKey: .ownerLockedCategories)
+        analyticsViewCount = try container.decodeIfPresent(Int.self, forKey: .analyticsViewCount) ?? 0
+        analyticsReservationClicks = try container.decodeIfPresent(Int.self, forKey: .analyticsReservationClicks) ?? 0
+        geohash4 = try container.decodeIfPresent(String.self, forKey: .geohash4)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -210,6 +372,7 @@ struct Spot: Identifiable, Codable, Hashable {
         try container.encode(addedDate, forKey: .addedDate)
         try container.encode(averageRating, forKey: .averageRating)
         try container.encode(reviewCount, forKey: .reviewCount)
+        try container.encodeIfPresent(categoryRatings, forKey: .categoryRatings)
         try container.encodeIfPresent(offerings, forKey: .offerings)
         // Also write legacy mezcalOfferings for backward compat with older app versions
         try container.encodeIfPresent(offerings?["mezcal"], forKey: .mezcalOfferings)
@@ -223,5 +386,48 @@ struct Spot: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(source, forKey: .source)
         try container.encodeIfPresent(importDate, forKey: .importDate)
         try container.encode(communityVerified, forKey: .communityVerified)
+        try container.encodeIfPresent(categoryAddedBy, forKey: .categoryAddedBy)
+        try container.encodeIfPresent(verificationUpCount, forKey: .verificationUpCount)
+        try container.encodeIfPresent(verificationDownCount, forKey: .verificationDownCount)
+        try container.encodeIfPresent(lastVerificationDate, forKey: .lastVerificationDate)
+        try container.encode(verificationUserCount, forKey: .verificationUserCount)
+        try container.encodeIfPresent(websiteDetectedCategories, forKey: .websiteDetectedCategories)
+        try container.encode(closureReportCount, forKey: .closureReportCount)
+        try container.encodeIfPresent(locationStatus, forKey: .locationStatus)
+        try container.encode(ownerVerified, forKey: .ownerVerified)
+        try container.encodeIfPresent(ownerUserId, forKey: .ownerUserId)
+        try container.encodeIfPresent(ownerBrands, forKey: .ownerBrands)
+        try container.encodeIfPresent(ownerDetails, forKey: .ownerDetails)
+        try container.encodeIfPresent(reservationURL, forKey: .reservationURL)
+        try container.encodeIfPresent(ownerLockedCategories, forKey: .ownerLockedCategories)
+        try container.encode(analyticsViewCount, forKey: .analyticsViewCount)
+        try container.encode(analyticsReservationClicks, forKey: .analyticsReservationClicks)
+        try container.encodeIfPresent(geohash4, forKey: .geohash4)
+    }
+
+    // MARK: - Owner Helpers
+
+    /// Whether the given user is the verified owner of this spot
+    func isOwner(userID: String?) -> Bool {
+        guard let userID, ownerVerified, let ownerUserId else { return false }
+        return userID == ownerUserId
+    }
+
+    /// Whether a category is locked by the owner (community edits blocked)
+    func isCategoryLocked(_ category: SpotCategory) -> Bool {
+        ownerLockedCategories?.contains(category.rawValue) ?? false
+    }
+
+    // MARK: - Category Attribution
+
+    /// Who added a specific category. Falls back to original spot creator for legacy data.
+    func categoryAddedByUser(_ category: SpotCategory) -> String? {
+        categoryAddedBy?[category.rawValue] ?? addedByUserID
+    }
+
+    /// Whether the given user can remove a specific category (they added it).
+    func canRemoveCategory(_ category: SpotCategory, userID: String?) -> Bool {
+        guard let userID else { return false }
+        return categoryAddedByUser(category) == userID
     }
 }

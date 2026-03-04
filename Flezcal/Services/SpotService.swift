@@ -28,6 +28,7 @@ class SpotService: ObservableObject {
             await cleanupCommaSeparatedMezcals()
             await deduplicateSpots()
             await backfillUserAddedVerification()
+            await backfillGeohash()
         } catch {
             errorMessage = "Failed to load spots: \(error.localizedDescription)"
         }
@@ -78,7 +79,11 @@ class SpotService: ObservableObject {
                     spots[index].offerings = cleanedAll
                 }
             } catch {
-                // Non-fatal — will retry next launch
+                // Permission denied or network error — stop batch to avoid write storm
+                #if DEBUG
+                print("[Backfill] Offerings cleanup aborted after error: \(error.localizedDescription)")
+                #endif
+                return
             }
         }
     }
@@ -186,7 +191,38 @@ class SpotService: ObservableObject {
                     spots[index].communityVerified = true
                 }
             } catch {
-                // Non-fatal — will retry next launch
+                // Permission denied or network error — stop the entire batch
+                // to avoid flooding Firestore with 75+ doomed write attempts
+                // that pile up and freeze the app.
+                #if DEBUG
+                print("[Backfill] Verification backfill aborted after error: \(error.localizedDescription)")
+                #endif
+                return
+            }
+        }
+    }
+
+    // MARK: - Backfill Geohash for Analytics
+
+    /// Sets `geohash4` on spots that don't have one yet. Used for regional
+    /// analytics grouping (~20 km cells). Non-fatal — will retry next launch.
+    private func backfillGeohash() async {
+        for spot in spots where spot.geohash4 == nil {
+            let hash = Geohash.encode(latitude: spot.latitude, longitude: spot.longitude)
+            do {
+                try await db.collection(collectionName).document(spot.id).updateData([
+                    "geohash4": hash
+                ])
+                if let index = spots.firstIndex(where: { $0.id == spot.id }) {
+                    spots[index].geohash4 = hash
+                }
+            } catch {
+                // Permission denied or network error — stop the entire batch
+                // to avoid flooding Firestore with doomed write attempts.
+                #if DEBUG
+                print("[Backfill] Geohash backfill aborted after error: \(error.localizedDescription)")
+                #endif
+                return
             }
         }
     }
@@ -269,6 +305,44 @@ class SpotService: ObservableObject {
         }
     }
 
+    /// Updates per-category rating and recalculates the overall spot average.
+    func updateCategoryRating(spotID: String, category: String,
+                               newAverage: Double, newCount: Int) async {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return }
+
+        // Build updated per-category map
+        var ratings = spots[index].categoryRatings ?? [:]
+        ratings[category] = CategoryRating(average: newAverage, count: newCount)
+
+        // Recalculate overall from all categories (weighted average)
+        var totalReviews = 0
+        var weightedSum = 0.0
+        for entry in ratings.values {
+            totalReviews += entry.count
+            weightedSum += entry.average * Double(entry.count)
+        }
+        let overallAverage = totalReviews > 0 ? weightedSum / Double(totalReviews) : 0.0
+
+        do {
+            // Encode categoryRatings to Firestore-compatible format
+            var catRatingsData: [String: [String: Any]] = [:]
+            for (key, val) in ratings {
+                catRatingsData[key] = ["average": val.average, "count": val.count]
+            }
+            let data: [String: Any] = [
+                "categoryRatings": catRatingsData,
+                "averageRating": overallAverage,
+                "reviewCount": totalReviews
+            ]
+            try await db.collection(collectionName).document(spotID).updateData(data)
+            spots[index].categoryRatings = ratings
+            spots[index].averageRating = overallAverage
+            spots[index].reviewCount = totalReviews
+        } catch {
+            errorMessage = "Failed to update category rating: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Report a Spot
 
     func reportSpot(spotID: String, reporterUserID: String) async {
@@ -306,6 +380,22 @@ class SpotService: ObservableObject {
         }
     }
 
+    // MARK: - Hide a Spot (soft delete by owner)
+
+    /// Hides a spot by setting isHidden = true. Used when the spot creator
+    /// removes the last category — the spot disappears from all lists but
+    /// the Firestore document is preserved so it can be restored if needed.
+    func hideSpot(spotID: String) async {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return }
+        do {
+            let data: [String: Any] = ["isHidden": true]
+            try await db.collection(collectionName).document(spotID).updateData(data)
+            spots[index].isHidden = true
+        } catch {
+            errorMessage = "Failed to hide spot: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Delete a Spot
 
     func deleteSpot(spotID: String) async -> Bool {
@@ -323,9 +413,9 @@ class SpotService: ObservableObject {
 
     func filteredSpots(for filter: SpotFilter) -> [Spot] {
         guard let category = filter.category else {
-            return spots.filter { !$0.isHidden }
+            return spots.filter { !$0.isHidden && !$0.isClosed }
         }
-        return spots.filter { $0.matchesFilter(category) && !$0.isHidden }
+        return spots.filter { $0.matchesFilter(category) && !$0.isHidden && !$0.isClosed }
     }
 
     // MARK: - Community Verification (imported spots)
@@ -360,14 +450,19 @@ class SpotService: ObservableObject {
 
     // MARK: - Add Category to Existing Spot
 
-    /// Adds a new category to an existing spot (e.g., adding flan to a mezcal spot)
-    func addCategories(spotID: String, newCategories: [SpotCategory]) async -> Bool {
+    /// Adds new categories to an existing spot (e.g., adding flan to a mezcal spot).
+    /// When `addedBy` is provided, records per-category attribution in `categoryAddedBy`.
+    func addCategories(spotID: String, newCategories: [SpotCategory], addedBy userID: String? = nil) async -> Bool {
         guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
 
         var merged = spots[index].categories
+        var attribution = spots[index].categoryAddedBy ?? [:]
         for cat in newCategories {
             if !merged.contains(cat) {
                 merged.append(cat)
+                if let userID {
+                    attribution[cat.rawValue] = userID
+                }
             }
         }
 
@@ -376,13 +471,153 @@ class SpotService: ObservableObject {
 
         do {
             let rawCategories = merged.map { $0.rawValue }
-            let data: [String: Any] = ["categories": rawCategories]
+            var data: [String: Any] = ["categories": rawCategories]
+            if !attribution.isEmpty {
+                data["categoryAddedBy"] = attribution
+            }
             try await db.collection(collectionName).document(spotID).updateData(data)
             spots[index].categories = merged
+            spots[index].categoryAddedBy = attribution.isEmpty ? nil : attribution
             return true
         } catch {
             errorMessage = "Failed to update categories: \(error.localizedDescription)"
             return false
         }
+    }
+
+    // MARK: - Remove Category from Existing Spot
+
+    /// Removes a category from an existing spot. The spot must have at least 2 categories
+    /// (cannot remove the last one). Also cleans up the `categoryAddedBy` attribution entry.
+    func removeCategory(spotID: String, category: SpotCategory) async -> Bool {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
+        guard spots[index].categories.count > 1 else { return false }
+
+        var updated = spots[index].categories
+        updated.removeAll { $0 == category }
+
+        // Safety: don't leave an empty array
+        guard !updated.isEmpty else { return false }
+
+        do {
+            let rawCategories = updated.map { $0.rawValue }
+            var data: [String: Any] = ["categories": rawCategories]
+
+            // Clean up per-category attribution
+            var attribution = spots[index].categoryAddedBy ?? [:]
+            attribution.removeValue(forKey: category.rawValue)
+            data["categoryAddedBy"] = attribution.isEmpty ? FieldValue.delete() : attribution
+
+            try await db.collection(collectionName).document(spotID).updateData(data)
+            spots[index].categories = updated
+            spots[index].categoryAddedBy = attribution.isEmpty ? nil : attribution
+            return true
+        } catch {
+            errorMessage = "Failed to remove category: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    // MARK: - Owner Verified — Update Owner Fields
+
+    /// Updates the owner-editable fields on a spot. Only the verified owner
+    /// (spot.ownerUserId matching the current user) should call this.
+    func updateOwnerFields(
+        spotID: String,
+        ownerBrands: [String]?,
+        ownerDetails: String?,
+        reservationURL: String?,
+        ownerLockedCategories: [String]?
+    ) async -> Bool {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
+
+        do {
+            var data: [String: Any] = [:]
+            // Use FieldValue.delete() for nil/empty values to keep Firestore clean
+            if let brands = ownerBrands, !brands.isEmpty {
+                data["ownerBrands"] = brands
+            } else {
+                data["ownerBrands"] = FieldValue.delete()
+            }
+            if let details = ownerDetails, !details.isEmpty {
+                data["ownerDetails"] = details
+            } else {
+                data["ownerDetails"] = FieldValue.delete()
+            }
+            if let url = reservationURL, !url.isEmpty {
+                data["reservationURL"] = url
+            } else {
+                data["reservationURL"] = FieldValue.delete()
+            }
+            if let locked = ownerLockedCategories, !locked.isEmpty {
+                data["ownerLockedCategories"] = locked
+            } else {
+                data["ownerLockedCategories"] = FieldValue.delete()
+            }
+
+            try await db.collection(collectionName).document(spotID).updateData(data)
+
+            // Update local model
+            spots[index].ownerBrands = ownerBrands?.isEmpty == true ? nil : ownerBrands
+            spots[index].ownerDetails = ownerDetails?.isEmpty == true ? nil : ownerDetails
+            spots[index].reservationURL = reservationURL?.isEmpty == true ? nil : reservationURL
+            spots[index].ownerLockedCategories = ownerLockedCategories?.isEmpty == true ? nil : ownerLockedCategories
+            return true
+        } catch {
+            errorMessage = "Failed to update owner fields: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    // MARK: - Update Verification Tallies Locally
+
+    /// Updates the local spot's verification tally counts after a vote so the UI
+    /// reflects the change immediately (Firestore is already updated by VerificationService).
+    ///
+    /// Three cases:
+    /// - `previousVote == nil`: new vote → increment the matching tally
+    /// - `previousVote != vote`: flip → decrement old, increment new
+    /// - `previousVote == vote`: retract → decrement the matching tally
+    func updateVerificationTallies(spotID: String, category: SpotCategory, vote: Bool, previousVote: Bool?) {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return }
+
+        let catKey = category.rawValue
+
+        // Ensure dictionaries exist
+        if spots[index].verificationUpCount == nil {
+            spots[index].verificationUpCount = [:]
+        }
+        if spots[index].verificationDownCount == nil {
+            spots[index].verificationDownCount = [:]
+        }
+
+        if let previousVote = previousVote {
+            if previousVote == vote {
+                // Retract — user tapped the same vote again, remove it
+                if vote {
+                    spots[index].verificationUpCount?[catKey, default: 0] -= 1
+                } else {
+                    spots[index].verificationDownCount?[catKey, default: 0] -= 1
+                }
+            } else {
+                // Flip — decrement old, increment new
+                if vote {
+                    spots[index].verificationUpCount?[catKey, default: 0] += 1
+                    spots[index].verificationDownCount?[catKey, default: 0] -= 1
+                } else {
+                    spots[index].verificationUpCount?[catKey, default: 0] -= 1
+                    spots[index].verificationDownCount?[catKey, default: 0] += 1
+                }
+            }
+        } else {
+            // New vote
+            if vote {
+                spots[index].verificationUpCount?[catKey, default: 0] += 1
+            } else {
+                spots[index].verificationDownCount?[catKey, default: 0] += 1
+            }
+        }
+
+        spots[index].lastVerificationDate = Date()
     }
 }

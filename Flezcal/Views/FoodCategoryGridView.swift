@@ -3,7 +3,14 @@ import SwiftUI
 /// Full-screen grid where the user selects up to `UserPicksService.maxPicks` categories.
 /// Presented as a sheet from MyPicksTabView.
 ///
-/// Includes all 20 hardcoded categories plus a "Create Your Own" button for custom picks.
+/// When `FeatureFlags.broadSearchEnabled` is false (launch mode):
+/// - The 3 launch categories (mezcal, flan, tortillas) show a lock icon — always active.
+/// - The other 18 categories are greyed out with "Coming Soon".
+/// - One custom pick slot is available via "Create Your Own".
+///
+/// When `FeatureFlags.broadSearchEnabled` is true (Phase 4):
+/// - All 21 categories are freely selectable (up to 3).
+/// - 3 custom pick slots are available.
 ///
 /// NOTE: ForEach is intentionally avoided in some spots due to a SwiftUICore/SwiftUI
 /// module ambiguity that causes "ambiguous use of init" errors in Xcode 16 whole-module
@@ -24,7 +31,7 @@ struct FoodCategoryGridView: View {
     var body: some View {
         NavigationStack {
             scrollContent
-                .navigationTitle("My Picks")
+                .navigationTitle("My Flezcals")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
@@ -34,6 +41,8 @@ struct FoodCategoryGridView: View {
                 }
                 .sheet(isPresented: $showCreateCustom) {
                     CreateCustomCategoryView()
+                        .environmentObject(picksService)
+                        .environmentObject(authService)
                 }
         }
     }
@@ -41,19 +50,38 @@ struct FoodCategoryGridView: View {
     private var scrollContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: HorizontalAlignment.leading, spacing: 20) {
-                Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                subtitleText
                     .padding(.horizontal)
 
                 counterBadge
 
-                categoryGrid
+                // Launch categories at top
+                launchGrid
                     .padding(.horizontal)
+
+                // Custom picks section
+                let customPicks = picksService.customPicks
+                if !customPicks.isEmpty {
+                    customPicksSection(customPicks)
+                        .padding(.horizontal)
+                }
 
                 // Create custom button
                 if authService.isSignedIn && picksService.canCreateCustom {
                     createCustomButton
+                        .padding(.horizontal)
+                }
+
+                // Coming soon divider
+                if !FeatureFlags.broadSearchEnabled {
+                    comingSoonSection
+                        .padding(.horizontal)
+
+                    // Grayed out future categories
+                    futureGrid
+                        .padding(.horizontal)
+                } else {
+                    categoryGrid
                         .padding(.horizontal)
                 }
             }
@@ -61,24 +89,125 @@ struct FoodCategoryGridView: View {
         }
     }
 
+    private var subtitleText: some View {
+        Group {
+            if FeatureFlags.broadSearchEnabled {
+                Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
+            } else {
+                Text("Select up to \(UserPicksService.maxPicks) categories. You can also add your own pick below!")
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+    }
+
     private var counterBadge: some View {
-        let atMax = picksService.picks.count == UserPicksService.maxPicks
-        return HStack {
+        HStack {
             Spacer()
-            Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
-                .foregroundStyle(atMax ? Color.orange : Color.secondary)
-                .clipShape(Capsule())
+            if FeatureFlags.broadSearchEnabled {
+                let atMax = picksService.picks.count == UserPicksService.maxPicks
+                Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
+                    .foregroundStyle(atMax ? Color.orange : Color.secondary)
+                    .clipShape(Capsule())
+            } else {
+                let atMax = picksService.picks.count >= UserPicksService.maxPicks
+                Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
+                    .foregroundStyle(atMax ? Color.orange : Color.secondary)
+                    .clipShape(Capsule())
+            }
             Spacer()
         }
     }
 
+    /// Top grid showing only launch categories (mezcal, flan, tortillas).
+    private var launchGrid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(FoodCategory.launchCategories) { cat in
+                FoodCategoryCell(category: cat, picksService: picksService)
+            }
+        }
+    }
+
+    /// "Coming soon" message between active and future categories.
+    private var comingSoonSection: some View {
+        VStack(spacing: 6) {
+            Divider()
+                .padding(.vertical, 4)
+            Text("More categories coming soon based on user feedback!")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Grayed-out grid of non-launch categories (future items).
+    private var futureGrid: some View {
+        let futureCats = FoodCategory.allCategories.filter { !FoodCategory.isLaunchCategory($0) }
+        return LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(futureCats) { cat in
+                FoodCategoryCell(category: cat, picksService: picksService)
+            }
+        }
+        .opacity(0.4)
+    }
+
+    /// Full grid of all categories (Phase 4).
     private var categoryGrid: some View {
         CategoryGridContent(columns: columns, picksService: picksService)
+    }
+
+    private func customPicksSection(_ customPicks: [FoodCategory]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Your Custom Picks")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+
+            ForEach(customPicks) { pick in
+                HStack(spacing: 12) {
+                    Text(pick.emoji)
+                        .font(.title3)
+                    Text(pick.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Spacer()
+
+                    // Remove button
+                    Button {
+                        withAnimation(.spring()) {
+                            _ = picksService.removeCustomPick(pick)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(picksService.picks.count <= 1)
+                    .accessibilityLabel("Remove \(pick.displayName)")
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.purple.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                        )
+                )
+            }
+        }
     }
 
     private var createCustomButton: some View {
@@ -140,20 +269,38 @@ private struct FoodCategoryCell: View {
     @ObservedObject var picksService: UserPicksService
 
     private var isSelected: Bool { picksService.isSelected(category) }
-    private var isDisabled: Bool { !isSelected && !picksService.canAddMore }
+
+    /// Non-launch categories are locked ("Coming Soon") until broadSearchEnabled.
+    /// Launch categories are always freely selectable.
+    private var isLocked: Bool {
+        if FeatureFlags.broadSearchEnabled { return false }
+        if FoodCategory.isLaunchCategory(category) { return false }
+        // Non-launch, non-custom categories are "Coming Soon"
+        return !category.id.hasPrefix("custom_")
+    }
+
+    private var isDisabled: Bool {
+        if isLocked { return true }
+        return !isSelected && !picksService.canAddMore
+    }
 
     var body: some View {
         VStack(spacing: 6) {
             emojiBadge
             categoryLabel
         }
-        .opacity(isDisabled ? 0.4 : 1.0)
+        .opacity(isDisabled ? 0.35 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .onTapGesture {
+            guard !isLocked else { return }
             withAnimation(.spring()) {
                 _ = picksService.toggle(category)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(category.displayName)\(isSelected ? ", selected" : "")\(isLocked ? ", coming soon" : "")")
+        .accessibilityAddTraits(isLocked ? [] : .isButton)
+        .accessibilityHint(isLocked ? "Not available yet" : (isSelected ? "Double tap to deselect" : "Double tap to select"))
     }
 
     private var emojiBadge: some View {
@@ -181,12 +328,21 @@ private struct FoodCategoryCell: View {
     }
 
     private var categoryLabel: some View {
-        Text(category.displayName)
-            .font(.caption2)
-            .fontWeight(isSelected ? .semibold : .regular)
-            .foregroundColor(isSelected ? category.color : (isDisabled ? Color.secondary : Color.primary))
-            .multilineTextAlignment(.center)
-            .lineLimit(2)
-            .frame(maxWidth: .infinity)
+        VStack(spacing: 2) {
+            Text(category.displayName)
+                .font(.caption2)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? category.color : (isDisabled ? Color.secondary : Color.primary))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity)
+
+            if isLocked {
+                Text("Coming Soon")
+                    .font(.system(size: 8))
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }

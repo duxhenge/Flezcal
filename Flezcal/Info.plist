@@ -6,6 +6,7 @@
 	<string>Flezcal needs your location to show flan and mezcal spots near you.</string>
 	<key>BraveSearchAPIKey</key>
 	<string>$(BRAVE_SEARCH_API_KEY)</string>
-
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
