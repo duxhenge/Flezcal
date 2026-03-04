@@ -652,11 +652,8 @@ struct ListTabView: View {
     @State private var customLocation: CustomSearchLocation? = nil
     @State private var isEditingLocation = false
     @State private var locationInputText = ""
-    @State private var isGeocodingLocation = false
-    @State private var geocodeError: String? = nil
-    @State private var geocodeResults: [CustomSearchLocation] = []
-    @State private var showGeocodePicker = false
-    @State private var geocodeTask: Task<Void, Never>? = nil
+    @StateObject private var locationCompleter = LocationCompleterService()
+    @State private var isResolvingLocation = false
 
     /// The coordinate to use for all searches. Custom location if set, otherwise GPS.
     private var effectiveLocation: CLLocationCoordinate2D? {
@@ -875,34 +872,22 @@ struct ListTabView: View {
                     .font(.subheadline)
 
                 if isEditingLocation {
-                    TextField("City name (e.g. Ajijic, Mexico)", text: $locationInputText)
+                    TextField("City name (e.g. Mammoth Lakes)", text: $locationInputText)
                         .textFieldStyle(.plain)
                         .font(.subheadline)
                         .autocorrectionDisabled()
-                        .submitLabel(.go)
+                        .submitLabel(.search)
                         .onSubmit {
-                            let query = locationInputText.trimmingCharacters(in: .whitespaces)
-                            guard query.count >= 2 else { return }
-                            geocodeTask?.cancel()
-                            geocodeTask = Task { await geocodeCity(query, autoSelect: true) }
+                            // If there's exactly one suggestion, select it on Return
+                            if let first = locationCompleter.suggestions.first {
+                                resolveAndSelect(first)
+                            }
                         }
-                        .onChange(of: locationInputText) { _ in
-                            geocodeTask?.cancel()
-                            let query = locationInputText.trimmingCharacters(in: .whitespaces)
-                            guard query.count >= 2 else {
-                                geocodeResults = []
-                                showGeocodePicker = false
-                                geocodeError = nil
-                                return
-                            }
-                            geocodeTask = Task {
-                                try? await Task.sleep(for: .milliseconds(400))
-                                guard !Task.isCancelled else { return }
-                                await geocodeCity(query, autoSelect: false)
-                            }
+                        .onChange(of: locationInputText) { _, newValue in
+                            locationCompleter.updateQuery(newValue)
                         }
 
-                    if isGeocodingLocation {
+                    if isResolvingLocation {
                         ProgressView()
                             .controlSize(.small)
                     }
@@ -910,10 +895,7 @@ struct ListTabView: View {
                     Button {
                         isEditingLocation = false
                         locationInputText = ""
-                        geocodeError = nil
-                        geocodeResults = []
-                        showGeocodePicker = false
-                        geocodeTask?.cancel()
+                        locationCompleter.cancel()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
@@ -937,7 +919,6 @@ struct ListTabView: View {
 
                     Button {
                         customLocation = nil
-                        geocodeError = nil
                     } label: {
                         Image(systemName: "location.fill")
                             .foregroundStyle(.blue)
@@ -965,40 +946,38 @@ struct ListTabView: View {
             .padding(.horizontal)
             .padding(.top, 6)
 
-            if let error = geocodeError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal)
-                    .padding(.top, 2)
-            }
-
-            // Location picker — shown when geocoder returns multiple matches
-            if showGeocodePicker && !geocodeResults.isEmpty {
+            // Autocomplete suggestions from MKLocalSearchCompleter
+            if isEditingLocation && !locationCompleter.suggestions.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(Array(geocodeResults.enumerated()), id: \.offset) { _, location in
+                    ForEach(locationCompleter.suggestions.prefix(5), id: \.self) { completion in
                         Button {
-                            selectLocation(location)
+                            resolveAndSelect(completion)
                         } label: {
                             HStack {
                                 Image(systemName: "mappin.circle.fill")
                                     .foregroundStyle(.blue)
                                     .font(.subheadline)
-                                Text(location.name)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(completion.title)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    if !completion.subtitle.isEmpty {
+                                        Text(completion.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
                                 Spacer()
                             }
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                         }
                         .buttonStyle(.plain)
 
-                        if location != geocodeResults.last {
-                            Divider()
-                                .padding(.leading, 36)
-                        }
+                        Divider()
+                            .padding(.leading, 36)
                     }
                 }
                 .background(Color(.systemGray6))
@@ -1009,74 +988,20 @@ struct ListTabView: View {
         }
     }
 
-    // MARK: - Custom location geocoding
+    // MARK: - Custom location resolution
 
-    /// Geocodes a city name and shows results in the picker.
-    /// - Parameter autoSelect: When true and there's exactly one result,
-    ///   auto-confirms it (used for explicit Go/Return). When false (typing),
-    ///   always shows the picker so the user can review before selecting.
-    private func geocodeCity(_ cityName: String, autoSelect: Bool) async {
-        let trimmed = cityName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-
-        isGeocodingLocation = true
-        geocodeError = nil
-
-        let geocoder = CLGeocoder()
-        do {
-            let placemarks = try await geocoder.geocodeAddressString(trimmed)
-            guard !Task.isCancelled else { return }
-            let results = placemarks.compactMap { placemark -> CustomSearchLocation? in
-                guard let coord = placemark.location?.coordinate else { return nil }
-                let displayName = buildDisplayName(from: placemark)
-                return CustomSearchLocation(
-                    name: displayName.isEmpty ? trimmed : displayName,
-                    coordinate: coord
-                )
+    /// Resolves a completer suggestion to a coordinate and sets it as the custom location.
+    private func resolveAndSelect(_ completion: MKLocalSearchCompletion) {
+        isResolvingLocation = true
+        Task {
+            if let location = await locationCompleter.resolve(completion) {
+                customLocation = location
+                isEditingLocation = false
+                locationInputText = ""
+                locationCompleter.cancel()
             }
-
-            if results.count == 1 && autoSelect {
-                // Explicit submit (Go/Return) with a single match — confirm immediately
-                selectLocation(results[0])
-            } else if !results.isEmpty {
-                // Multiple results, or single result from typing — show picker
-                geocodeResults = results
-                showGeocodePicker = true
-            } else {
-                geocodeResults = []
-                showGeocodePicker = false
-                geocodeError = "No results for \"\(trimmed)\""
-            }
-        } catch {
-            guard !Task.isCancelled else { return }
-            geocodeResults = []
-            showGeocodePicker = false
-            geocodeError = "Couldn't look up location"
+            isResolvingLocation = false
         }
-        isGeocodingLocation = false
-    }
-
-    private func buildDisplayName(from placemark: CLPlacemark) -> String {
-        var components: [String] = []
-        if let locality = placemark.locality {
-            components.append(locality)
-        }
-        if let admin = placemark.administrativeArea, admin != placemark.locality {
-            components.append(admin)
-        }
-        if let country = placemark.country, country != placemark.administrativeArea {
-            components.append(country)
-        }
-        return components.joined(separator: ", ")
-    }
-
-    private func selectLocation(_ location: CustomSearchLocation) {
-        customLocation = location
-        isEditingLocation = false
-        locationInputText = ""
-        geocodeError = nil
-        geocodeResults = []
-        showGeocodePicker = false
     }
 
 

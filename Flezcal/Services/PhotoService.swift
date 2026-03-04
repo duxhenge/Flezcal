@@ -76,6 +76,7 @@ class PhotoService: ObservableObject {
             return url.absoluteString
         } catch {
             uploadError = "Photo upload failed: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "PhotoService.uploadSpotPhoto")
             return nil
         }
     }
@@ -89,6 +90,7 @@ class PhotoService: ObservableObject {
             try await db.collection(FirestoreCollections.spots).document(spotID).updateData(update)
         } catch {
             uploadError = "Failed to save photo: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "PhotoService.savePhotoURL")
         }
     }
 
@@ -99,6 +101,7 @@ class PhotoService: ObservableObject {
             try await db.collection(FirestoreCollections.spots).document(spotID).updateData(update)
         } catch {
             uploadError = "Failed to save photo: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "PhotoService.saveUserPhotoURL")
         }
     }
 

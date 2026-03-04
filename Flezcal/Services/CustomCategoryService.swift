@@ -35,6 +35,7 @@ class CustomCategoryService: ObservableObject {
             }
         } catch {
             errorMessage = "Failed to load custom categories: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "CustomCategoryService.fetchAll")
         }
         isLoading = false
     }
@@ -88,6 +89,7 @@ class CustomCategoryService: ObservableObject {
             return category.toFoodCategory()
         } catch {
             errorMessage = "Failed to save custom category: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "CustomCategoryService.createOrIncrement")
             return nil
         }
     }

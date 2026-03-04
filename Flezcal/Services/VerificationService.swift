@@ -28,6 +28,7 @@ class VerificationService: ObservableObject {
                 .sorted { $0.date > $1.date }
         } catch {
             errorMessage = "Failed to load verifications: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "VerificationService.fetchVerifications")
         }
         isLoading = false
     }
@@ -130,6 +131,7 @@ class VerificationService: ObservableObject {
                     try await db.collection(collectionName).document(existing.id).delete()
                 } catch {
                     errorMessage = "Failed to retract vote: \(error.localizedDescription)"
+                    CrashReporter.record(error, context: "VerificationService.retractVote")
                     return false
                 }
 
@@ -169,6 +171,7 @@ class VerificationService: ObservableObject {
                     try await db.collection(collectionName).document(existing.id).updateData(updateData)
                 } catch {
                     errorMessage = "Failed to update vote: \(error.localizedDescription)"
+                    CrashReporter.record(error, context: "VerificationService.flipVote")
                     return false
                 }
 
@@ -227,6 +230,7 @@ class VerificationService: ObservableObject {
                 try db.collection(collectionName).document(verification.id).setData(from: verification)
             } catch {
                 errorMessage = "Failed to submit vote: \(error.localizedDescription)"
+                CrashReporter.record(error, context: "VerificationService.submitVote")
                 return false
             }
 
@@ -289,6 +293,7 @@ class VerificationService: ObservableObject {
                 try await db.collection(collectionName).document(existing.id).updateData(updateData)
             } catch {
                 errorMessage = "Failed to submit rating: \(error.localizedDescription)"
+                CrashReporter.record(error, context: "VerificationService.submitRating")
                 return false
             }
 
@@ -336,6 +341,7 @@ class VerificationService: ObservableObject {
                 try db.collection(collectionName).document(verification.id).setData(from: verification)
             } catch {
                 errorMessage = "Failed to submit rating: \(error.localizedDescription)"
+                CrashReporter.record(error, context: "VerificationService.submitRating")
                 return false
             }
 
@@ -389,6 +395,7 @@ class VerificationService: ObservableObject {
             ])
         } catch {
             errorMessage = "Failed to remove rating: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "VerificationService.removeRating")
             return false
         }
 

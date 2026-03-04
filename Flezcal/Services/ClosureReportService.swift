@@ -76,6 +76,7 @@ class ClosureReportService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to submit closure report: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ClosureReportService.submitReport")
             return false
         }
     }
@@ -106,6 +107,7 @@ class ClosureReportService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to confirm closure: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ClosureReportService.confirmClosure")
             return false
         }
     }
@@ -133,6 +135,7 @@ class ClosureReportService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to dismiss reports: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ClosureReportService.dismissReports")
             return false
         }
     }

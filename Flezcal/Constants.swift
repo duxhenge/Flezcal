@@ -2,6 +2,14 @@ import Foundation
 
 /// API keys — injected at build time from Secrets.xcconfig via Info.plist.
 /// Secrets.xcconfig is excluded from version control via .gitignore.
+///
+/// **Rotation plan:**
+/// - Brave Search: Generate a new key at https://brave.com/search/api/ → Dashboard,
+///   update `BRAVE_SEARCH_API_KEY` in `Secrets.xcconfig`, rebuild & ship.
+///   Rotation cadence: annually or immediately if key is suspected compromised.
+/// - Firebase/Google: Managed via Firebase Console → Project Settings → Service accounts.
+///   The GoogleService-Info.plist API key is restricted to the app's bundle ID.
+/// - No keys are stored in source control. All secrets live in Secrets.xcconfig (gitignored).
 enum APIKeys {
     /// Brave Search API key. Sourced from BRAVE_SEARCH_API_KEY in Secrets.xcconfig →
     /// BraveSearchAPIKey in Info.plist → read here at runtime.
@@ -23,6 +31,7 @@ enum AppConstants {
     static let termsURL = URL(string: "https://flezcal.app/terms")!
     static let supportURL = URL(string: "https://flezcal.app/support")!
     static let supportEmail = "support@flezcal.app"
+    static let supportMailURL = URL(string: "mailto:support@flezcal.app")!
 
     // ✏️ Add, remove, or edit taglines here — one is picked at random each launch.
     static let taglines: [String] = [

@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseAuth
+import FirebaseCrashlytics
 import FirebaseFirestore
 import AuthenticationServices
 import CryptoKit
@@ -25,6 +26,11 @@ class AuthService: ObservableObject {
                 self?.user = user
                 self?.isSignedIn = user != nil
                 self?.isLoading = false
+
+                // Tag Crashlytics with user ID so crash reports can be correlated.
+                // Cleared on sign-out (user == nil) for privacy.
+                Crashlytics.crashlytics().setUserID(user?.uid ?? "")
+
                 // Sync display name to Firestore on every app launch for signed-in users.
                 // This auto-migrates existing users who already have a Firebase Auth name.
                 if user != nil {
@@ -104,6 +110,7 @@ class AuthService: ObservableObject {
                     await self.syncDisplayNameToFirestore()
                 } catch {
                     self.errorMessage = error.localizedDescription
+                    CrashReporter.record(error, context: "AuthService.signInWithApple")
                 }
             }
 
@@ -111,6 +118,7 @@ class AuthService: ObservableObject {
             // Don't show error if user simply cancelled
             if (error as NSError).code != ASAuthorizationError.canceled.rawValue {
                 errorMessage = error.localizedDescription
+                CrashReporter.record(error, context: "AuthService.signInWithApple.authorization")
             }
         }
     }
@@ -126,6 +134,7 @@ class AuthService: ObservableObject {
             await syncDisplayNameToFirestore()
         } catch {
             self.errorMessage = friendlyError(error)
+            CrashReporter.record(error, context: "AuthService.signIn")
         }
     }
 
@@ -146,6 +155,7 @@ class AuthService: ObservableObject {
             await syncDisplayNameToFirestore()
         } catch {
             self.errorMessage = friendlyError(error)
+            CrashReporter.record(error, context: "AuthService.createAccount")
         }
     }
 
@@ -180,6 +190,7 @@ class AuthService: ObservableObject {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+            CrashReporter.record(error, context: "AuthService.signOut")
         }
     }
 

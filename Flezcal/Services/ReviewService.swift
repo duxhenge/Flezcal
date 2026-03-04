@@ -28,6 +28,7 @@ class ReviewService: ObservableObject {
             await migrateEmailUserNames()
         } catch {
             errorMessage = "Failed to load reviews: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ReviewService.fetchAllReviews")
         }
     }
 
@@ -70,6 +71,7 @@ class ReviewService: ObservableObject {
                 .sorted { $0.date > $1.date }
         } catch {
             errorMessage = "Failed to load reviews: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ReviewService.fetchReviews")
         }
         isLoading = false
     }
@@ -83,6 +85,7 @@ class ReviewService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to add review: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ReviewService.addReview")
             return false
         }
     }
@@ -121,6 +124,7 @@ class ReviewService: ObservableObject {
             reviews[index].isHidden = shouldHide
         } catch {
             errorMessage = "Failed to report review: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "ReviewService.reportReview")
         }
     }
 
@@ -197,9 +201,7 @@ class ReviewService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to delete review: \(error.localizedDescription)"
-            #if DEBUG
-            print("⚠️ Delete review failed: \(error.localizedDescription)")
-            #endif
+            CrashReporter.record(error, context: "ReviewService.deleteReview")
             return false
         }
     }

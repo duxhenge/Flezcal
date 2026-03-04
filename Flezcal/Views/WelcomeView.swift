@@ -311,7 +311,7 @@ private struct WelcomeShapeCard: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             // Email link
-            Link(destination: URL(string: "mailto:support@flezcal.app")!) {
+            Link(destination: AppConstants.supportMailURL) {
                 HStack(spacing: 6) {
                     Image(systemName: "envelope.fill")
                         .font(.caption)

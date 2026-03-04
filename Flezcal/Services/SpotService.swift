@@ -31,6 +31,7 @@ class SpotService: ObservableObject {
             await backfillGeohash()
         } catch {
             errorMessage = "Failed to load spots: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.loadSpots")
         }
         isLoading = false
     }
@@ -236,6 +237,7 @@ class SpotService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to add spot: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.addSpot")
             return false
         }
     }
@@ -281,6 +283,7 @@ class SpotService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to update offerings: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.addOfferings")
             return false
         }
     }
@@ -302,6 +305,7 @@ class SpotService: ObservableObject {
             }
         } catch {
             errorMessage = "Failed to update rating: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.updateSpotRating")
         }
     }
 
@@ -340,6 +344,7 @@ class SpotService: ObservableObject {
             spots[index].reviewCount = totalReviews
         } catch {
             errorMessage = "Failed to update category rating: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.updateCategoryRating")
         }
     }
 
@@ -377,6 +382,7 @@ class SpotService: ObservableObject {
             spots[index].isHidden = shouldHide
         } catch {
             errorMessage = "Failed to report spot: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.reportSpot")
         }
     }
 
@@ -393,6 +399,7 @@ class SpotService: ObservableObject {
             spots[index].isHidden = true
         } catch {
             errorMessage = "Failed to hide spot: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.hideSpot")
         }
     }
 
@@ -405,6 +412,7 @@ class SpotService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to delete spot: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.deleteSpot")
             return false
         }
     }
@@ -445,6 +453,7 @@ class SpotService: ObservableObject {
             spots[index].isHidden = false
         } catch {
             errorMessage = "Failed to verify spot: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.verifySpot")
         }
     }
 
@@ -481,6 +490,7 @@ class SpotService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to update categories: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.addCategory")
             return false
         }
     }
@@ -514,6 +524,7 @@ class SpotService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to remove category: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.removeCategory")
             return false
         }
     }
@@ -565,6 +576,7 @@ class SpotService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to update owner fields: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.updateOwnerFields")
             return false
         }
     }

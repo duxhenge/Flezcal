@@ -182,7 +182,20 @@ service cloud.firestore {
       allow read: if true;
 
       // Only authenticated users can create custom categories
-      allow create: if request.auth != null;
+      // Validates: name exists, 1-50 chars, pickCount starts at 0 or 1,
+      // and the document ID matches the normalizedName field.
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['displayName', 'normalizedName', 'pickCount', 'createdBy'])
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() >= 1
+                    && request.resource.data.displayName.size() <= 50
+                    && request.resource.data.normalizedName is string
+                    && request.resource.data.normalizedName.size() >= 1
+                    && request.resource.data.normalizedName.size() <= 50
+                    && request.resource.data.normalizedName == categoryId
+                    && request.resource.data.pickCount is int
+                    && request.resource.data.pickCount >= 0
+                    && request.resource.data.pickCount <= 1;
 
       // Only allow pickCount increment updates (authenticated users)
       allow update: if request.auth != null

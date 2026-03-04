@@ -28,6 +28,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "UT0000050000000000000001"
+               BuildableName = "FlezcalTests.xctest"
+               BlueprintName = "FlezcalTests"
+               ReferencedContainer = "container:Flezcal.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "29F2A53E6D91C5D116AEA92F"
                BuildableName = "FlezcalUITests.xctest"
                BlueprintName = "FlezcalUITests"
@@ -42,6 +56,16 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "UT0000050000000000000001"
+               BuildableName = "FlezcalTests.xctest"
+               BlueprintName = "FlezcalTests"
+               ReferencedContainer = "container:Flezcal.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
          <TestableReference
             skipped = "NO">
             <BuildableReference

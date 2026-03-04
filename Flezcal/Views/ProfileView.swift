@@ -308,6 +308,11 @@ struct SignedInProfileView: View {
                     Label("Privacy Policy", systemImage: "hand.raised")
                 }
                 .foregroundStyle(.primary)
+
+                Link(destination: AppConstants.termsURL) {
+                    Label("Terms of Service", systemImage: "doc.text")
+                }
+                .foregroundStyle(.primary)
             }
 
             // Sign out

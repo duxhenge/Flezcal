@@ -31,9 +31,10 @@ struct AgeVerificationView: View {
                     .padding(.horizontal, 32)
             } else {
                 // Verification prompt
-                Text("Are you 21 or older?")
+                Text("This app includes alcohol-related content.\nAre you 21 or older?")
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
 
                 VStack(spacing: 12) {
                     // Primary "Yes" button
