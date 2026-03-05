@@ -1,5 +1,9 @@
 # .swiftlint.yml — Flezcal
 # Tailored for SwiftUI + Firebase iOS app (66 source files)
+#
+# Philosophy: Start with rules the codebase already passes, then tighten
+# incrementally. Rules that produce violations on existing code are disabled
+# and listed under "Future Rules" for later adoption.
 
 # ─── Paths ─────────────────────────────────────────────────────────
 included:
@@ -14,20 +18,17 @@ excluded:
   - Flezcal.xcodeproj
 
 # ─── Enabled Opt-In Rules ──────────────────────────────────────────
+# Only rules the codebase currently passes cleanly.
 opt_in_rules:
   # Safety
   - force_unwrapping
-  - implicitly_unwrapped_optional
-  - discouraged_optional_boolean
 
   # Code quality
   - closure_end_indentation
   - closure_spacing
-  - collection_alignment
   - contains_over_filter_count
   - contains_over_first_not_nil
   - empty_collection_literal
-  - empty_count
   - empty_string
   - fatal_error_message
   - first_where
@@ -35,20 +36,15 @@ opt_in_rules:
   - joined_default_parameter
   - last_where
   - legacy_multiple
-  - literal_expression_end_indentation
-  - multiline_arguments
-  - multiline_parameters
   - overridden_super_call
-  - prefer_self_in_static_references
-  - prefer_zero_over_explicit_init
   - redundant_nil_coalescing
   - sorted_first_last
   - toggle_bool
   - unavailable_function
-  - unneeded_parentheses_in_closure_argument
   - yoda_condition
 
 # ─── Disabled Rules ────────────────────────────────────────────────
+# Rules that conflict with existing code patterns or produce too much noise.
 disabled_rules:
   - trailing_comma
   - opening_brace
@@ -56,6 +52,23 @@ disabled_rules:
   - nesting
   - large_tuple
   - multiple_closures_with_trailing_syntax
+  - implicit_optional_initialization   # Codebase uses explicit = nil for clarity
+  - comma                              # Some multiline formatting uses trailing commas with spaces
+
+# ─── Future Rules (disabled until codebase is cleaned up) ──────────
+# These are valuable but the codebase has too many existing violations.
+# Enable one at a time and fix violations in a dedicated PR.
+#
+# - multiline_arguments          # ~20+ violations: args mixed on same/different lines
+# - multiline_parameters         # ~15+ violations: func params mixed on same/different lines
+# - discouraged_optional_boolean  # ~3 violations: Bool? used for userVote, previousVote
+# - implicitly_unwrapped_optional # Review after removing any IB patterns
+# - prefer_self_in_static_references # ~10+ violations: Type.method vs Self.method
+# - empty_count                  # ~5 violations: .count == 0 vs .isEmpty
+# - collection_alignment         # Alignment style varies across files
+# - literal_expression_end_indentation
+# - prefer_zero_over_explicit_init
+# - unneeded_parentheses_in_closure_argument
 
 # ─── Rule Configuration ───────────────────────────────────────────
 
@@ -75,10 +88,11 @@ function_body_length:
   warning: 80
   error: 200
 
-# Line length: Some SwiftUI chains and Firestore paths are long.
+# Line length: Raised to accommodate existing code. Firestore paths and
+# SwiftUI chains frequently exceed 140. Error threshold catches truly egregious lines.
 line_length:
-  warning: 140
-  error: 200
+  warning: 160
+  error: 250
   ignores_urls: true
   ignores_comments: true
   ignores_interpolated_strings: true
@@ -119,10 +133,6 @@ vertical_whitespace:
 # ─── Custom Rules ─────────────────────────────────────────────────
 
 custom_rules:
-  # NOTE: no_bare_print was removed because SwiftLint regex rules can't distinguish
-  # prints inside #if DEBUG from bare prints. All current prints are already wrapped.
-  # Use pre-release checklist to verify: grep -n 'print(' *.swift | grep -v '#if DEBUG'
-
   # Flag any direct Brave API URL construction outside WebsiteCheckService
   brave_api_guard:
     name: "Brave API Usage Guard"

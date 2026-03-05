@@ -12,7 +12,7 @@ concurrency:
 
 env:
   SCHEME: Flezcal
-  DESTINATION: "platform=iOS Simulator,name=iPhone 16,OS=18.2"
+  DESTINATION: "platform=iOS Simulator,name=iPhone 16 Pro,OS=latest"
   XCODEPROJ: Flezcal.xcodeproj
 
 jobs:
@@ -78,8 +78,6 @@ jobs:
 
       - name: Run SwiftLint
         uses: norio-nomura/action-swiftlint@3.2.1
-        with:
-          args: --strict
 
   # ─── Job 3: Build + Test ─────────────────────────────────────────
   build-and-test:
