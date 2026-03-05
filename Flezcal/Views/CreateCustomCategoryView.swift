@@ -48,6 +48,21 @@ struct CreateCustomCategoryView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    // Custom Flezcal info box
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("What to expect", systemImage: "info.circle.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.purple)
+
+                        Text("Custom Flezcals help you search and tag spots, but don't include ratings, verifications, or offerings yet. Popular custom Flezcals may be promoted to full status with all features.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.purple.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
                     // Name input
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Category Name")

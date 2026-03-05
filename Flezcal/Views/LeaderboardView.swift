@@ -84,7 +84,7 @@ struct LeaderboardView: View {
                             Image(systemName: "list.bullet")
                                 .foregroundStyle(.orange)
                         }
-                        ScoringBadge(label: "Verify", points: "+1") {
+                        ScoringBadge(label: "Confirm", points: "+1") {
                             Image(systemName: "checkmark.seal.fill")
                                 .foregroundStyle(.green)
                         }

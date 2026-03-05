@@ -5,9 +5,13 @@ import SwiftUI
 /// Layout (multi-row, breathing room):
 /// ```
 ///              🫓 Tortillas                   ← Row 1: emoji + full name, centered
-///   👍 👎  3 confirmed      4.2🍮 (7 ratings) ← Row 2: thumbs + confirm count | score + one flan + count
+///   4.2🍮 (7 ratings)        3 confirmed      ← Row 2: aggregate rating | confirm count
+///   ┌─────────────────────────────────────┐
+///   │ ⭐ I've tried it — rate it          │   ← Row 3 (no engagement): three choices
+///   │ 👀 Just browsing                    │
+///   │ ✕  No longer available here         │
+///   └─────────────────────────────────────┘
 ///       Your rating: Road Trip (4🍮) ✏️       ← Row 3 (if rated): tappable to edit
-///             + Add your rating               ← Row 3 (if thumbs-up but no rating): tappable prompt
 /// ```
 struct FlezcalRowView: View {
     let spot: Spot
@@ -27,9 +31,11 @@ struct FlezcalRowView: View {
     @State private var actionError: String? = nil
     /// Tracks what the user tried to do before sign-in so we can auto-proceed.
     @State private var pendingAction: PendingAction? = nil
+    /// User tapped "Just browsing" — hides the prompt for this session.
+    @State private var dismissedPrompt = false
 
     private enum PendingAction {
-        case thumbsUp, thumbsDown, rate
+        case rate, markUnavailable
     }
 
     /// Live version from SpotService so tally updates are reflected immediately
@@ -57,8 +63,9 @@ struct FlezcalRowView: View {
             ?? liveSpot.rating(for: category)
     }
 
+    /// Confirmation count from Spot tallies (verificationUpCount)
     private var confirmCount: Int {
-        verificationService.confirmationCount(for: category)
+        liveSpot.verificationUpCount?[category.rawValue] ?? 0
     }
 
     var body: some View {
@@ -86,46 +93,9 @@ struct FlezcalRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
 
-            // ── Row 2: Thumbs + confirmations | Aggregate rating ────
+            // ── Row 2: Aggregate rating | Confirmation count ────
             HStack {
-                // Left: Thumbs up/down + confirmation count
-                HStack(spacing: 6) {
-                    Button {
-                        handleThumbsUp()
-                    } label: {
-                        Image(systemName: userVote == true ? "hand.thumbsup.fill" : "hand.thumbsup")
-                            .font(.body)
-                            .foregroundStyle(userVote == true ? .green : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isSubmitting)
-                    .accessibilityLabel(userVote == true ? "\(category.displayName) verified" : "Verify \(category.displayName)")
-                    .accessibilityHint(userVote == true
-                        ? (userRating == nil ? "Double tap to add your rating" : "Already verified and rated")
-                        : "Double tap to confirm this spot has \(category.displayName)")
-
-                    Button {
-                        handleThumbsDown()
-                    } label: {
-                        Image(systemName: userVote == false ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                            .font(.body)
-                            .foregroundStyle(userVote == false ? .orange : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isSubmitting)
-                    .accessibilityLabel(userVote == false ? "\(category.displayName) not here" : "Mark \(category.displayName) as not available")
-                    .accessibilityHint("Double tap to vote that this spot does not have \(category.displayName)")
-
-                    if confirmCount > 0 {
-                        Text("\(confirmCount) confirmed")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    }
-                }
-
-                Spacer()
-
-                // Right: Aggregate rating — compact: "4.2🍮 (7 ratings)"
+                // Left: Aggregate rating — "4.2🍮 (7 ratings)"
                 if let catRating = aggregateRating, catRating.count > 0 {
                     HStack(spacing: 3) {
                         Text(String(format: "%.1f", catRating.average))
@@ -141,74 +111,45 @@ struct FlezcalRowView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(String(format: "%.1f", catRating.average)) out of 5, \(catRating.count) \(catRating.count == 1 ? "rating" : "ratings")")
                 }
+
+                Spacer()
+
+                // Right: Confirmation count (social proof)
+                if confirmCount > 0 {
+                    Text("\(confirmCount) confirmed")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
             }
 
-            // ── Row 3: User's own rating (tappable to edit) ─────────
+            // ── Row 3: Action buttons / user engagement state ────
             if authService.isSignedIn {
-                if let rating = userRating, let level = RatingLevel.from(rating) {
-                    // User has a rating — show it with edit affordance
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showRatingPicker.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("Your rating:")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(level.label) (\(rating)🍮)")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                            Image(systemName: "pencil")
-                                .font(.caption2)
-                                .foregroundStyle(.blue)
-                                .accessibilityHidden(true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Your rating: \(level.label), \(rating) out of 5")
-                    .accessibilityHint("Double tap to change your rating")
+                if userVote == false {
+                    // State D: User marked as unavailable
+                    unavailableReportedRow
+                } else if let rating = userRating, let level = RatingLevel.from(rating) {
+                    // State B: User has rated — show editable rating
+                    userRatingRow(rating: rating, level: level)
                 } else if userVote == true {
-                    // User verified (thumbs-up) but hasn't rated yet
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showRatingPicker.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle")
-                                .font(.caption)
-                            Text("Add your rating")
-                                .font(.caption)
-                        }
-                        .foregroundStyle(.blue)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                    .buttonStyle(.plain)
+                    // State C: User voted up (legacy) but hasn't rated
+                    addYourRatingPrompt
+                } else if dismissedPrompt {
+                    // User tapped "Just browsing" — show compact prompt
+                    compactRatePrompt
+                } else {
+                    // State A: No engagement yet — show three choices
+                    actionButtonsRow
                 }
+            } else if dismissedPrompt {
+                compactRatePrompt
             } else {
-                // Not signed in — invite user to rate (triggers sign-in)
-                Button {
-                    pendingAction = .rate
-                    showSignIn = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus.circle")
-                            .font(.caption)
-                        Text("Sign in to rate")
-                            .font(.caption)
-                    }
-                    .foregroundStyle(.blue)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.plain)
+                // Not signed in — show three choices (will trigger sign-in)
+                actionButtonsRow
             }
 
             // ── Inline rating picker (expandable) ───────────────────
             if showRatingPicker {
-                InlineRatingPicker(
+                RatingFlowView(
                     categoryName: category.displayName,
                     existingRating: userRating,
                     onSubmit: { rating in
@@ -244,18 +185,163 @@ struct FlezcalRowView: View {
                 // Small delay so the sign-in sheet finishes dismissing
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     switch action {
-                    case .thumbsUp:
-                        handleThumbsUp()
-                    case .thumbsDown:
-                        handleThumbsDown()
                     case .rate:
                         withAnimation(.easeInOut(duration: 0.2)) {
                             showRatingPicker = true
                         }
+                    case .markUnavailable:
+                        markUnavailable()
                     }
                 }
             }
         }
+    }
+
+    // MARK: - Row Subviews
+
+    /// State A: Three choices — tried it (rate), just browsing (dismiss), no longer available
+    private var actionButtonsRow: some View {
+        VStack(spacing: 6) {
+            // Primary: I've tried it — opens rating picker
+            Button {
+                openRatingPicker()
+            } label: {
+                Label("I've tried the \(category.displayName.lowercased()) here — rate it",
+                      systemImage: "star.circle")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .disabled(isSubmitting)
+            .accessibilityHint("Double tap to rate the \(category.displayName) at this spot")
+
+            // Secondary: Just browsing — collapses the prompt
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    dismissedPrompt = true
+                }
+            } label: {
+                Label("Just browsing",
+                      systemImage: "eye")
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+            }
+            .buttonStyle(.bordered)
+            .tint(.secondary)
+
+            // Tertiary: No longer available
+            Button {
+                if authService.isSignedIn {
+                    markUnavailable()
+                } else {
+                    pendingAction = .markUnavailable
+                    showSignIn = true
+                }
+            } label: {
+                Label("\(category.displayName) is no longer available here",
+                      systemImage: "xmark.circle")
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+            }
+            .buttonStyle(.bordered)
+            .tint(.secondary)
+            .disabled(isSubmitting)
+            .accessibilityHint("Double tap to report this spot no longer has \(category.displayName)")
+        }
+    }
+
+    /// State B: User has a rating — show it with edit affordance
+    private func userRatingRow(rating: Int, level: RatingLevel) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showRatingPicker.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("Your rating:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("\(level.label) (\(rating)🍮)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                Image(systemName: "pencil")
+                    .font(.caption2)
+                    .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Your rating: \(level.label), \(rating) out of 5")
+        .accessibilityHint("Double tap to change your rating")
+    }
+
+    /// Compact prompt shown after user tapped "Just browsing"
+    private var compactRatePrompt: some View {
+        Button {
+            openRatingPicker()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "star.circle")
+                    .font(.caption)
+                Text("Tried it? Rate it")
+                    .font(.caption)
+            }
+            .foregroundStyle(.orange)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// State C: User voted up (legacy) but hasn't rated yet
+    private var addYourRatingPrompt: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showRatingPicker.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus.circle")
+                    .font(.caption)
+                Text("Add your rating")
+                    .font(.caption)
+            }
+            .foregroundStyle(.blue)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// State D: User marked this as unavailable
+    private var unavailableReportedRow: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+            Text("You reported this as unavailable")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                retractUnavailable()
+            } label: {
+                Text("Undo")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+            .disabled(isSubmitting)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Actions
@@ -268,66 +354,25 @@ struct FlezcalRowView: View {
         }
     }
 
-    private func handleThumbsUp() {
+    /// Opens the rating picker. If not signed in, triggers sign-in first.
+    private func openRatingPicker() {
         guard authService.isSignedIn else {
-            pendingAction = .thumbsUp
+            pendingAction = .rate
             showSignIn = true
             return
         }
-        let previousVote = userVote
-
-        if previousVote == true {
-            // Already verified — open rating picker if not yet rated,
-            // or give feedback that the vote is already recorded.
-            if userRating == nil {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showRatingPicker = true
-                }
-            } else {
-                // Already verified and rated — brief feedback
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                showError("Already verified — tap your rating below to edit")
-            }
-            return
-        }
-
-        // New thumbs up or flipping from thumbs down
-        isSubmitting = true
-        Task {
-            guard await RateLimiter.shared.allowAction("vote-\(spot.id)-\(category.rawValue)") else {
-                isSubmitting = false
-                showError("Too fast — wait a moment and try again")
-                return
-            }
-            let success = await verificationService.submitVote(
-                spotID: spot.id, userID: userID, category: category, vote: true
-            )
-            if success {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    spotService.updateVerificationTallies(
-                        spotID: spot.id, category: category,
-                        vote: true, previousVote: previousVote
-                    )
-                    // Show rating picker after successful thumbs up
-                    showRatingPicker = true
-                }
-            } else {
-                showError("Couldn't save — check your connection and try again")
-            }
-            let generator = UIImpactFeedbackGenerator(style: .light)
-            generator.impactOccurred()
-            isSubmitting = false
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showRatingPicker = true
         }
     }
 
-    private func handleThumbsDown() {
+    /// Marks this category as unavailable at this spot (vote: false).
+    private func markUnavailable() {
         guard authService.isSignedIn else {
-            pendingAction = .thumbsDown
+            pendingAction = .markUnavailable
             showSignIn = true
             return
         }
-        let previousVote = userVote
 
         isSubmitting = true
         Task {
@@ -343,7 +388,7 @@ struct FlezcalRowView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     spotService.updateVerificationTallies(
                         spotID: spot.id, category: category,
-                        vote: false, previousVote: previousVote
+                        vote: false, previousVote: nil
                     )
                     showRatingPicker = false
                 }
@@ -364,6 +409,35 @@ struct FlezcalRowView: View {
                 }
             } else {
                 showError("Couldn't save — check your connection and try again")
+            }
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            isSubmitting = false
+        }
+    }
+
+    /// Retracts the user's "unavailable" vote (same vote = retract in VerificationService).
+    private func retractUnavailable() {
+        isSubmitting = true
+        Task {
+            guard await RateLimiter.shared.allowAction("vote-\(spot.id)-\(category.rawValue)") else {
+                isSubmitting = false
+                showError("Too fast — wait a moment and try again")
+                return
+            }
+            // Submitting the same vote again triggers retract logic
+            let success = await verificationService.submitVote(
+                spotID: spot.id, userID: userID, category: category, vote: false
+            )
+            if success {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    spotService.updateVerificationTallies(
+                        spotID: spot.id, category: category,
+                        vote: false, previousVote: false
+                    )
+                }
+            } else {
+                showError("Couldn't undo — check your connection and try again")
             }
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()

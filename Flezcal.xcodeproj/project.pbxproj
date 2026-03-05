@@ -22,6 +22,7 @@
 		AD0000010000000000000009 /* AdminNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000009 /* AdminNotesView.swift */; };
 		AE0000010000000000000001 /* AgeVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000020000000000000001 /* AgeVerificationView.swift */; };
 		AEEA3812748D3BDFDA62D68D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4A8B31AA11DC786E5093A4F /* Foundation.framework */; };
+		FP0000010000000000000001 /* FlezcalPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FP0000020000000000000001 /* FlezcalPickerView.swift */; };
 		AN0000010000000000000001 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AN0000020000000000000001 /* AnalyticsService.swift */; };
 		CR0000040000000000000001 /* CrashReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CR0000050000000000000001 /* CrashReporter.swift */; };
 		LC0000010000000000000001 /* LocationCompleterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = LC0000020000000000000001 /* LocationCompleterService.swift */; };
@@ -32,7 +33,6 @@
 		B10000010000000000000005 /* Review.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000005 /* Review.swift */; };
 		B10000010000000000000006 /* AppUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* AppUser.swift */; };
 		B10000010000000000000007 /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000007 /* MapTabView.swift */; };
-		B10000010000000000000008 /* AddSpotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000008 /* AddSpotView.swift */; };
 		B10000010000000000000009 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000009 /* ProfileView.swift */; };
 		B1000001000000000000000A /* SpotCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000A /* SpotCategory.swift */; };
 		B1000001000000000000000B /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000B /* Constants.swift */; };
@@ -80,6 +80,7 @@
 		VF0000010000000000000004 /* ClosureReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000004 /* ClosureReportService.swift */; };
 
 		VF0000010000000000000006 /* AdminClosureReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000006 /* AdminClosureReportsView.swift */; };
+		CP0000010000000000000001 /* AdminCustomPicksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CP0000020000000000000001 /* AdminCustomPicksView.swift */; };
 		FR0000010000000000000001 /* FlezcalRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR0000020000000000000001 /* FlezcalRowView.swift */; };
 		FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR0000020000000000000002 /* InlineRatingPicker.swift */; };
 		UT0000010000000000000001 /* SpotModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UT0000020000000000000001 /* SpotModelTests.swift */; };
@@ -120,6 +121,7 @@
 		AD0000020000000000000008 /* AdminDeadlinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminDeadlinesView.swift; sourceTree = "<group>"; };
 		AD0000020000000000000009 /* AdminNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminNotesView.swift; sourceTree = "<group>"; };
 		AE0000020000000000000001 /* AgeVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeVerificationView.swift; sourceTree = "<group>"; };
+		FP0000020000000000000001 /* FlezcalPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalPickerView.swift; sourceTree = "<group>"; };
 		AN0000020000000000000001 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		CR0000050000000000000001 /* CrashReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporter.swift; sourceTree = "<group>"; };
 		LC0000020000000000000001 /* LocationCompleterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCompleterService.swift; sourceTree = "<group>"; };
@@ -130,7 +132,6 @@
 		B20000010000000000000005 /* Review.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Review.swift; sourceTree = "<group>"; };
 		B20000010000000000000006 /* AppUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUser.swift; sourceTree = "<group>"; };
 		B20000010000000000000007 /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
-		B20000010000000000000008 /* AddSpotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddSpotView.swift; sourceTree = "<group>"; };
 		B20000010000000000000009 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		B2000001000000000000000A /* SpotCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotCategory.swift; sourceTree = "<group>"; };
 		B2000001000000000000000B /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
@@ -181,6 +182,7 @@
 		VF0000020000000000000004 /* ClosureReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureReportService.swift; sourceTree = "<group>"; };
 
 		VF0000020000000000000006 /* AdminClosureReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClosureReportsView.swift; sourceTree = "<group>"; };
+		CP0000020000000000000001 /* AdminCustomPicksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminCustomPicksView.swift; sourceTree = "<group>"; };
 		FR0000020000000000000001 /* FlezcalRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalRowView.swift; sourceTree = "<group>"; };
 		FR0000020000000000000002 /* InlineRatingPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineRatingPicker.swift; sourceTree = "<group>"; };
 		UT0000020000000000000001 /* SpotModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotModelTests.swift; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 				AD0000020000000000000008 /* AdminDeadlinesView.swift */,
 				AD0000020000000000000009 /* AdminNotesView.swift */,
 				VF0000020000000000000006 /* AdminClosureReportsView.swift */,
+				CP0000020000000000000001 /* AdminCustomPicksView.swift */,
 			);
 			path = Admin;
 			sourceTree = "<group>";
@@ -299,7 +302,6 @@
 			children = (
 				B20000010000000000000007 /* MapTabView.swift */,
 				B20000010000000000000025 /* ListTabView.swift */,
-				B20000010000000000000008 /* AddSpotView.swift */,
 				B20000010000000000000009 /* ProfileView.swift */,
 				B20000010000000000000013 /* SpotDetailView.swift */,
 				B20000010000000000000014 /* BusinessSearchView.swift */,
@@ -317,6 +319,7 @@
 				96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */,
 				EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */,
 				AE0000020000000000000001 /* AgeVerificationView.swift */,
+				FP0000020000000000000001 /* FlezcalPickerView.swift */,
 
 				FR0000020000000000000001 /* FlezcalRowView.swift */,
 				FR0000020000000000000002 /* InlineRatingPicker.swift */,
@@ -588,7 +591,6 @@
 				B10000010000000000000006 /* AppUser.swift in Sources */,
 				B10000010000000000000007 /* MapTabView.swift in Sources */,
 				B10000010000000000000026 /* ListTabView.swift in Sources */,
-				B10000010000000000000008 /* AddSpotView.swift in Sources */,
 				B10000010000000000000009 /* ProfileView.swift in Sources */,
 				B1000001000000000000000F /* AuthService.swift in Sources */,
 				B10000010000000000000012 /* LocationSearchService.swift in Sources */,
@@ -606,6 +608,7 @@
 				B1000001000000000000001E /* SuggestionService.swift in Sources */,
 				B100000100000000000000A1 /* WebsiteCheckService.swift in Sources */,
 				B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */,
+				FP0000010000000000000001 /* FlezcalPickerView.swift in Sources */,
 				SI0000020000000000000001 /* SignInSheet.swift in Sources */,
 				B10000010000000000000020 /* WelcomeContent.swift in Sources */,
 				B10000010000000000000021 /* WelcomeService.swift in Sources */,
@@ -638,6 +641,7 @@
 				VF0000010000000000000004 /* ClosureReportService.swift in Sources */,
 
 				VF0000010000000000000006 /* AdminClosureReportsView.swift in Sources */,
+				CP0000010000000000000001 /* AdminCustomPicksView.swift in Sources */,
 				NM0000010000000000000001 /* NetworkMonitor.swift in Sources */,
 				AN0000010000000000000001 /* AnalyticsService.swift in Sources */,
 				CR0000040000000000000001 /* CrashReporter.swift in Sources */,

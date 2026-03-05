@@ -297,6 +297,11 @@ private struct ExplorePanel: View {
     /// Shared custom location — owned by ListTabView, passed as @Binding so
     /// ExplorePanel's .task(id:) re-fires when location changes.
     @Binding var customLocation: CustomSearchLocation?
+    /// Looks up an existing Spot in Firestore by name + coordinate.
+    /// Plain closure (not @EnvironmentObject) to respect the stability contract.
+    let findExistingSpot: (_ name: String, _ lat: Double, _ lon: Double) -> Spot?
+    /// Called when a search result matches an existing spot — parent opens SpotDetailView.
+    let onSelectExistingSpot: (Spot) -> Void
     @StateObject private var searchService = LocationSearchService()
 
     // Sheet state lives here so changes never re-render ListTabView
@@ -646,6 +651,16 @@ private struct ExplorePanel: View {
     }
 
     private func selectResult(_ mapItem: MKMapItem) {
+        // Check if this venue already exists in Firestore — if so, go straight
+        // to SpotDetailView (same workflow as tapping a spot in the list).
+        if let coord = mapItem.placemark.location?.coordinate,
+           let name = mapItem.name,
+           let existing = findExistingSpot(name, coord.latitude, coord.longitude) {
+            onSelectExistingSpot(existing)
+            return
+        }
+
+        // New venue — open SuggestedSpotSheet with website check
         websiteCheckTask?.cancel()
         multiCheckResult = nil
         let foodCat = primaryFoodCategory
@@ -704,6 +719,7 @@ struct ListTabView: View {
     @State private var locationInputText = ""
     @StateObject private var locationCompleter = LocationCompleterService()
     @State private var isResolvingLocation = false
+    @FocusState private var isLocationFieldFocused: Bool
 
     /// The coordinate to use for all searches. Custom location if set, otherwise GPS.
     private var effectiveLocation: CLLocationCoordinate2D? {
@@ -851,7 +867,13 @@ struct ListTabView: View {
                         selectedFilterCategory: selectedFilter,
                         currentLocation: currentLocation,
                         userPicks: picksService.picks,
-                        customLocation: $customLocation
+                        customLocation: $customLocation,
+                        findExistingSpot: { name, lat, lon in
+                            spotService.findExistingSpot(name: name, latitude: lat, longitude: lon)
+                        },
+                        onSelectExistingSpot: { spot in
+                            selectedSpot = spot
+                        }
                     )
                 }
             }
@@ -952,6 +974,7 @@ struct ListTabView: View {
                         .textFieldStyle(.plain)
                         .font(.subheadline)
                         .autocorrectionDisabled()
+                        .focused($isLocationFieldFocused)
                         .submitLabel(.search)
                         .onSubmit {
                             // If there's exactly one suggestion, select it on Return
@@ -962,6 +985,12 @@ struct ListTabView: View {
                         .onChange(of: locationInputText) { _, newValue in
                             locationCompleter.updateQuery(newValue)
                         }
+                        .onAppear {
+                            // Auto-focus so the keyboard opens immediately — no second tap needed
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                isLocationFieldFocused = true
+                            }
+                        }
 
                     if isResolvingLocation {
                         ProgressView()
@@ -970,6 +999,7 @@ struct ListTabView: View {
 
                     Button {
                         isEditingLocation = false
+                        isLocationFieldFocused = false
                         locationInputText = ""
                         locationCompleter.cancel()
                     } label: {
@@ -980,27 +1010,19 @@ struct ListTabView: View {
                     Text("Near: \(custom.name)")
                         .font(.subheadline)
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
 
                     Spacer()
 
-                    Button {
-                        locationInputText = ""
-                        isEditingLocation = true
-                    } label: {
-                        Image(systemName: "pencil.circle")
-                            .foregroundStyle(.blue)
-                            .font(.subheadline)
-                    }
-                    .accessibilityLabel("Change location")
-
+                    // Clear custom location — return to GPS
                     Button {
                         customLocation = nil
                     } label: {
-                        Image(systemName: "location.fill")
-                            .foregroundStyle(.blue)
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                             .font(.subheadline)
                     }
-                    .accessibilityLabel("Use current location")
+                    .accessibilityLabel("Clear location, use current location")
                 } else {
                     Button {
                         isEditingLocation = true

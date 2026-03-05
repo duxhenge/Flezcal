@@ -479,8 +479,19 @@ class SpotService: ObservableObject {
             }
         }
 
-        // No change needed
-        if merged.count == spots[index].categories.count { return true }
+        // No new categories — but still unhide if needed.
+        if merged.count == spots[index].categories.count {
+            if spots[index].isHidden {
+                do {
+                    try await db.collection(collectionName).document(spotID).updateData(["isHidden": false])
+                    spots[index].isHidden = false
+                } catch {
+                    errorMessage = "Failed to unhide spot: \(error.localizedDescription)"
+                    CrashReporter.record(error, context: "SpotService.addCategories.unhide")
+                }
+            }
+            return true
+        }
 
         do {
             let rawCategories = merged.map { $0.rawValue }
@@ -488,13 +499,54 @@ class SpotService: ObservableObject {
             if !attribution.isEmpty {
                 data["categoryAddedBy"] = attribution
             }
+            // Unhide if the spot was soft-deleted (last category removed earlier).
+            // Adding a new category means the spot should be visible again.
+            if spots[index].isHidden {
+                data["isHidden"] = false
+            }
             try await db.collection(collectionName).document(spotID).updateData(data)
             spots[index].categories = merged
             spots[index].categoryAddedBy = attribution.isEmpty ? nil : attribution
+            if spots[index].isHidden {
+                spots[index].isHidden = false
+            }
             return true
         } catch {
             errorMessage = "Failed to update categories: \(error.localizedDescription)"
             CrashReporter.record(error, context: "SpotService.addCategory")
+            return false
+        }
+    }
+
+    // MARK: - Custom Category Tags
+
+    /// Adds custom category tags to a spot. Tags are normalized names (e.g. "empanadas").
+    /// Deduplicates against existing tags. Used for data capture — no ratings/verifications.
+    func addCustomCategoryTags(spotID: String, tags: [String]) async -> Bool {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
+
+        let existing = spots[index].customCategoryTags ?? []
+        var merged = existing
+        for tag in tags {
+            let normalized = tag.lowercased().trimmingCharacters(in: .whitespaces)
+            if !normalized.isEmpty && !merged.contains(normalized) {
+                merged.append(normalized)
+            }
+        }
+
+        // No change needed
+        if merged.count == existing.count { return true }
+
+        do {
+            try await db.collection(collectionName).document(spotID).updateData([
+                "customCategoryTags": merged
+            ])
+            spots[index].customCategoryTags = merged
+            return true
+        } catch {
+            #if DEBUG
+            print("[SpotService] Failed to save custom category tags: \(error.localizedDescription)")
+            #endif
             return false
         }
     }

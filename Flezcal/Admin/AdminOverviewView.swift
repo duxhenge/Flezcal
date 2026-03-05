@@ -4,6 +4,8 @@ import Charts
 struct AdminOverviewView: View {
     @ObservedObject var viewModel: AdminViewModel
     @EnvironmentObject var spotService: SpotService
+    @StateObject private var customService = CustomCategoryService()
+    @State private var categoryPickCounts: [(categoryID: String, displayName: String, pickCount: Int)] = []
 
     var body: some View {
         let metrics = viewModel.spotMetrics(spots: spotService.spots)
@@ -23,6 +25,9 @@ struct AdminOverviewView: View {
                 // Top Categories
                 categoriesSection(metrics: metrics)
 
+                // Custom Picks Ranking
+                customPicksSection()
+
                 // Most Popular Spots
                 popularSpotsSection(metrics: metrics)
 
@@ -41,6 +46,12 @@ struct AdminOverviewView: View {
         }
         .refreshable {
             await spotService.fetchSpots()
+            await customService.fetchAll()
+            categoryPickCounts = await UserPicksService.fetchPickCounts()
+        }
+        .task {
+            await customService.fetchAll()
+            categoryPickCounts = await UserPicksService.fetchPickCounts()
         }
     }
 
@@ -151,31 +162,59 @@ struct AdminOverviewView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Categories Breakdown
+    // MARK: - Categories by Pick Popularity
 
     @ViewBuilder
     private func categoriesSection(metrics: SpotMetrics) -> some View {
-        if !metrics.byCategory.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("By Category", systemImage: "square.grid.2x2")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Flezcal Picks", systemImage: "square.grid.2x2")
                     .font(.headline)
+                Spacer()
+                Text("user picks")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
-                let sorted = metrics.byCategory.sorted { $0.value > $1.value }
-                ForEach(sorted, id: \.key) { cat, count in
-                    HStack {
-                        Text(cat)
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(count)")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+            if categoryPickCounts.isEmpty {
+                Text("No pick data yet. Data appears as users select categories.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(Array(categoryPickCounts.enumerated()), id: \.element.categoryID) { index, item in
+                    HStack(spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption)
+                            .fontWeight(.bold)
                             .foregroundStyle(.secondary)
+                            .frame(width: 20, alignment: .trailing)
+
+                        let emoji = FoodCategory.allCategories.first(where: { $0.id == item.categoryID })?.emoji
+                        if let emoji {
+                            Text(emoji)
+                        }
+
+                        Text(item.displayName)
+                            .font(.subheadline)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        HStack(spacing: 3) {
+                            Image(systemName: "person.2.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Text("\(item.pickCount)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
                     }
                 }
             }
-            .padding()
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Popular Spots
@@ -285,6 +324,73 @@ struct AdminOverviewView: View {
                 metricCard(title: "Closed Spots", value: "\(closedSpots)", color: .red)
                 metricCard(title: "Verified Spots", value: "\(spotsWithVerifications)", color: .green)
                 metricCard(title: "Verification Rate", value: "\(verificationRate)%", color: .blue)
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Custom Picks Ranking
+
+    @ViewBuilder
+    private func customPicksSection() -> some View {
+        let ranked = customService.topCandidates(limit: 20)
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Custom Picks", systemImage: "sparkles")
+                    .font(.headline)
+                Spacer()
+                Text("\(customService.customCategories.count) total")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if customService.isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+            } else if ranked.isEmpty {
+                Text("No custom categories created yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(Array(ranked.enumerated()), id: \.element.id) { index, cat in
+                    HStack(spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, alignment: .trailing)
+
+                        Text(cat.emoji)
+
+                        Text(cat.displayName)
+                            .font(.subheadline)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        HStack(spacing: 3) {
+                            Image(systemName: "person.2.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.purple)
+                            Text("\(cat.pickCount)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
+                        if cat.pickCount >= 5 {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
             }
         }
         .padding()

@@ -41,14 +41,14 @@ struct ContentView: View {
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
+                ListTabView(locationManager: locationManager, picksService: picksService)
+                    .tabItem { Label("Spots", systemImage: "list.bullet") }
+                    .tag(AppTab.spots)
+
                 MyPicksTabView()
                     .environmentObject(picksService)
                     .tabItem { Label("My Flezcals", systemImage: "heart.circle") }
                     .tag(AppTab.myPicks)
-
-                ListTabView(locationManager: locationManager, picksService: picksService)
-                    .tabItem { Label("Spots", systemImage: "list.bullet") }
-                    .tag(AppTab.spots)
 
                 LeaderboardView()
                     .tabItem { Label("Leaderboard", systemImage: "trophy") }

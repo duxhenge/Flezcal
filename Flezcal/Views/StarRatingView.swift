@@ -143,108 +143,6 @@ private struct HorizontalFillShape: Shape {
     }
 }
 
-// MARK: - Flan Emoji Rating Picker (legacy — kept for reference)
-
-struct FlanRatingView: View {
-    @Binding var rating: Int
-    let maxRating: Int = 5
-
-    static let ratingEmoji = "🍮"
-    static let emptyEmoji  = "🍮"
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(1...maxRating, id: \.self) { flan in
-                Text(flan <= rating ? Self.ratingEmoji : Self.emptyEmoji)
-                    .opacity(flan <= rating ? 1.0 : 0.25)
-                    .font(.system(size: 32))
-                    .scaleEffect(flan == rating ? 1.25 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: rating)
-                    .onTapGesture {
-                        withAnimation {
-                            rating = flan
-                        }
-                        let generator = UIImpactFeedbackGenerator(style: .medium)
-                        generator.impactOccurred()
-                    }
-                    .accessibilityLabel("Rate \(flan) flan\(flan == 1 ? "" : "s")")
-                    .accessibilityAddTraits(.isButton)
-            }
-        }
-    }
-}
-
-// MARK: - Passionate Rating Picker
-
-/// The primary rating input: 5 levels from You Decide to Pilgrimage.
-/// Rates the specific food at the venue, not the venue itself.
-struct PassionateRatingView: View {
-    @Binding var rating: Int
-    /// Optional category name to contextualise the prompt (e.g. "flan", "mezcal")
-    var categoryName: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let name = categoryName {
-                Text("Rate the \(name) here")
-                    .font(.headline)
-            }
-
-            VStack(spacing: 8) {
-                ForEach(RatingLevel.allCases, id: \.rawValue) { level in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            rating = level.rawValue
-                        }
-                        let generator = UIImpactFeedbackGenerator(style: .medium)
-                        generator.impactOccurred()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Text(level.emoji)
-                                .font(.title3)
-                                .frame(width: 36)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(level.label)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                Text(level.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            if rating == level.rawValue {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.title3)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(rating == level.rawValue
-                                      ? Color.orange.opacity(0.1)
-                                      : Color(.systemGray6))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(rating == level.rawValue
-                                        ? Color.orange.opacity(0.4)
-                                        : Color.clear,
-                                        lineWidth: 1.5)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(level.label): \(level.description)\(rating == level.rawValue ? ", selected" : "")")
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Compact Passionate Rating Display
 
 /// Inline display for review cards and spot detail (non-interactive).
@@ -357,7 +255,6 @@ enum ReviewTitleGenerator {
     ScrollView {
         VStack(spacing: 20) {
             StarRatingView(rating: .constant(3), interactive: true)
-            FlanRatingView(rating: .constant(4))
             StarDisplayView(rating: 3.5)
 
             // Flan bar examples
@@ -371,7 +268,6 @@ enum ReviewTitleGenerator {
                 FlanBarView(rating: 5.0, size: 20)
             }
 
-            PassionateRatingView(rating: .constant(4), categoryName: "flan")
             RatingLevelBadge(rating: 5)
             RatingLevelBadge(rating: 3)
             AverageRatingView(averageRating: 4.2, reviewCount: 7)

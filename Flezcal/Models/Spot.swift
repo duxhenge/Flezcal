@@ -83,6 +83,11 @@ struct Spot: Identifiable, Codable, Hashable {
     // Once a user verifies a category (thumbs up), it moves from "potential" to "verified".
     var websiteDetectedCategories: [String]?
 
+    // Custom category tags — normalized names of user-created categories associated
+    // with this spot (e.g. ["empanadas", "pupusas"]). Stored for data capture and
+    // future promotion to hardcoded categories. No ratings/verifications/offerings.
+    var customCategoryTags: [String]?
+
     // Closure reporting
     var closureReportCount: Int = 0
     var locationStatus: String?  // nil = open, "closed" = confirmed closed by admin
@@ -224,6 +229,7 @@ struct Spot: Identifiable, Codable, Hashable {
         case verificationUpCount, verificationDownCount
         case lastVerificationDate, verificationUserCount
         case websiteDetectedCategories
+        case customCategoryTags
         case closureReportCount, locationStatus
         case ownerVerified, ownerUserId, ownerBrands, ownerDetails
         case reservationURL, ownerLockedCategories
@@ -250,6 +256,7 @@ struct Spot: Identifiable, Codable, Hashable {
          lastVerificationDate: Date? = nil,
          verificationUserCount: Int = 0,
          websiteDetectedCategories: [String]? = nil,
+         customCategoryTags: [String]? = nil,
          closureReportCount: Int = 0,
          locationStatus: String? = nil,
          ownerVerified: Bool = false,
@@ -286,6 +293,7 @@ struct Spot: Identifiable, Codable, Hashable {
         self.lastVerificationDate = lastVerificationDate
         self.verificationUserCount = verificationUserCount
         self.websiteDetectedCategories = websiteDetectedCategories
+        self.customCategoryTags = customCategoryTags
         self.closureReportCount = closureReportCount
         self.locationStatus = locationStatus
         self.ownerVerified = ownerVerified
@@ -346,6 +354,7 @@ struct Spot: Identifiable, Codable, Hashable {
         lastVerificationDate = try container.decodeIfPresent(Date.self, forKey: .lastVerificationDate)
         verificationUserCount = try container.decodeIfPresent(Int.self, forKey: .verificationUserCount) ?? 0
         websiteDetectedCategories = try container.decodeIfPresent([String].self, forKey: .websiteDetectedCategories)
+        customCategoryTags = try container.decodeIfPresent([String].self, forKey: .customCategoryTags)
         closureReportCount = try container.decodeIfPresent(Int.self, forKey: .closureReportCount) ?? 0
         locationStatus = try container.decodeIfPresent(String.self, forKey: .locationStatus)
         ownerVerified = try container.decodeIfPresent(Bool.self, forKey: .ownerVerified) ?? false
@@ -392,6 +401,7 @@ struct Spot: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(lastVerificationDate, forKey: .lastVerificationDate)
         try container.encode(verificationUserCount, forKey: .verificationUserCount)
         try container.encodeIfPresent(websiteDetectedCategories, forKey: .websiteDetectedCategories)
+        try container.encodeIfPresent(customCategoryTags, forKey: .customCategoryTags)
         try container.encode(closureReportCount, forKey: .closureReportCount)
         try container.encodeIfPresent(locationStatus, forKey: .locationStatus)
         try container.encode(ownerVerified, forKey: .ownerVerified)

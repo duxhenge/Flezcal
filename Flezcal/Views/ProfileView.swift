@@ -260,24 +260,37 @@ struct SignedInProfileView: View {
 
                                     Spacer()
 
-                                    // Thumbs icon
-                                    Image(systemName: verification.vote ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
-                                        .foregroundStyle(verification.vote ? .green : .red)
-                                        .font(.caption)
-                                        .accessibilityLabel(verification.vote ? "Verified" : "Not verified")
-
-                                    // Rating if present
-                                    if let rating = verification.rating {
-                                        HStack(spacing: 1) {
-                                            Text("🍮")
-                                                .font(.caption2)
-                                                .accessibilityHidden(true)
-                                            Text("\(rating)")
+                                    if verification.vote {
+                                        // Rated or confirmed (legacy)
+                                        if let rating = verification.rating {
+                                            HStack(spacing: 1) {
+                                                Text("🍮")
+                                                    .font(.caption2)
+                                                    .accessibilityHidden(true)
+                                                Text("\(rating)")
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                            }
+                                            .accessibilityElement(children: .ignore)
+                                            .accessibilityLabel("Rated \(rating) out of 5")
+                                        } else {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
                                                 .font(.caption)
-                                                .fontWeight(.medium)
+                                                .accessibilityLabel("Confirmed")
+                                        }
+                                    } else {
+                                        // Marked as unavailable
+                                        HStack(spacing: 2) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.orange)
+                                                .font(.caption)
+                                            Text("Unavailable")
+                                                .font(.caption2)
+                                                .foregroundStyle(.orange)
                                         }
                                         .accessibilityElement(children: .ignore)
-                                        .accessibilityLabel("Rated \(rating) out of 5")
+                                        .accessibilityLabel("Reported as unavailable")
                                     }
 
                                     // Date
@@ -302,6 +315,7 @@ struct SignedInProfileView: View {
 
                 Label("Version", systemImage: "info.circle")
                     .badge(AppConstants.appVersion)
+                    .contentShape(Rectangle())
                     .onLongPressGesture(minimumDuration: 2) {
                         if AdminAccess.isAdmin(uid: authService.userID) {
                             showAdmin = true

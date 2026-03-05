@@ -9,8 +9,12 @@ enum SuggestedSpotSource {
     case exploreSearch
 }
 
-/// Sheet shown when a user taps a ghost suggestion pin or an Explore search result.
-/// Lets them confirm (opens Add Spot flow) or dismiss.
+/// Sheet shown when a user taps a ghost pin or Explore search result for a
+/// venue that does NOT yet exist in Firestore. Lets them confirm (opens
+/// Add Spot flow) or dismiss.
+///
+/// Existing spots are now routed directly to SpotDetailView from the tap
+/// handlers in MapTabView and ExplorePanel — they never reach this sheet.
 struct SuggestedSpotSheet: View {
     let suggestion: SuggestedSpot
     /// Live multi-category result passed in from the map — snapshotted on
@@ -27,7 +31,9 @@ struct SuggestedSpotSheet: View {
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var photoService: PhotoService
     @Environment(\.dismiss) private var dismiss
-    @State private var showAddSpot = false
+    @State private var showFlezcalPicker = false
+    @State private var selectedFlezcal: FoodCategory? = nil
+    @State private var showConfirmSpot = false
     @State private var showSignIn = false
     /// Tracks that the user tapped "add" while unsigned — auto-proceed after sign-in.
     @State private var pendingAddAfterSignIn = false
@@ -48,36 +54,17 @@ struct SuggestedSpotSheet: View {
     /// Use the frozen result so the sheet is stable after opening.
     private var displayResult: MultiCategoryCheckResult? { frozenResult }
 
-    /// If this venue is already confirmed in Firestore, this holds the existing Spot.
-    private var existingSpot: Spot? {
-        guard let coord = suggestion.mapItem.placemark.location?.coordinate,
-              let name = suggestion.mapItem.name else { return nil }
-        return spotService.findExistingSpot(
-            name: name, latitude: coord.latitude, longitude: coord.longitude
-        )
+    /// Custom category tag derived from the user's selected Flezcal.
+    private var customCategoryTag: String? {
+        guard let flezcal = selectedFlezcal, flezcal.id.hasPrefix("custom_") else { return nil }
+        return String(flezcal.id.dropFirst("custom_".count))
     }
 
-    /// FoodCategories already confirmed on this spot in Firestore.
-    private var existingCategories: [FoodCategory] {
-        guard let spot = existingSpot else { return [] }
-        return spot.categories.compactMap { FoodCategory(spotCategory: $0) }
-    }
-
-    /// SpotCategories to pass to ConfirmSpotView.
-    /// Only confirmed picks are pre-filled — relatedFound matches require user
-    /// verification and should not be automatically included. If nothing was
-    /// confirmed, falls back to the primary pick so the user can still add.
-    private var spotCategories: [SpotCategory] {
-        guard let result = displayResult else {
-            // Still loading — just use the primary pick
-            return [SpotCategory(rawValue: suggestedCategory.id) ?? .mezcal]
-        }
-        // Only confirmed categories are addable — relatedFound need verification first
-        if !result.confirmed.isEmpty {
-            return result.confirmed.compactMap { SpotCategory(rawValue: $0.id) }
-        }
-        // Nothing confirmed — use the primary pick so the user can still add
-        return [SpotCategory(rawValue: result.primaryPick.id) ?? .mezcal]
+    /// The SpotCategory for the user's selected Flezcal.
+    /// Returns nil for custom categories (they have no SpotCategory case).
+    private var selectedSpotCategory: SpotCategory? {
+        guard let flezcal = selectedFlezcal else { return nil }
+        return SpotCategory(rawValue: flezcal.id)
     }
 
     /// All categories detected by the website scan (confirmed + related).
@@ -91,8 +78,6 @@ struct SuggestedSpotSheet: View {
     }
 
     /// Banner message and icon based on the multi-category website check.
-    /// When the spot already exists in Firestore, the banner focuses on
-    /// newly-discovered categories rather than contradicting existing data.
     private var websiteCheckBanner: (icon: String, color: Color, message: String) {
         guard let result = displayResult else {
             return (
@@ -102,21 +87,7 @@ struct SuggestedSpotSheet: View {
             )
         }
 
-        let existingIDs = Set(existingCategories.map(\.id))
-
-        // Categories confirmed by website check that are NOT already in Firestore
-        let newlyConfirmed = result.confirmed.filter { !existingIDs.contains($0.id) }
-        // Categories confirmed by website check that ARE already in Firestore
-        let reconfirmed = result.confirmed.filter { existingIDs.contains($0.id) }
-
         if result.websiteUnavailable {
-            if existingSpot != nil {
-                return (
-                    icon: "wifi.slash",
-                    color: .secondary,
-                    message: "No website on file — but this spot is already confirmed by the community."
-                )
-            }
             return (
                 icon: "wifi.slash",
                 color: .secondary,
@@ -124,35 +95,7 @@ struct SuggestedSpotSheet: View {
             )
         }
 
-        // When the spot already exists, tailor the message
-        if existingSpot != nil {
-            if !newlyConfirmed.isEmpty {
-                let names = newlyConfirmed.map { $0.displayName.lowercased() }.joined(separator: ", ")
-                return (
-                    icon: "plus.circle.fill",
-                    color: newlyConfirmed.first?.color ?? .orange,
-                    message: "We also found \(names) on their website — a new category to add!"
-                )
-            }
-            if !reconfirmed.isEmpty {
-                let names = reconfirmed.map { $0.displayName.lowercased() }.joined(separator: ", ")
-                return (
-                    icon: "checkmark.seal.fill",
-                    color: reconfirmed.first?.color ?? .orange,
-                    message: "Their website confirms \(names) — matches the community data."
-                )
-            }
-            // Website didn't find any picks, but spot is already confirmed
-            return (
-                icon: "checkmark.circle",
-                color: .orange,
-                message: "Website scan didn't find your picks, but this spot is confirmed by the community."
-            )
-        }
-
-        // Not an existing spot — original behavior
         if !result.confirmed.isEmpty && !result.relatedFound.isEmpty {
-            // Confirmed + related on same venue
             let confirmedNames = result.confirmed.map { $0.displayName.lowercased() }.joined(separator: ", ")
             let relatedMatch = result.relatedFound.first!
             return (
@@ -171,7 +114,6 @@ struct SuggestedSpotSheet: View {
             )
         }
         if !result.relatedFound.isEmpty {
-            // Related-only (no confirmed) — amber verification prompt
             let relatedMatch = result.relatedFound.first!
             return (
                 icon: "eye.fill",
@@ -179,7 +121,6 @@ struct SuggestedSpotSheet: View {
                 message: "We found '\(relatedMatch.keyword)' on their menu — help verify if they have \(relatedMatch.category.displayName.lowercased())!"
             )
         }
-        // Nothing confirmed or related — list all picks that were checked
         let allNames = result.notFound.map { $0.displayName.lowercased() }
         let nameList = allNames.joined(separator: " or ")
         return (
@@ -211,7 +152,9 @@ struct SuggestedSpotSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Skip") { dismiss() }
+                    Button("Skip") {
+                        dismiss()
+                    }
                 }
             }
             .sheet(isPresented: $showSignIn) {
@@ -222,25 +165,64 @@ struct SuggestedSpotSheet: View {
             .onChange(of: authService.isSignedIn) { _, signedIn in
                 if signedIn && pendingAddAfterSignIn {
                     pendingAddAfterSignIn = false
-                    // Small delay so the sign-in sheet finishes dismissing
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        showAddSpot = true
+                        showFlezcalPicker = true
                     }
                 }
             }
-            .sheet(isPresented: $showAddSpot) {
-                ConfirmSpotView(
-                    mapItem: suggestion.mapItem,
-                    categories: spotCategories,
-                    preVerified: true,
-                    websiteDetectedCategories: detectedCategoryIDs
-                ) {
-                    onConfirm()
-                    dismiss()
+            .sheet(isPresented: $showFlezcalPicker) {
+                FlezcalPickerView(
+                    userPicks: userPicks,
+                    allCategories: FoodCategory.allCategories,
+                    disabledCategoryIDs: Set(),
+                    onSelect: { category in
+                        selectedFlezcal = category
+                        showFlezcalPicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            showConfirmSpot = true
+                        }
+                    },
+                    onCancel: {
+                        showFlezcalPicker = false
+                    }
+                )
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showConfirmSpot) {
+                if selectedFlezcal != nil,
+                   let spotCat = selectedSpotCategory {
+                    ConfirmSpotView(
+                        mapItem: suggestion.mapItem,
+                        category: spotCat,
+                        preVerified: true,
+                        websiteDetectedCategories: detectedCategoryIDs,
+                        customCategoryTag: customCategoryTag
+                    ) {
+                        onConfirm()
+                        dismiss()
+                    }
+                    .environmentObject(authService)
+                    .environmentObject(spotService)
+                    .environmentObject(photoService)
+                } else if selectedFlezcal != nil {
+                    // Custom category — no SpotCategory case.
+                    let fallbackCat = userPicks.compactMap({ SpotCategory(rawValue: $0.id) }).first
+                        ?? SpotCategory(rawValue: suggestedCategory.id)
+                        ?? .mezcal
+                    ConfirmSpotView(
+                        mapItem: suggestion.mapItem,
+                        category: fallbackCat,
+                        preVerified: true,
+                        websiteDetectedCategories: detectedCategoryIDs,
+                        customCategoryTag: customCategoryTag
+                    ) {
+                        onConfirm()
+                        dismiss()
+                    }
+                    .environmentObject(authService)
+                    .environmentObject(spotService)
+                    .environmentObject(photoService)
                 }
-                .environmentObject(authService)
-                .environmentObject(spotService)
-                .environmentObject(photoService)
             }
         }
     }
@@ -274,7 +256,6 @@ struct SuggestedSpotSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            existingSpotBanner
             websiteCheckBannerView
             userPromptText
         }
@@ -285,29 +266,8 @@ struct SuggestedSpotSheet: View {
     @ViewBuilder
     private var categoryChips: some View {
         HStack(spacing: 6) {
-            ForEach(existingCategories) { cat in
-                HStack(spacing: 4) {
-                    FoodCategoryIcon(category: cat, size: 18)
-                    Text(cat.displayName)
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                }
-                .font(.caption)
-                .fontWeight(.medium)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(cat.color.opacity(0.15))
-                .foregroundStyle(cat.color)
-                .clipShape(Capsule())
-            }
-
             if let result = displayResult {
-                let existingIDs = Set(existingCategories.map(\.id))
-                let newConfirmed = result.confirmed.filter { !existingIDs.contains($0.id) }
-                let relatedNew = result.relatedFound.filter { !existingIDs.contains($0.category.id) }
-                let notFoundNew = result.notFound.filter { !existingIDs.contains($0.id) }
-                ForEach(newConfirmed) { cat in
+                ForEach(result.confirmed) { cat in
                     HStack(spacing: 4) {
                         FoodCategoryIcon(category: cat, size: 18)
                         Text(cat.displayName)
@@ -323,7 +283,7 @@ struct SuggestedSpotSheet: View {
                     .foregroundStyle(cat.color)
                     .clipShape(Capsule())
                 }
-                ForEach(relatedNew, id: \.category.id) { match in
+                ForEach(result.relatedFound, id: \.category.id) { match in
                     HStack(spacing: 4) {
                         FoodCategoryIcon(category: match.category, size: 18)
                         Text(match.category.displayName)
@@ -339,7 +299,7 @@ struct SuggestedSpotSheet: View {
                     .foregroundStyle(Color(red: 0.7, green: 0.5, blue: 0.0))
                     .clipShape(Capsule())
                 }
-                ForEach(notFoundNew) { cat in
+                ForEach(result.notFound) { cat in
                     HStack(spacing: 4) {
                         FoodCategoryIcon(category: cat, size: 18)
                         Text(cat.displayName)
@@ -354,7 +314,7 @@ struct SuggestedSpotSheet: View {
                     .foregroundStyle(.secondary)
                     .clipShape(Capsule())
                 }
-            } else if existingCategories.isEmpty {
+            } else {
                 ForEach(allCheckedPicks) { cat in
                     HStack(spacing: 4) {
                         FoodCategoryIcon(category: cat, size: 18)
@@ -369,25 +329,6 @@ struct SuggestedSpotSheet: View {
                     .clipShape(Capsule())
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var existingSpotBanner: some View {
-        if let spot = existingSpot {
-            let catNames = spot.categories.map(\.displayName).joined(separator: ", ")
-            Label(
-                "Already on Flezcal for \(catNames).",
-                systemImage: "star.fill"
-            )
-            .font(.subheadline)
-            .foregroundStyle(.orange)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.orange.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.top, 4)
         }
     }
 
@@ -415,24 +356,7 @@ struct SuggestedSpotSheet: View {
     @ViewBuilder
     private var userPromptText: some View {
         Group {
-            if existingSpot != nil {
-                if let result = displayResult {
-                    let existingIDs = Set(existingCategories.map(\.id))
-                    let newCats = result.confirmed.filter { !existingIDs.contains($0.id) }
-                    let newRelated = result.relatedFound.filter { !existingIDs.contains($0.category.id) }
-                    if !newCats.isEmpty {
-                        let newNames = newCats.map { $0.displayName.lowercased() }.joined(separator: ", ")
-                        Text("This spot is already on Flezcal. We also found \(newNames) on their website — tap below to add \(newCats.count == 1 ? "it" : "them").")
-                    } else if !newRelated.isEmpty {
-                        let match = newRelated.first!
-                        Text("This spot is already on Flezcal. We found '\(match.keyword)' on their website — if they have \(match.category.displayName.lowercased()), tap below to add it.")
-                    } else {
-                        Text("This spot is already on Flezcal. You can still update it with new categories or mezcal offerings.")
-                    }
-                } else {
-                    Text("This spot is already on Flezcal. Checking their website for more categories…")
-                }
-            } else if let result = displayResult {
+            if let result = displayResult {
                 if !result.confirmed.isEmpty {
                     Text("Know this place? If you've been here, add it so the community can find it.")
                 } else if !result.relatedFound.isEmpty {
@@ -459,26 +383,19 @@ struct SuggestedSpotSheet: View {
         VStack(spacing: 12) {
             Button {
                 if authService.isSignedIn {
-                    showAddSpot = true
+                    showFlezcalPicker = true
                 } else {
                     pendingAddAfterSignIn = true
                     showSignIn = true
                 }
             } label: {
-                Label(
-                    existingSpot != nil
-                        ? "Update this spot"
-                        : "Yes, add it to Flezcal!",
-                    systemImage: existingSpot != nil
-                        ? "pencil.circle.fill"
-                        : "checkmark.circle.fill"
-                )
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
+                Label("Add to Flezcal", systemImage: "plus.circle.fill")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
             }
             .buttonStyle(.borderedProminent)
-            .tint(existingSpot != nil ? .orange : suggestedCategory.color)
+            .tint(suggestedCategory.color)
 
             Button {
                 suggestion.mapItem.openInMaps()

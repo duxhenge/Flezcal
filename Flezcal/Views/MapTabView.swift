@@ -42,6 +42,61 @@ struct MapTabView: View {
     @State private var websiteCheckTask: Task<Void, Never>? = nil
     private let websiteChecker = WebsiteCheckService()
 
+    /// Finds an existing Spot in Firestore that matches a SuggestedSpot.
+    /// Used to route taps on ghost pins directly to SpotDetailView when
+    /// the venue is already in the database.
+    private func existingSpot(for suggestion: SuggestedSpot) -> Spot? {
+        guard let coord = suggestion.mapItem.placemark.location?.coordinate,
+              let name = suggestion.mapItem.name else { return nil }
+        return spotService.findExistingSpot(
+            name: name, latitude: coord.latitude, longitude: coord.longitude
+        )
+    }
+
+    /// Handles tapping a ghost pin or show-on-map pin.
+    /// If the venue already exists in Firestore, opens SpotDetailView directly.
+    /// Otherwise opens SuggestedSpotSheet for the Add Spot / Add Flezcal flow.
+    private func handleSuggestionTap(_ suggestion: SuggestedSpot) {
+        // Shift camera so the pin sits 3/4 up the map, above the slide-up sheet.
+        withAnimation(.easeInOut(duration: 0.3)) {
+            cameraPosition = .region(
+                cameraRegion(centeredAbove: suggestion.coordinate)
+            )
+        }
+
+        // Check if this venue is already a confirmed spot
+        if let existing = existingSpot(for: suggestion) {
+            // Unhide if soft-deleted so the green verified pin shows
+            if existing.isHidden {
+                Task {
+                    _ = await spotService.addCategories(
+                        spotID: existing.id, newCategories: [], addedBy: nil
+                    )
+                }
+            }
+            // Remove the ghost pin since we're showing the real spot
+            suggestionService.confirm(suggestion)
+            // Open SpotDetailView — same experience as tapping a spot in the list
+            selectedSpot = existing
+        } else {
+            // New venue — open SuggestedSpotSheet with website check
+            websiteCheckTask?.cancel()
+            multiCheckResult = nil
+            selectedSuggestion = suggestion
+            let primaryPick = bestPrimaryPick(for: suggestion)
+            let allPicks = picksService.picks
+            websiteCheckTask = Task {
+                let result = await websiteChecker.checkAllPicks(
+                    suggestion.mapItem,
+                    picks: allPicks,
+                    primaryPick: primaryPick
+                )
+                guard !Task.isCancelled else { return }
+                multiCheckResult = result
+            }
+        }
+    }
+
     // Batch fetch + pre-screen — homepage-only scan triggered after ghost pin fetch
     @State private var fetchAndPreScreenTask: Task<Void, Never>? = nil
     @State private var preScreenTask: Task<Void, Never>? = nil
@@ -218,6 +273,28 @@ struct MapTabView: View {
         }
     }
 
+    /// Ghost pins filtered to exclude any that overlap with a verified spot.
+    /// Uses name matching (same as SuggestionService) plus coordinate proximity
+    /// so a ghost pin never renders on top of a green pin.
+    private var filteredSuggestions: [SuggestedSpot] {
+        let spotNames = Set(spotService.spots.filter { !$0.isHidden && !$0.isClosed }.map { $0.name.lowercased() })
+        let spotCoords = spotService.spots.filter { !$0.isHidden && !$0.isClosed }
+            .map { ($0.latitude, $0.longitude) }
+        let threshold = 0.005 // ~550 meters — same as findExistingSpot
+        return suggestionService.suggestions.filter { suggestion in
+            let key = suggestion.name.lowercased()
+            if spotNames.contains(key) { return false }
+            // Also check coordinate proximity for name mismatches
+            let coord = suggestion.coordinate
+            for (lat, lon) in spotCoords {
+                if abs(coord.latitude - lat) < threshold && abs(coord.longitude - lon) < threshold {
+                    return false
+                }
+            }
+            return true
+        }
+    }
+
     private var visibleSuggestions: [SuggestedSpot] {
         guard let region = visibleRegion else { return suggestionService.suggestions }
         let b = bounds(for: region)
@@ -315,7 +392,8 @@ struct MapTabView: View {
                 // Ghost pins — unconfirmed Apple Maps suggestions
                 // Yellow = not yet scanned. Green = pre-screen found keywords.
                 // Gray = scanned but no match found.
-                ForEach(suggestionService.suggestions) { suggestion in
+                // Filtered to exclude any that overlap with a verified spot.
+                ForEach(filteredSuggestions) { suggestion in
                     let isGreen = suggestion.preScreenMatches?.isEmpty == false
                     let isScanned = suggestion.preScreenMatches != nil
                     Annotation(suggestion.name, coordinate: suggestion.coordinate) {
@@ -327,30 +405,7 @@ struct MapTabView: View {
                                 .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                         )
                             .onTapGesture {
-                                // Shift camera so the pin sits 3/4 up the map,
-                                // above the slide-up sheet.
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    cameraPosition = .region(
-                                        cameraRegion(centeredAbove: suggestion.coordinate)
-                                    )
-                                }
-                                websiteCheckTask?.cancel()
-                                multiCheckResult = nil
-                                selectedSuggestion = suggestion
-                                // Check the primary category (full 3-pass) then check
-                                // all remaining user picks against the HTML cache — zero
-                                // extra API cost for the additional picks.
-                                let primaryPick = bestPrimaryPick(for: suggestion)
-                                let allPicks = picksService.picks
-                                websiteCheckTask = Task {
-                                    let result = await websiteChecker.checkAllPicks(
-                                        suggestion.mapItem,
-                                        picks: allPicks,
-                                        primaryPick: primaryPick
-                                    )
-                                    guard !Task.isCancelled else { return }
-                                    multiCheckResult = result
-                                }
+                                handleSuggestionTap(suggestion)
                             }
                     }
                 }
@@ -376,26 +431,7 @@ struct MapTabView: View {
                                 .offset(y: -2)
                         }
                         .onTapGesture {
-                            // Shift camera so the pin sits 3/4 up the map
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                cameraPosition = .region(
-                                    cameraRegion(centeredAbove: pinned.coordinate)
-                                )
-                            }
-                            websiteCheckTask?.cancel()
-                            multiCheckResult = nil
-                            selectedSuggestion = pinned
-                            let primaryPick = bestPrimaryPick(for: pinned)
-                            let allPicks = picksService.picks
-                            websiteCheckTask = Task {
-                                let result = await websiteChecker.checkAllPicks(
-                                    pinned.mapItem,
-                                    picks: allPicks,
-                                    primaryPick: primaryPick
-                                )
-                                guard !Task.isCancelled else { return }
-                                multiCheckResult = result
-                            }
+                            handleSuggestionTap(pinned)
                         }
                     }
                 }
@@ -446,27 +482,8 @@ struct MapTabView: View {
                 guard let suggestion = newValue else { return }
                 pendingMapSuggestion = nil   // consume immediately
 
-                // Center camera with the venue at 3/4 up the map (above the sheet)
-                cameraPosition = .region(
-                    cameraRegion(centeredAbove: suggestion.coordinate)
-                )
-
-                // Open the ghost pin sheet + run website check (same as ghost pin tap)
-                websiteCheckTask?.cancel()
-                multiCheckResult = nil
                 showOnMapPin = suggestion  // persist pin after sheet dismissal
-                selectedSuggestion = suggestion
-                let primaryPick = bestPrimaryPick(for: suggestion)
-                let allPicks = picksService.picks
-                websiteCheckTask = Task {
-                    let result = await websiteChecker.checkAllPicks(
-                        suggestion.mapItem,
-                        picks: allPicks,
-                        primaryPick: primaryPick
-                    )
-                    guard !Task.isCancelled else { return }
-                    multiCheckResult = result
-                }
+                handleSuggestionTap(suggestion)
             }
             .onChange(of: pendingMapCenter?.latitude) { _, _ in
                 guard let center = pendingMapCenter else { return }

@@ -106,8 +106,9 @@ class SuggestionService: ObservableObject {
         print("[Suggestions] Fetching for region center (\(String(format: "%.4f", region.center.latitude)), \(String(format: "%.4f", region.center.longitude))) span (\(String(format: "%.4f", region.span.latitudeDelta)), \(String(format: "%.4f", region.span.longitudeDelta))), picks: \(picks.map(\.id)), \(allQueries.count) unique queries: \(allQueries.map(\.query))")
         #endif
 
-        // Existing confirmed spot names — never re-suggest these
-        let existingNames = Set(existingSpots.map { $0.name.lowercased() })
+        // Existing confirmed spot names — never re-suggest these.
+        // Exclude hidden spots so ghost pins reappear when user removes all categories.
+        let existingNames = Set(existingSpots.filter { !$0.isHidden }.map { $0.name.lowercased() })
 
         // Reference point for distance sorting
         let regionCenter = CLLocation(latitude: region.center.latitude,

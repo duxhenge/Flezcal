@@ -66,6 +66,19 @@ enum RatingLevel: Int, CaseIterable {
         }
     }
 
+    /// Confirmation question shown before submitting a new rating.
+    /// The category name is interpolated in lowercase.
+    func confirmationQuestion(for category: String) -> String {
+        let name = category.lowercased()
+        switch self {
+        case .pilgrimage: return "Is the \(name) here worth booking a flight?"
+        case .roadTrip:   return "Is the \(name) here worth going out of your way?"
+        case .bookIt:     return "Does the \(name) here satisfy the craving?"
+        case .popIn:      return "Are you glad the \(name) is on the menu here?"
+        case .youDecide:  return "You can't recommend the \(name) here?"
+        }
+    }
+
     /// Returns the RatingLevel for a 1-5 integer, or nil if out of range.
     static func from(_ rating: Int) -> RatingLevel? {
         RatingLevel(rawValue: rating)

@@ -110,6 +110,22 @@ class VerificationService: ObservableObject {
         }.count
     }
 
+    // MARK: - Auto-Verify (convenience)
+
+    /// Convenience helper that creates a thumbs-up verification for a category.
+    /// Used when a user adds a category to a spot — adding IS verifying.
+    /// Creates a standalone VerificationService, submits the vote, and discards it.
+    /// Safe to call from any context (fire-and-forget).
+    static func autoVerify(spotID: String, userID: String, category: SpotCategory) async {
+        let service = VerificationService()
+        _ = await service.submitVote(
+            spotID: spotID,
+            userID: userID,
+            category: category,
+            vote: true
+        )
+    }
+
     // MARK: - Submit, Change, or Retract Vote
 
     /// Creates a new vote, flips an existing one, or retracts if tapping the same vote again.

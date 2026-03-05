@@ -18,6 +18,9 @@ struct SpotDetailView: View {
     @State private var showAddCategory = false
     @State private var isConfirmingVisit = false
     @State private var showVisitConfirmed = false
+    @State private var showVisitRatingFlow = false
+    @State private var showVisitThankYou = false
+    @State private var visitThankYouMessage = ""
 
     // Community verification
     @StateObject private var verificationService = VerificationService()
@@ -47,8 +50,6 @@ struct SpotDetailView: View {
 
     // Owner editing
     @State private var showOwnerEdit = false
-
-    private let websiteChecker = WebsiteCheckService()
 
     /// Live version of this spot from SpotService, reflecting any in-session mutations
     /// (e.g. communityVerified flip, report updates). Falls back to the original `let spot`.
@@ -370,13 +371,7 @@ struct SpotDetailView: View {
                 OwnerEditSheet(spot: liveSpot)
             }
             .sheet(isPresented: $showAddCategory) {
-                AddCategorySheet(
-                    spot: liveSpot,
-                    addableCategories: SpotCategory.allCases.filter { cat in
-                        !cat.isLegacy && !liveSpot.categories.contains(cat)
-                    },
-                    websiteChecker: websiteChecker
-                )
+                AddFlezcalFlow(spot: liveSpot)
             }
             .sheet(isPresented: $showSignIn) {
                 SignInSheet()
@@ -612,9 +607,64 @@ struct SpotDetailView: View {
             }
         }
         .alert("Spot Confirmed!", isPresented: $showVisitConfirmed) {
-            Button("Thanks!", role: .cancel) {}
+            if !liveSpot.categories.isEmpty {
+                Button("Rate It") {
+                    showVisitRatingFlow = true
+                }
+                Button("Done", role: .cancel) {}
+            } else {
+                Button("Thanks!", role: .cancel) {}
+            }
         } message: {
-            Text("You've marked \(spot.name) as visited. This helps the whole community!")
+            if !liveSpot.categories.isEmpty {
+                Text("You've confirmed \(spot.name)! Would you like to rate it?")
+            } else {
+                Text("You've marked \(spot.name) as visited. This helps the whole community!")
+            }
+        }
+        .sheet(isPresented: $showVisitRatingFlow, onDismiss: {
+            // Swipe-to-dismiss or Skip: just close — no thank-you unless they rated
+        }) {
+            if let firstCat = liveSpot.categories.first {
+                NavigationStack {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            Text("Rate the \(firstCat.displayName) here")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.top)
+
+                            RatingFlowView(
+                                categoryName: firstCat.displayName,
+                                existingRating: nil,
+                                onSubmit: { rating in
+                                    submitVisitRating(rating, for: firstCat)
+                                },
+                                onSkip: {
+                                    showVisitRatingFlow = false
+                                },
+                                onRemove: nil
+                            )
+                            .padding(.horizontal)
+                        }
+                    }
+                    .navigationTitle("Rate This Flezcal")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Skip") {
+                                showVisitRatingFlow = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .alert("Thank You!", isPresented: $showVisitThankYou) {
+            Button("Done", role: .cancel) {}
+        } message: {
+            Text(visitThankYouMessage)
         }
     }
 
@@ -703,16 +753,46 @@ struct SpotDetailView: View {
         .padding(.horizontal)
     }
 
-    /// Marks this imported spot as community-verified in Firestore.
+    /// Marks this imported spot as community-verified in Firestore,
+    /// then offers a rating flow for the spot's first category.
     private func confirmVisit() {
         isConfirmingVisit = true
         Task {
             await spotService.markCommunityVerified(spotID: spot.id)
+
+            // Auto-verify with a thumbs-up for each category on the spot
+            if let userID = authService.userID, let firstCat = liveSpot.categories.first {
+                await VerificationService.autoVerify(spotID: spot.id, userID: userID, category: firstCat)
+            }
+
             await MainActor.run {
                 isConfirmingVisit = false
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.success)
                 showVisitConfirmed = true
+            }
+        }
+    }
+
+    /// Submits a rating after confirm-visit, then shows thank-you.
+    private func submitVisitRating(_ rating: Int, for cat: SpotCategory) {
+        guard let userID = authService.userID else {
+            showVisitRatingFlow = false
+            return
+        }
+        Task {
+            let verificationService = VerificationService()
+            _ = await verificationService.submitRating(
+                spotID: spot.id,
+                userID: userID,
+                category: cat,
+                rating: rating,
+                spotService: spotService
+            )
+            await MainActor.run {
+                showVisitRatingFlow = false
+                visitThankYouMessage = "Your rating has been saved. Thanks for helping the community!"
+                showVisitThankYou = true
             }
         }
     }
@@ -879,277 +959,189 @@ struct AddOfferingsSheet: View {
     }
 }
 
-// MARK: - Add Category Sheet
+// MARK: - Add Flezcal Flow
 
-/// Sheet presented from SpotDetailView that lets the user add any non-legacy
-/// SpotCategory to an existing confirmed spot.
-///
-/// Cache-first strategy:
-///   1. If the spot has a stored websiteURL and it was already scanned this session,
-///      return the cached result instantly (zero network calls).
-///   2. Otherwise run a targeted checkWithBraveSearch() for just the selected category.
-///      Max ~3 Brave calls, same as a normal ghost-pin tap.
-struct AddCategorySheet: View {
+/// Unified flow for adding a Flezcal to an existing spot.
+/// Step 1: User picks a category from FlezcalPickerView.
+/// Step 2: Category is saved, then rating prompt appears.
+/// Step 3: Thank you → dismiss.
+private struct AddFlezcalFlow: View {
     let spot: Spot
-    /// All non-legacy categories that this spot doesn't already have
-    let addableCategories: [SpotCategory]
-    let websiteChecker: WebsiteCheckService
 
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
+    @EnvironmentObject var picksService: UserPicksService
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedCategory: SpotCategory? = nil
-    @State private var checkResult: WebsiteCheckResult? = nil
-    @State private var isChecking = false
+    @State private var selectedFlezcal: FoodCategory? = nil
     @State private var isSaving = false
-    @State private var showSuccess = false
-    @State private var checkTask: Task<Void, Never>? = nil
+    @State private var showRatingFlow = false
+    @State private var showThankYou = false
+    @State private var thankYouMessage = ""
+    @State private var savedCategory: SpotCategory? = nil
+    /// Spot already had this category — skip straight to rating offer
+    @State private var showAlreadyThere = false
+
+    /// Live version of the spot — reflects in-session mutations.
+    private var liveSpot: Spot {
+        spotService.spots.first { $0.id == spot.id } ?? spot
+    }
+
+    /// Category IDs already on this spot — re-computed from live data.
+    private var disabledIDs: Set<String> {
+        Set(liveSpot.categories.map(\.rawValue))
+    }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+        FlezcalPickerView(
+            userPicks: picksService.picks,
+            allCategories: FoodCategory.allCategories,
+            disabledCategoryIDs: disabledIDs,
+            onSelect: { category in
+                selectedFlezcal = category
+                saveCategory(category)
+            },
+            onCancel: { dismiss() }
+        )
+        .sheet(isPresented: $showRatingFlow, onDismiss: {
+            // Swipe-to-dismiss or Skip: just finish — no thank-you unless they rated
+            if !showThankYou {
+                dismiss()
+            }
+        }) {
+            if let cat = savedCategory {
+                NavigationStack {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            Text("Rate the \(cat.displayName) here")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.top)
 
-                    // Spot header
-                    Text(spot.name)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                    Label(spot.address, systemImage: "mappin")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // Already-confirmed categories on this spot
-                    HStack(spacing: 6) {
-                        ForEach(spot.categories) { cat in
-                            HStack(spacing: 4) {
-                                Text(cat.emoji).font(.system(size: 13))
-                                Text(cat.displayName)
-                            }
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(cat.color.opacity(0.12))
-                            .foregroundStyle(cat.color)
-                            .clipShape(Capsule())
+                            RatingFlowView(
+                                categoryName: cat.displayName,
+                                existingRating: nil,
+                                onSubmit: { rating in
+                                    submitRating(rating, for: cat)
+                                },
+                                onSkip: {
+                                    showRatingFlow = false
+                                },
+                                onRemove: nil
+                            )
+                            .padding(.horizontal)
                         }
                     }
-
-                    Divider()
-
-                    Text("Which category would you like to add?")
-                        .font(.headline)
-
-                    // Selectable category cards
-                    VStack(spacing: 10) {
-                        ForEach(addableCategories) { cat in
-                            Button {
-                                selectCategory(cat)
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Text(cat.emoji)
-                                        .font(.system(size: 28))
-                                        .frame(width: 50, height: 50)
-                                        .accessibilityHidden(true)
-                                        .background(selectedCategory == cat
-                                                    ? cat.color.opacity(0.2)
-                                                    : Color(.systemGray6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(selectedCategory == cat ? cat.color : Color.clear, lineWidth: 2)
-                                        )
-
-                                    Text(cat.displayName)
-                                        .font(.headline)
-                                        .foregroundStyle(selectedCategory == cat ? cat.color : .primary)
-
-                                    Spacer()
-
-                                    if selectedCategory == cat {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(cat.color)
-                                    }
-                                }
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(selectedCategory == cat
-                                              ? cat.color.opacity(0.07)
-                                              : Color(.systemBackground))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14)
-                                                .stroke(selectedCategory == cat
-                                                        ? cat.color.opacity(0.3)
-                                                        : Color(.systemGray4).opacity(0.5),
-                                                        lineWidth: 1)
-                                        )
-                                )
+                    .navigationTitle("Rate This Flezcal")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Skip") {
+                                showRatingFlow = false
                             }
-                            .buttonStyle(.plain)
-                            .animation(.easeInOut(duration: 0.15), value: selectedCategory)
                         }
                     }
-
-                    // Website check result banner
-                    if let cat = selectedCategory {
-                        websiteCheckBanner(for: cat)
-                            .padding(.top, 4)
-                    }
-
-                    // Confirm button
-                    if let cat = selectedCategory {
-                        Button {
-                            confirmCategory(cat)
-                        } label: {
-                            Group {
-                                if isSaving {
-                                    ProgressView()
-                                } else {
-                                    Label("Confirm — add \(cat.displayName) to this spot",
-                                          systemImage: "plus.circle.fill")
-                                        .fontWeight(.semibold)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(cat.color)
-                        .disabled(isSaving || isChecking)
-                    }
                 }
-                .padding()
+                .presentationDetents([.medium, .large])
             }
-            .navigationTitle("Add Flezcal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
+        }
+        .alert("Already Added", isPresented: $showAlreadyThere) {
+            Button("Rate It") {
+                showRatingFlow = true
             }
-            .onAppear {
-                selectedCategory = addableCategories.first
-                if let first = addableCategories.first { runCheck(for: first) }
+            Button("Done") { dismiss() }
+        } message: {
+            if let cat = savedCategory {
+                Text("\(spot.name) already has \(cat.displayName). Would you like to rate it?")
             }
-            .onDisappear {
-                checkTask?.cancel()
-            }
-            .alert("Flezcal Added!", isPresented: $showSuccess) {
-                Button("Done") { dismiss() }
-            } message: {
-                if let cat = selectedCategory {
-                    Text("\(cat.displayName) has been added to \(spot.name).")
+        }
+        .alert("Thank You!", isPresented: $showThankYou) {
+            Button("Done") { dismiss() }
+        } message: {
+            Text(thankYouMessage)
+        }
+        .overlay {
+            if isSaving {
+                ZStack {
+                    Color.black.opacity(0.2).ignoresSafeArea()
+                    ProgressView("Adding Flezcal...")
+                        .padding(24)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
         }
     }
 
-    // MARK: - Website check banner
-
-    @ViewBuilder
-    private func websiteCheckBanner(for cat: SpotCategory) -> some View {
-        let name = cat.displayName.lowercased()
-        let (icon, color, message): (String, Color, String) = {
-            if isChecking {
-                return ("magnifyingglass", .secondary, "Checking their website for \(name)…")
-            }
-            switch checkResult {
-            case .confirmed:
-                return ("checkmark.seal.fill", cat.color,
-                        "We found a mention of \(name) on their website.")
-            case .relatedFound(_, let keyword):
-                return ("eye.fill", Color(red: 0.7, green: 0.5, blue: 0.0),
-                        "We found '\(keyword)' on their website — can you verify they have \(name)?")
-            case .notFound:
-                return ("questionmark.circle", .secondary,
-                        "No mention of \(name) found online — but menus aren't always posted.")
-            case .unavailable:
-                return ("wifi.slash", .secondary, "No website found. Add based on your visit.")
-            case nil:
-                return ("magnifyingglass", .secondary, "Checking their website…")
-            }
-        }()
-
-        VStack(alignment: .leading, spacing: 4) {
-            Label(message, systemImage: icon)
-                .font(.subheadline)
-                .foregroundStyle(color)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(color.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            // Disclaimer — web scans are best-effort
-            Label("Web searches aren't as reliable as your own knowledge — but we'll give it our best shot!", systemImage: "info.circle")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 4)
-        }
-    }
-
-    // MARK: - Actions
-
-    private func selectCategory(_ cat: SpotCategory) {
-        guard cat != selectedCategory else { return }
-        selectedCategory = cat
-        checkResult = nil
-        runCheck(for: cat)
-    }
-
-    /// Cache-first website check — no network if URL was already scanned this session.
-    /// Converts SpotCategory → FoodCategory for the website checker API.
-    private func runCheck(for cat: SpotCategory) {
-        guard let foodCat = FoodCategory(spotCategory: cat) else {
-            isChecking = false
-            checkResult = .unavailable
-            return
-        }
-
-        checkTask?.cancel()
-        checkResult = nil
-        isChecking = true
-
-        checkTask = Task {
-            // Level 1: cache lookup (async actor call, no network)
-            if let urlString = spot.websiteURL {
-                let cached = await websiteChecker.cachedResult(for: urlString, pick: foodCat)
-                if let cached {
-                    guard !Task.isCancelled else { return }
-                    checkResult = cached
-                    isChecking = false
-                    return
-                }
-            }
-
-            // Level 2: full targeted check (uses Brave Search only if HTML scan misses)
-            let placemark = MKPlacemark(coordinate: spot.coordinate, addressDictionary: nil)
-            let mapItem = MKMapItem(placemark: placemark)
-            mapItem.name = spot.name
-
-            let result = await websiteChecker.checkWithBraveSearch(
-                mapItem, for: foodCat, knownURL: spot.websiteURL
-            )
-            guard !Task.isCancelled else { return }
-            checkResult = result
-            isChecking = false
-        }
-    }
-
-    private func confirmCategory(_ cat: SpotCategory) {
+    private func saveCategory(_ category: FoodCategory) {
+        guard let userID = authService.userID else { return }
         isSaving = true
+
         Task {
-            let success = await spotService.addCategories(spotID: spot.id, newCategories: [cat], addedBy: authService.userID ?? "")
+            var success = false
+            var alreadyHadCategory = false
+
+            // Save curated category via addCategories
+            if let spotCat = SpotCategory(rawValue: category.id) {
+                savedCategory = spotCat
+
+                // Check if category already exists on the live spot
+                if liveSpot.categories.contains(spotCat) {
+                    alreadyHadCategory = true
+                    success = true
+                } else {
+                    success = await spotService.addCategories(
+                        spotID: spot.id,
+                        newCategories: [spotCat],
+                        addedBy: userID
+                    )
+                    if success {
+                        // Auto-create verification (bug fix: old AddCategorySheet was missing this)
+                        await VerificationService.autoVerify(spotID: spot.id, userID: userID, category: spotCat)
+                    }
+                }
+            }
+
+            // Save custom category tag
+            if category.id.hasPrefix("custom_") {
+                let tag = String(category.id.dropFirst("custom_".count))
+                _ = await spotService.addCustomCategoryTags(spotID: spot.id, tags: [tag])
+                success = true
+                // Use the first non-legacy SpotCategory as placeholder for rating
+                savedCategory = spot.categories.first
+            }
+
             await MainActor.run {
                 isSaving = false
-                if success {
+                if alreadyHadCategory {
+                    showAlreadyThere = true
+                } else if success {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    showSuccess = true
+                    showRatingFlow = true
                 }
+            }
+        }
+    }
+
+    private func submitRating(_ rating: Int, for cat: SpotCategory) {
+        guard let userID = authService.userID else {
+            showRatingFlow = false
+            return
+        }
+        Task {
+            let verificationService = VerificationService()
+            _ = await verificationService.submitRating(
+                spotID: spot.id,
+                userID: userID,
+                category: cat,
+                rating: rating,
+                spotService: spotService
+            )
+            await MainActor.run {
+                showRatingFlow = false
+                thankYouMessage = "Your rating has been saved. Thanks for helping the community!"
+                showThankYou = true
             }
         }
     }

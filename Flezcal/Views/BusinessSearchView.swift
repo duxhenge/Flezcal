@@ -3,6 +3,9 @@ import MapKit
 
 struct BusinessSearchView: View {
     let category: SpotCategory
+    /// Normalized name of a custom category to tag on the spot (e.g. "empanadas").
+    /// nil for hardcoded categories. Passed through to ConfirmSpotView for data capture.
+    var customCategoryTag: String? = nil
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var photoService: PhotoService
@@ -90,7 +93,7 @@ struct BusinessSearchView: View {
             }
             .sheet(isPresented: $showConfirmation) {
                 if let mapItem = selectedMapItem {
-                    ConfirmSpotView(mapItem: mapItem, categories: [category]) {
+                    ConfirmSpotView(mapItem: mapItem, category: category, customCategoryTag: customCategoryTag) {
                         dismiss()
                     }
                     .environmentObject(authService)
@@ -112,18 +115,16 @@ struct BusinessSearchView: View {
 
 struct ConfirmSpotView: View {
     let mapItem: MKMapItem
-    /// Categories to assign to the spot. Multi-category comes from the
-    /// multi-pick website check; single-category from BusinessSearchView.
-    let categories: [SpotCategory]
+    /// The single category the user explicitly chose from the Flezcal picker.
+    let category: SpotCategory
     /// When true the spot is marked community-verified on creation (ghost pin / Explore search).
     var preVerified: Bool = false
     /// Website-detected categories to store on the spot (from ghost pin flow).
     var websiteDetectedCategories: [String]? = nil
+    /// Normalized name of a custom category to tag on the spot (e.g. "empanadas").
+    /// Saved to Spot.customCategoryTags for data capture / future promotion.
+    var customCategoryTag: String? = nil
     let onSaved: () -> Void
-
-    /// Primary category — first in the list, used wherever the old single-category
-    /// code path still needs one value (pin colour, offerings label, etc.).
-    private var category: SpotCategory { categories.first ?? .mezcal }
 
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var spotService: SpotService
@@ -132,11 +133,8 @@ struct ConfirmSpotView: View {
 
     @State private var mezcalOfferings: [String] = [""]
     @State private var isSaving = false
-    @State private var showSuccess = false
     @State private var showError = false
-    @State private var showFirstSpotCelebration = false
     @State private var existingSpot: Spot?
-    @State private var successMessage = ""
     @State private var showSuccessOverlay = false
     @State private var overlayScale: CGFloat = 0.3
     /// Holds the saved Spot so the user can navigate to its detail view.
@@ -144,6 +142,12 @@ struct ConfirmSpotView: View {
     @State private var showSignIn = false
     /// Tracks that the user tapped "save" before signing in — auto-proceed after.
     @State private var pendingSaveAfterSignIn = false
+    /// Post-save rating flow
+    @State private var showRatingFlow = false
+    @State private var showThankYou = false
+    @State private var thankYouMessage = ""
+    /// Spot already had this category — skip straight to rating offer
+    @State private var showAlreadyThere = false
 
     var body: some View {
         NavigationStack {
@@ -222,11 +226,9 @@ struct ConfirmSpotView: View {
                                     }
                                 }
 
-                                // Show which new categories will be added
-                                let newCats = categories.filter { cat in !existing.categories.contains(cat) }
-                                if !newCats.isEmpty {
-                                    let names = newCats.map(\.displayName).joined(separator: " & ")
-                                    Label("This will also add \(names) to this spot!", systemImage: "plus.circle.fill")
+                                // Show which category will be added
+                                if !existing.categories.contains(category) {
+                                    Label("Adding \(category.displayName) to this spot", systemImage: "plus.circle.fill")
                                         .font(.caption)
                                         .fontWeight(.medium)
                                         .foregroundStyle(.green)
@@ -352,28 +354,31 @@ struct ConfirmSpotView: View {
                     }
                 }
             }
-            .alert("Success!", isPresented: $showSuccess) {
-                Button("OK") {
+            .alert("Already on \(AppConstants.appName)", isPresented: $showAlreadyThere) {
+                Button("Rate It") {
+                    showRatingFlow = true
+                }
+                Button("Done") {
                     dismiss()
                     onSaved()
                 }
             } message: {
-                Text("\(successMessage)\n\nYou can rate individual categories from the spot's detail page.")
+                Text("\(mapItem.name ?? "This spot") already has \(category.displayName). Would you like to rate it?")
             }
-            .alert("🍮 ¡Eres un Flanático!", isPresented: $showFirstSpotCelebration) {
-                Button("¡Vámonos!") {
+            .alert("Thank You!", isPresented: $showThankYou) {
+                Button("Done") {
                     dismiss()
                     onSaved()
                 }
             } message: {
-                Text("You added your first spot to Flezcal! The community thanks you. You are now officially a Flanático. 🥃\n\nVisit the spot to rate individual categories.")
+                Text(thankYouMessage)
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(spotService.errorMessage ?? "Failed to save. Please try again.")
             }
-            // Success overlay — brief animated confirmation before alert appears
+            // Success overlay — brief animated confirmation before rating prompt
             .overlay {
                 if showSuccessOverlay {
                     ZStack {
@@ -396,6 +401,48 @@ struct ConfirmSpotView: View {
                     .transition(.opacity)
                 }
             }
+            // Post-save rating flow — appears after success overlay
+            .sheet(isPresented: $showRatingFlow, onDismiss: {
+                // Swipe-to-dismiss or Skip: just finish — no thank-you unless they rated
+                if !showThankYou {
+                    dismiss()
+                    onSaved()
+                }
+            }) {
+                NavigationStack {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            Text("Rate the \(category.displayName) here")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.top)
+
+                            RatingFlowView(
+                                categoryName: category.displayName,
+                                existingRating: nil,
+                                onSubmit: { rating in
+                                    submitPostSaveRating(rating)
+                                },
+                                onSkip: {
+                                    showRatingFlow = false
+                                },
+                                onRemove: nil
+                            )
+                            .padding(.horizontal)
+                        }
+                    }
+                    .navigationTitle("Rate This Flezcal")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Skip") {
+                                showRatingFlow = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+            }
         }
     }
 
@@ -417,6 +464,11 @@ struct ConfirmSpotView: View {
 
         isSaving = true
 
+        // Re-check for existing spot at save time — catches state changes
+        // that happened between sheet open and save (e.g. sign-in delay,
+        // another user adding the spot concurrently).
+        checkForExistingSpot()
+
         // Split on commas so "A, B, C" becomes three separate brands
         let filteredOfferings = mezcalOfferings
             .flatMap { $0.split(separator: ",") }
@@ -426,35 +478,29 @@ struct ConfirmSpotView: View {
         Task {
             if let existing = existingSpot {
                 var didSomething = false
-                var messages: [String] = []
 
-                // Add any new categories not already on the spot
-                let newCats = categories.filter { cat in !existing.categories.contains(cat) }
-                if !newCats.isEmpty {
-                    let catSuccess = await spotService.addCategories(spotID: existing.id, newCategories: newCats, addedBy: userID)
-                    if catSuccess {
-                        let names = newCats.map(\.displayName).joined(separator: ", ")
-                        messages.append("\(names) added to \(existing.name).")
-                        didSomething = true
+                // Add the category (also unhides if the spot was soft-deleted)
+                let catSuccess = await spotService.addCategories(spotID: existing.id, newCategories: [category], addedBy: userID)
+                if catSuccess && !existing.categories.contains(category) {
+                    didSomething = true
 
-                        // Auto-create verifications for the newly added categories
-                        let verificationService = VerificationService()
-                        for cat in newCats {
-                            _ = await verificationService.submitVote(
-                                spotID: existing.id,
-                                userID: userID,
-                                category: cat,
-                                vote: true
-                            )
-                        }
-                    }
+                    // Auto-create verification for the newly added category
+                    await VerificationService.autoVerify(spotID: existing.id, userID: userID, category: category)
+                }
+                // If the spot was hidden (soft-deleted), count unhiding as a change
+                if existing.isHidden && catSuccess {
+                    didSomething = true
+                }
+
+                // Save custom category tag if present
+                if let tag = customCategoryTag {
+                    _ = await spotService.addCustomCategoryTags(spotID: existing.id, tags: [tag])
                 }
 
                 // Merge offerings for the primary category
                 if !filteredOfferings.isEmpty {
                     let offeringsSuccess = await spotService.addOfferings(spotID: existing.id, category: category, newOfferings: filteredOfferings)
                     if offeringsSuccess {
-                        messages.append("\(category.offeringsLabel) have been updated.")
                         didSomething = true
                     }
                 }
@@ -469,22 +515,21 @@ struct ConfirmSpotView: View {
                 if didSomething {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    successMessage = messages.joined(separator: " ")
-                    showSuccess = true
+                    // Go to rating prompt
+                    showRatingFlow = true
                 } else {
-                    successMessage = "This spot is already in \(AppConstants.appName). No changes to make."
-                    showSuccess = true
+                    // Category already existed, nothing changed — offer to rate it
+                    showAlreadyThere = true
                 }
             } else {
                 // Create new spot
-                let categoryAttribution = Dictionary(uniqueKeysWithValues: categories.map { ($0.rawValue, userID) })
                 let spot = Spot(
                     name: mapItem.name ?? "Unknown",
                     address: mapItem.placemark.formattedAddress ?? "Unknown address",
                     latitude: coordinate.latitude,
                     longitude: coordinate.longitude,
                     mapItemName: mapItem.name ?? "",
-                    categories: categories,
+                    categories: [category],
                     addedByUserID: userID,
                     addedDate: Date(),
                     averageRating: 0,
@@ -492,28 +537,19 @@ struct ConfirmSpotView: View {
                     offerings: filteredOfferings.isEmpty ? nil : [category.rawValue: filteredOfferings],
                     websiteURL: mapItem.url?.absoluteString,
                     communityVerified: preVerified,
-                    categoryAddedBy: categoryAttribution,
-                    websiteDetectedCategories: websiteDetectedCategories
+                    categoryAddedBy: [category.rawValue: userID],
+                    websiteDetectedCategories: websiteDetectedCategories,
+                    customCategoryTags: customCategoryTag.map { [$0] }
                 )
 
-                let isFirstSpot = spotService.spots.filter { $0.addedByUserID == userID }.isEmpty
                 let success = await spotService.addSpot(spot)
                 isSaving = false
                 if success {
                     savedSpot = spot
 
-                    // Auto-create verification documents for each confirmed category
-                    // The user adding a spot IS their verification (vote: true)
+                    // Auto-create verification — the user adding a spot IS their verification
                     Task {
-                        let verificationService = VerificationService()
-                        for cat in categories {
-                            _ = await verificationService.submitVote(
-                                spotID: spot.id,
-                                userID: userID,
-                                category: cat,
-                                vote: true
-                            )
-                        }
+                        await VerificationService.autoVerify(spotID: spot.id, userID: userID, category: category)
                     }
 
                     // Show pin-drop animation
@@ -533,16 +569,11 @@ struct ConfirmSpotView: View {
                         }
                     }
 
-                    // Dismiss overlay after 1.4s then show success alert/celebration
+                    // Dismiss overlay after 1.4s then show rating prompt
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                         withAnimation { showSuccessOverlay = false }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            if isFirstSpot {
-                                showFirstSpotCelebration = true
-                            } else {
-                                successMessage = "\(mapItem.name ?? "This spot") has been added to \(AppConstants.appName)."
-                                showSuccess = true
-                            }
+                            showRatingFlow = true
                         }
                     }
                 } else {
@@ -550,6 +581,29 @@ struct ConfirmSpotView: View {
                     generator.notificationOccurred(.error)
                     showError = true
                 }
+            }
+        }
+    }
+
+    private func submitPostSaveRating(_ rating: Int) {
+        guard let spot = savedSpot,
+              let userID = authService.userID else {
+            showRatingFlow = false
+            return
+        }
+        Task {
+            let verificationService = VerificationService()
+            _ = await verificationService.submitRating(
+                spotID: spot.id,
+                userID: userID,
+                category: category,
+                rating: rating,
+                spotService: spotService
+            )
+            await MainActor.run {
+                showRatingFlow = false
+                thankYouMessage = "Your rating has been saved. Thanks for helping the community!"
+                showThankYou = true
             }
         }
     }

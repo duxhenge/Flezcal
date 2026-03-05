@@ -30,12 +30,31 @@ class CustomCategoryService: ObservableObject {
                 .limit(to: 100)
                 .getDocuments()
 
+            #if DEBUG
+            print("[CustomCategory] fetchAll: \(snapshot.documents.count) documents in '\(Self.collectionName)' collection")
+            #endif
+
             customCategories = snapshot.documents.compactMap { doc in
-                try? doc.data(as: CustomCategory.self)
+                do {
+                    let cat = try doc.data(as: CustomCategory.self)
+                    #if DEBUG
+                    print("[CustomCategory]   Decoded: \(cat.emoji) \(cat.displayName) pickCount=\(cat.pickCount)")
+                    #endif
+                    return cat
+                } catch {
+                    #if DEBUG
+                    print("[CustomCategory]   DECODE FAILED for doc '\(doc.documentID)': \(error)")
+                    print("[CustomCategory]   Raw data: \(doc.data())")
+                    #endif
+                    return nil
+                }
             }
         } catch {
             errorMessage = "Failed to load custom categories: \(error.localizedDescription)"
             CrashReporter.record(error, context: "CustomCategoryService.fetchAll")
+            #if DEBUG
+            print("[CustomCategory] fetchAll ERROR: \(error.localizedDescription)")
+            #endif
         }
         isLoading = false
     }
@@ -52,9 +71,18 @@ class CustomCategoryService: ObservableObject {
     /// is never persisted, tracked, or visible to other users.
     /// Returns the FoodCategory representation for use in the pick system.
     func createOrIncrement(_ category: CustomCategory) async -> FoodCategory? {
+        #if DEBUG
+        print("[CustomCategory] createOrIncrement called: '\(category.displayName)' normalized='\(category.normalizedName)' emoji=\(category.emoji) createdBy=\(category.createdBy)")
+        print("[CustomCategory]   websiteKeywords: \(category.websiteKeywords)")
+        print("[CustomCategory]   mapSearchTerms: \(category.mapSearchTerms)")
+        #endif
+
         // Silently skip Firestore for blocked terms — UI works normally but
         // nothing is persisted, tracked, or visible to other users.
         guard !CustomCategory.isBlocked(category.normalizedName) else {
+            #if DEBUG
+            print("[CustomCategory]   BLOCKED — skipping Firestore write")
+            #endif
             return category.toFoodCategory()
         }
 
@@ -64,6 +92,9 @@ class CustomCategoryService: ObservableObject {
         do {
             let doc = try await docRef.getDocument()
             if doc.exists {
+                #if DEBUG
+                print("[CustomCategory]   Doc EXISTS in Firestore — checking picker dedup")
+                #endif
                 // Already exists — only increment if this user hasn't picked before
                 let pickerDoc = try await pickerRef.getDocument()
                 if !pickerDoc.exists {
@@ -72,24 +103,43 @@ class CustomCategoryService: ObservableObject {
                     if let index = customCategories.firstIndex(where: { $0.id == category.id }) {
                         customCategories[index].pickCount += 1
                     }
+                    #if DEBUG
+                    print("[CustomCategory]   Incremented pickCount (new picker)")
+                    #endif
+                } else {
+                    #if DEBUG
+                    print("[CustomCategory]   User already picked this — no increment")
+                    #endif
                 }
             } else {
+                #if DEBUG
+                print("[CustomCategory]   Doc NOT found — creating NEW document")
+                #endif
                 // New — create with pickCount = 1 and record this user as first picker
                 var newCat = category
                 newCat.pickCount = 1
                 try docRef.setData(from: newCat)
                 try await pickerRef.setData(["pickedDate": FieldValue.serverTimestamp()])
                 customCategories.insert(newCat, at: 0)
+                #if DEBUG
+                print("[CustomCategory]   Created successfully — pickCount=1")
+                #endif
             }
 
             // Log a timestamped event for trend tracking.
             // Fire-and-forget — don't block the pick flow if this fails.
             logSearchEvent(term: category.normalizedName, userID: category.createdBy)
 
+            #if DEBUG
+            print("[CustomCategory]   Returning FoodCategory id=custom_\(category.normalizedName)")
+            #endif
             return category.toFoodCategory()
         } catch {
             errorMessage = "Failed to save custom category: \(error.localizedDescription)"
             CrashReporter.record(error, context: "CustomCategoryService.createOrIncrement")
+            #if DEBUG
+            print("[CustomCategory]   ERROR: \(error.localizedDescription)")
+            #endif
             return nil
         }
     }
