@@ -1,0 +1,196 @@
+name: Flezcal CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCHEME: Flezcal
+  DESTINATION: "platform=iOS Simulator,name=iPhone 16,OS=18.2"
+  XCODEPROJ: Flezcal.xcodeproj
+
+jobs:
+  # ─── Job 1: Secrets Leak Detection ───────────────────────────────
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for hardcoded API keys
+        run: |
+          echo "Scanning for potential secrets in tracked files..."
+          PATTERNS=(
+            'BSA[a-zA-Z0-9]{20,}'
+            'AIza[a-zA-Z0-9_-]{35}'
+            'sk-[a-zA-Z0-9]{20,}'
+            'PRIVATE.KEY'
+            'BEGIN RSA PRIVATE KEY'
+            'BEGIN EC PRIVATE KEY'
+            'password\s*=\s*"[^"]{8,}'
+          )
+
+          FAILED=0
+          for pattern in "${PATTERNS[@]}"; do
+            MATCHES=$(grep -rn --include="*.swift" --include="*.xcconfig" \
+              --include="*.plist" --include="*.json" \
+              -E "$pattern" . \
+              --exclude-dir=build \
+              --exclude-dir=.git \
+              --exclude-dir=SourcePackages \
+              --exclude="Secrets.xcconfig" \
+              --exclude="GoogleService-Info.plist" \
+              --exclude="serviceAccountKey.json" \
+              || true)
+            if [ -n "$MATCHES" ]; then
+              echo "::warning::Potential secret pattern found: $pattern"
+              echo "$MATCHES"
+              FAILED=1
+            fi
+          done
+
+          # Check .gitignore includes required entries
+          for file in "Secrets.xcconfig" "GoogleService-Info.plist" "serviceAccountKey.json"; do
+            if ! grep -q "$file" .gitignore; then
+              echo "::error::$file is NOT in .gitignore"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::Secrets scan found issues. Review warnings above."
+            exit 1
+          fi
+          echo "✓ Secrets scan passed."
+
+  # ─── Job 2: SwiftLint ────────────────────────────────────────────
+  lint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run SwiftLint
+        uses: norio-nomura/action-swiftlint@3.2.1
+        with:
+          args: --strict
+
+  # ─── Job 3: Build + Test ─────────────────────────────────────────
+  build-and-test:
+    name: Build & Unit Tests
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Inject Secrets.xcconfig from GitHub Secret
+      - name: Inject Secrets.xcconfig
+        run: |
+          echo "${{ secrets.SECRETS_XCCONFIG }}" > Secrets.xcconfig
+          if [ ! -f Secrets.xcconfig ]; then
+            echo "::error::Failed to create Secrets.xcconfig"
+            exit 1
+          fi
+          echo "✓ Secrets.xcconfig injected."
+
+      # Inject GoogleService-Info.plist from base64-encoded GitHub Secret
+      - name: Inject GoogleService-Info.plist
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode > Flezcal/GoogleService-Info.plist
+          if [ ! -f Flezcal/GoogleService-Info.plist ]; then
+            echo "::error::Failed to create GoogleService-Info.plist"
+            exit 1
+          fi
+          echo "✓ GoogleService-Info.plist injected."
+
+      # Resolve SPM dependencies with caching
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            build/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Flezcal.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project $XCODEPROJ \
+            -scheme $SCHEME \
+            -clonedSourcePackagesDirPath build/SourcePackages
+
+      # Build for testing
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project $XCODEPROJ \
+            -scheme $SCHEME \
+            -destination "$DESTINATION" \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | xcpretty --color
+
+      # Run unit tests only (skip UI tests)
+      - name: Unit Tests
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project $XCODEPROJ \
+            -scheme $SCHEME \
+            -destination "$DESTINATION" \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            -only-testing:FlezcalTests \
+            -enableCodeCoverage YES \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | xcpretty --color
+
+      # Extract and report code coverage
+      - name: Code Coverage Report
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xccov view --report --json TestResults.xcresult > coverage.json 2>/dev/null || true
+            if [ -f coverage.json ]; then
+              COVERAGE=$(python3 -c "
+          import json
+          with open('coverage.json') as f:
+              data = json.load(f)
+          targets = data.get('targets', [])
+          for t in targets:
+              if t.get('name') == 'Flezcal.app':
+                  pct = t.get('lineCoverage', 0) * 100
+                  print(f'{pct:.1f}')
+                  break
+          else:
+              print('0.0')
+          " 2>/dev/null || echo "0.0")
+              echo "### Code Coverage: ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
+              echo "Coverage: ${COVERAGE}%"
+            fi
+          else
+            echo "Test results not available"
+          fi
+
+      # Upload test results as artifact
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 14
