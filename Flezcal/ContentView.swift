@@ -116,6 +116,11 @@ struct ContentView: View {
                 showWelcome = true
             }
         }
+        .onChange(of: authService.isSignedIn) { _, signedIn in
+            if signedIn {
+                picksService.ensurePicksSynced()
+            }
+        }
         .onChange(of: authService.needsDisplayNamePrompt) { _, needsPrompt in
             if needsPrompt {
                 promptedName = ""

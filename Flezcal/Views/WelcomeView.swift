@@ -108,9 +108,9 @@ struct WelcomeView: View {
                             icon: "storefront",
                             tint: .orange,
                             headline: "Own a Spot?",
-                            message: "If you own or manage a place that serves the best version of these foods and drinks, you can update your spot information just like any other user — for free. Want to take it further? Contact us to become an Owner Verified spot. You'll get a verified badge, the ability to lock your menu details, list your brands, and add a reservation link.",
-                            linkText: "Contact us at support@flezcal.app",
-                            linkURL: "mailto:support@flezcal.app"
+                            message: "If you own or manage a place that serves great food or drinks, add your spot and update your offerings just like any other user, for free. Want a verified badge, locked menu details, and a reservation link? Contact us about Owner Verification.",
+                            linkText: "Contact us at contact@flezcal.app",
+                            linkURL: "mailto:contact@flezcal.app"
                         )
                         .padding(.horizontal, 24)
 
@@ -304,23 +304,23 @@ private struct WelcomeShapeCard: View {
                 .font(.headline)
                 .fontWeight(.bold)
 
-            Text("Have a suggestion for the next food or drink to track? The app will track all the custom searches and look for trends.")
+            Text("Flezcal grows with its community. The categories you search for, the spots you add, the ratings you leave, all of it shapes what comes next. Have an idea? We're listening.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Email link
-            Link(destination: AppConstants.supportMailURL) {
+            Link(destination: URL(string: "mailto:contact@flezcal.app")!) {
                 HStack(spacing: 6) {
                     Image(systemName: "envelope.fill")
                         .font(.caption)
-                    Text("Comments? Email us at support@flezcal.app")
+                    Text("Tell us at contact@flezcal.app")
                         .font(.footnote)
                 }
                 .foregroundStyle(.orange)
             }
-            .accessibilityLabel("Email support at support@flezcal.app")
+            .accessibilityLabel("Email contact at contact@flezcal.app")
             .padding(.top, 4)
         }
         .padding(.vertical, 20)

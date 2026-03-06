@@ -55,7 +55,7 @@ struct CreateCustomCategoryView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(.purple)
 
-                        Text("Custom Flezcals help you search and tag spots, but don't include ratings, verifications, or offerings yet. Popular custom Flezcals may be promoted to full status with all features.")
+                        Text("Custom Flezcals let you search and tag spots, but don't include ratings, verifications, or offerings yet. Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -249,7 +249,7 @@ struct CreateCustomCategoryView: View {
             .alert("Category Created!", isPresented: $showSuccess) {
                 Button("Done") { dismiss() }
             } message: {
-                Text("\(name.trimmingCharacters(in: .whitespaces)) has been added to your picks. Ghost pins will now search for it!")
+                Text("\(name.trimmingCharacters(in: .whitespaces)) has been added to your picks! Ghost pins will now search for it. Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
             }
         }
     }

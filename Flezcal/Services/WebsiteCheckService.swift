@@ -160,9 +160,10 @@ actor WebsiteCheckService {
         let pickIDs = Set(picks.map(\.id))
         var results: [String: Set<String>] = [:]
         for suggestion in suggestions {
-            guard let url = suggestion.mapItem.url,
-                  !isSocialMediaURL(url) else { continue }
-            if let cached = htmlCache[url.absoluteString] {
+            guard let rawURL = suggestion.mapItem.url,
+                  !isSocialMediaURL(rawURL) else { continue }
+            let key = upgradeToHTTPS(rawURL).absoluteString
+            if let cached = htmlCache[key] {
                 results[suggestion.id] = cached.confirmed.intersection(pickIDs)
             }
         }
@@ -193,11 +194,14 @@ actor WebsiteCheckService {
         var toFetch: [(id: String, url: URL)] = []
 
         for suggestion in suggestions {
-            guard let url = suggestion.mapItem.url,
-                  !isSocialMediaURL(url) else {
+            guard let rawURL = suggestion.mapItem.url,
+                  !isSocialMediaURL(rawURL) else {
                 // No URL or social media URL — skip entirely (not added to results)
                 continue
             }
+            // Normalize to https:// so cache keys match the full check
+            // (resolveURL applies upgradeToHTTPS before looking up the cache).
+            let url = upgradeToHTTPS(rawURL)
             let key = url.absoluteString
             if let cached = htmlCache[key] {
                 // Already scanned — filter to user's picks.
@@ -274,13 +278,16 @@ actor WebsiteCheckService {
 
         for item in items {
             guard !isSocialMediaURL(item.url) else { continue }
-            let key = item.url.absoluteString
+            // Normalize to https:// so cache keys match the full check
+            // (resolveURL applies upgradeToHTTPS before looking up the cache).
+            let normalized = upgradeToHTTPS(item.url)
+            let key = normalized.absoluteString
             if let cached = htmlCache[key] {
                 if !cached.confirmed.intersection(pickIDs).isEmpty {
                     matchedIndices.insert(item.index)
                 }
             } else {
-                toFetch.append((id: item.index, url: item.url))
+                toFetch.append((id: item.index, url: normalized))
             }
         }
 

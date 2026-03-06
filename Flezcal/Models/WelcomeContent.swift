@@ -34,27 +34,27 @@ struct WelcomeContent: Codable {
 
     // MARK: - Fallback content shown when Firestore is unreachable
     static let fallback = WelcomeContent(
-        version: "0",
-        title: "Welcome to Flezcal 🍮",
-        subtitle: "Discover the Flezcals you crave and the spots that serve them — starting with mezcal, flan, and handmade tortillas.",
-        tagline: "Flezcal is a combination of Flan and Mezcal. Two favorite foods and drinks. Flezcal is now a word that means \"Favorite Food and/or Drink\".",
+        version: "2.0",
+        title: "Welcome to Flezcal!",
+        subtitle: "50 categories and growing, from mezcal and birria to natural wine and high-end tequila. Pick the ones you care about and help build the guide.",
+        tagline: "A Flezcal is your favorite food or drink, the thing you'll drive across town for. The name started as Flan + Mezcal, but a Flezcal is now anything you're passionate about finding and sharing.",
         items: [
-            WelcomeItem(icon: "map",             text: "🗺️ Discover Flezcals on an interactive map"),
-            WelcomeItem(icon: "plus.circle",      text: "➕ Add your Flezcal spots. Who does it best?"),
-            WelcomeItem(icon: "star.fill",        text: "⭐ Rate your favorite Flezcals at the spots that offer them"),
-            WelcomeItem(icon: "trophy",           text: "🏆 Climb the leaderboard as you contribute"),
-            WelcomeItem(icon: "sparkles",         text: "✨ Ghost pins show unconfirmed spots — help verify them"),
-            WelcomeItem(icon: "heart.fill",       text: "❤️ Share the joy and have fun"),
+            WelcomeItem(icon: "fork.knife",       text: "🍽️ Pick your Flezcals. Choose up to 3 foods or drinks you're passionate about. These drive your map and search results."),
+            WelcomeItem(icon: "map",               text: "🗺️ Find spots nearby. The map scans restaurant and bar menus to surface places that carry what you're looking for."),
+            WelcomeItem(icon: "plus.circle",       text: "➕ Share what you know. Found a spot with incredible mole or a mezcal list worth the trip? Add it. The best finds come from people who actually care."),
+            WelcomeItem(icon: "star.fill",         text: "⭐ Rate and verify. Who does it best? Rate Flezcals at your spots and verify what others have found."),
+            WelcomeItem(icon: "sparkles",          text: "✨ Create your own. Don't see your Flezcal? Create a custom one. When enough people search for the same thing, it becomes an official category."),
         ],
         pages: [
-            WelcomePage(icon: "map.fill",             headline: "Explore the Map",        description: "Pan and zoom to discover ghost pins — places that might have what you're craving. Tap 'Search This Area' after moving the map to find more. Search becomes more powerful over time with community input.", color: "orange"),
-            WelcomePage(icon: "magnifyingglass",      headline: "Search by Name",         description: "Go to the Spots tab and use Explore to search any restaurant, bar or store by name. Tap a result to check their offerings, or tap the map icon to see it on the map.", color: "blue"),
-            WelcomePage(icon: "heart.circle.fill",    headline: "Pick Your Cravings",     description: "We are launching a number of items we're passionate about, starting with mezcal, flan, and handmade tortillas. Plus you can add one custom Flezcal of your own. Over time, the list will grow based on community feedback.", color: "pink"),
-            WelcomePage(icon: "checkmark.seal.fill",  headline: "Community Verified",     description: "Vote to confirm a spot has what you are looking for or check what others have verified. The community builds the guide together.", color: "green"),
-            WelcomePage(icon: "plus.circle.fill",     headline: "Grow the Guide",         description: "Add spots that offer the best version of your Flezcals. Climb the leaderboard as you contribute to the community.", color: "purple"),
+            WelcomePage(icon: "plus.circle.fill",     headline: "Share What You Know",       description: "The most valuable thing you can do is add a spot. Your knowledge of who serves the best version of something, that's what makes this useful. Share it.", color: "orange"),
+            WelcomePage(icon: "map.fill",             headline: "The Map Works for You",     description: "Pick your Flezcals and the map highlights matches nearby. Green pins are community-verified spots. Green ghost pins are menu-scanned matches. Yellow pins haven't been checked yet. Tap any pin to dig deeper.", color: "blue"),
+            WelcomePage(icon: "list.bullet",          headline: "Browse All Spots",          description: "The Spots tab is your community directory, every spot added by the community, searchable and sortable. Filter by category, check ratings, and find verified places at a glance.", color: "orange"),
+            WelcomePage(icon: "heart.circle.fill",    headline: "Categories Evolve",         description: "The 50 built-in categories are just the start. Custom searches get tracked, and when a pattern emerges, it becomes official. The community decides what matters.", color: "pink"),
+            WelcomePage(icon: "trophy.fill",          headline: "Community Verified",        description: "Anyone can add a spot. Anyone can verify it. Ratings and verifications build trust and help the best places rise to the top. Check the leaderboard to see who's leading the way.", color: "green"),
+            WelcomePage(icon: "person.circle.fill",   headline: "Track Your Impact",         description: "Every spot you add, every rating, every verification counts toward your rank. Check your profile to see your score, your progress, and your top Flezcals.", color: "purple"),
         ],
         footer: "",
-        changeNote: "",
-        changeDate: ""
+        changeNote: "50 built-in Flezcal categories, redesigned profile with rank progress, faster map search, and pin-type toggles.",
+        changeDate: "March 2026"
     )
 }

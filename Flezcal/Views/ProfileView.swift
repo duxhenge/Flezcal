@@ -196,40 +196,40 @@ struct SignedInProfileView: View {
                     .padding(.vertical, 4)
                 }
 
-                // Activity breakdown
-                Section("Your Contributions") {
-                    Label("Spots Added", systemImage: "mappin.circle")
-                        .badge("\(stats.spotsAdded)")
+                // Your Impact — redesigned contributions section
+                Section("Your Impact") {
+                    // Group 1: Next Rank Progress
+                    rankProgressRow(stats: stats)
 
-                    HStack {
-                        FlanIcon(size: 20)
-                        Text("Flan Spots")
-                        Spacer()
-                        Text("\(stats.flanSpotsAdded)")
-                            .foregroundStyle(.secondary)
+                    // Group 2: Score Breakdown Grid
+                    scoreBreakdownRow(stats: stats)
+
+                    // Group 3: Top Flezcals Pills
+                    topCategoriesRow(stats: stats)
+
+                    // Group 4: Brands & Offerings Collector badge
+                    if stats.brandsLogged > 0 {
+                        brandCollectorRow(stats: stats)
                     }
-
-                    HStack {
-                        VeladoraIcon(size: 20)
-                        Text("Mezcal Spots")
-                        Spacer()
-                        Text("\(stats.mezcalSpotsAdded)")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Label("Brands Listed", systemImage: "list.bullet")
-                        .badge("\(stats.brandsLogged)")
-
-                    Label("Ratings Given", systemImage: "flame")
-                        .badge("\(stats.ratingsGiven)")
                 }
             } else {
-                // Fallback while loading
-                Section("Activity") {
-                    Label("Spots Added", systemImage: "mappin.circle")
-                        .badge("--")
-                    Label("Ratings Given", systemImage: "flame")
-                        .badge("--")
+                // Zero-state while loading or no activity
+                Section("Your Impact") {
+                    VStack(spacing: 12) {
+                        Image(systemName: "star.circle")
+                            .font(.title)
+                            .foregroundStyle(.orange.opacity(0.5))
+
+                        Text("Start Your Journey")
+                            .font(.headline)
+
+                        Text("Add your first spot, rate a find, or verify a listing to begin climbing the ranks.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
                 }
             }
 
@@ -457,6 +457,248 @@ struct SignedInProfileView: View {
             verifications: verificationService.allVerifications
         )
         myRank = ContributorStatsBuilder.rankPosition(userID: userID, allStats: allStats)
+    }
+
+    // MARK: - Your Impact Groups
+
+    /// Group 1: Progress bar toward the next rank
+    @ViewBuilder
+    private func rankProgressRow(stats: ContributorStats) -> some View {
+        let current = RankConfig.currentLevel(for: stats.score)
+
+        if let next = RankConfig.nextLevel(for: stats.score) {
+            // Show progress toward next rank
+            let progressValue = Double(stats.score - current.minScore)
+            let progressTotal = Double(next.minScore - current.minScore)
+            let remaining = next.minScore - stats.score
+
+            VStack(spacing: 8) {
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: current.icon)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Text(current.title)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Text(next.title)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: next.icon)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ProgressView(value: progressValue, total: progressTotal)
+                    .tint(.orange)
+
+                if stats.score == 0 {
+                    Text("Add a spot or rate a find to get started!")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(stats.score) / \(next.minScore) pts \u{2022} \(remaining) pts to \(next.title)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        } else {
+            // Max rank achieved
+            HStack {
+                Image(systemName: current.icon)
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(current.title)
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                    Text("Maximum rank achieved")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(stats.score) pts")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.orange)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// Group 2: 5-column score breakdown showing all scoring activities
+    @ViewBuilder
+    private func scoreBreakdownRow(stats: ContributorStats) -> some View {
+        HStack(spacing: 0) {
+            ImpactStat(
+                icon: "mappin.circle.fill",
+                value: stats.spotsAdded,
+                label: "Spots",
+                points: "+10 ea",
+                isHighValue: true
+            )
+            Spacer()
+            ImpactStat(
+                icon: "tag.fill",
+                value: stats.categoriesIdentified,
+                label: "Finds",
+                points: "+3 ea",
+                isHighValue: true
+            )
+            Spacer()
+            ImpactStat(
+                icon: "flame.fill",
+                value: stats.ratingsGiven,
+                label: "Ratings",
+                points: "+5 ea",
+                isHighValue: true
+            )
+            Spacer()
+            ImpactStat(
+                icon: "list.bullet",
+                value: stats.brandsLogged,
+                label: "Brands",
+                points: "+1 ea",
+                isHighValue: false
+            )
+            Spacer()
+            ImpactStat(
+                icon: "checkmark.circle.fill",
+                value: stats.verificationsGiven,
+                label: "Confirms",
+                points: "+1 ea",
+                isHighValue: false
+            )
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Group 3: Top categories as colored capsule pills
+    @ViewBuilder
+    private func topCategoriesRow(stats: ContributorStats) -> some View {
+        let topCats = stats.topCategories(3)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your Top Finds")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+
+            if topCats.isEmpty {
+                Text("Add a spot to see your top categories here.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .italic()
+            } else {
+                FlowLayout(spacing: 8) {
+                    ForEach(topCats, id: \.id) { entry in
+                        if let cat = SpotCategory(rawValue: entry.id) {
+                            HStack(spacing: 4) {
+                                Text(cat.emoji)
+                                    .font(.callout)
+                                Text(cat.displayName)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text("\u{00D7}\(entry.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(cat.color.opacity(0.12))
+                            .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Group 4: Brands & Offerings Collector badge with progress
+    @ViewBuilder
+    private func brandCollectorRow(stats: ContributorStats) -> some View {
+        let threshold = RankConfig.brandCollectorThreshold
+
+        HStack(spacing: 12) {
+            Image(systemName: "shippingbox.fill")
+                .font(.title3)
+                .foregroundStyle(stats.isBrandCollector ? .green : .orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Brands & Offerings Collector")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                if stats.isBrandCollector {
+                    Text("\(stats.brandsLogged) unique brands logged")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Log \(threshold - stats.brandsLogged) more to earn!")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ProgressView(value: Double(stats.brandsLogged), total: Double(threshold))
+                        .tint(.orange)
+                }
+            }
+
+            Spacer()
+
+            if stats.isBrandCollector {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+            } else {
+                Text("\(stats.brandsLogged)/\(threshold)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(stats.isBrandCollector ? Color.green.opacity(0.08) : Color.orange.opacity(0.06))
+        )
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Impact Stat
+
+/// Compact vertical stat column used in the score breakdown grid.
+private struct ImpactStat: View {
+    let icon: String
+    let value: Int
+    let label: String
+    let points: String
+    let isHighValue: Bool
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(isHighValue ? .orange : .secondary)
+            Text("\(value)")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(points)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(value) \(label), \(points)")
     }
 }
 

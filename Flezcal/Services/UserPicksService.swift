@@ -33,13 +33,36 @@ class UserPicksService: ObservableObject {
     /// Number of custom picks the user has created this session.
     @Published private(set) var customPickCount: Int = 0
 
+    /// User's chosen search radius in degrees. Controls how wide the Apple Maps
+    /// search area is for both Explore and Map tabs. Default 0.5° ≈ 35 miles.
+    @Published var searchRadiusDegrees: Double = 0.5
+
     private let defaultsKey = "userFoodCategoryPicks"
     private let customPicksKey = "userCustomPicks"
+    private let searchRadiusKey = "userSearchRadiusDegrees"
+    /// IDs of built-in categories whose mapSearchTerms the user intentionally
+    /// customized via EditSpotSearchView. These are NOT refreshed from the
+    /// static definition on load — the user's edits take precedence.
+    private let customizedTermsKey = "userCustomizedTermsIDs"
 
     init() {
         picks = loadPicks()
         customPickCount = loadCustomPickCount()
+        searchRadiusDegrees = loadSearchRadius()
         FoodCategory.registerUserPicks(picks)
+        // Sync default picks to Firestore on launch. On first launch this
+        // ensures the 3 default categories get counted even if the user never
+        // changes their picks. The guard inside syncPicksToFirestore() bails
+        // if the user isn't signed in yet; that's fine because AuthService
+        // triggers a re-sync via ensurePicksSynced() once auth settles.
+        syncPicksToFirestore()
+    }
+
+    /// Called after sign-in to ensure picks are synced to Firestore.
+    /// On first launch, init() calls syncPicksToFirestore() but the user
+    /// isn't authenticated yet so the guard bails. This fills the gap.
+    func ensurePicksSynced() {
+        syncPicksToFirestore()
     }
 
     // MARK: - Public API
@@ -97,13 +120,68 @@ class UserPicksService: ObservableObject {
 
     /// Replace an existing pick with an updated version (e.g. edited search terms).
     /// Works for both built-in and custom picks. The old and new must have the same ID.
+    /// Marks built-in categories as user-customized so their terms aren't overwritten
+    /// by code updates on next load.
     /// Returns false if not found.
     @discardableResult
     func updatePick(_ updated: FoodCategory) -> Bool {
         guard let index = picks.firstIndex(where: { $0.id == updated.id }) else { return false }
         picks[index] = updated
+        // Mark this built-in category as intentionally customized so loadPicks
+        // won't overwrite the user's edits with the static definition.
+        if !updated.id.hasPrefix("custom_") {
+            var ids = loadCustomizedTermsIDs()
+            ids.insert(updated.id)
+            UserDefaults.standard.set(Array(ids), forKey: customizedTermsKey)
+        }
         savePicks()
         return true
+    }
+
+    /// Clears the "user-customized" flag for a category, so its terms will be
+    /// refreshed from the static definition on next load. Called by
+    /// EditSpotSearchView's "Reset to defaults" when the user saves default terms.
+    func clearCustomizedFlag(for categoryID: String) {
+        var ids = loadCustomizedTermsIDs()
+        ids.remove(categoryID)
+        UserDefaults.standard.set(Array(ids), forKey: customizedTermsKey)
+    }
+
+    private func loadCustomizedTermsIDs() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: customizedTermsKey) ?? [])
+    }
+
+    // MARK: - Search Radius
+
+    /// Discrete radius options. Degrees are internal; miles and km are user-facing.
+    static let radiusOptions: [(miles: Int, km: Int, degrees: Double)] = [
+        (10,  16,  0.15),
+        (25,  40,  0.35),
+        (35,  56,  0.5),   // default
+        (50,  80,  0.7),
+        (75,  121, 1.1),
+    ]
+
+    /// Sets the search radius and persists to UserDefaults.
+    func setSearchRadius(_ degrees: Double) {
+        searchRadiusDegrees = degrees
+        UserDefaults.standard.set(degrees, forKey: searchRadiusKey)
+    }
+
+    /// Returns the approximate miles label for a given radius in degrees.
+    static func radiusInMiles(_ degrees: Double) -> Int {
+        radiusOptions.min(by: { abs($0.degrees - degrees) < abs($1.degrees - degrees) })?.miles ?? 35
+    }
+
+    /// Returns the approximate km label for a given radius in degrees.
+    static func radiusInKm(_ degrees: Double) -> Int {
+        radiusOptions.min(by: { abs($0.degrees - degrees) < abs($1.degrees - degrees) })?.km ?? 56
+    }
+
+    private func loadSearchRadius() -> Double {
+        let saved = UserDefaults.standard.double(forKey: searchRadiusKey)
+        // 0.0 means never set — use default
+        return saved > 0 ? saved : 0.5
     }
 
     /// Whether adding more picks is currently allowed.
@@ -137,15 +215,29 @@ class UserPicksService: ObservableObject {
             return FoodCategory.defaultPicks
         }
 
+        // Refresh built-in categories from static definitions so code updates
+        // to mapSearchTerms/websiteKeywords propagate automatically.
+        // User-customized categories (edited via EditSpotSearchView) keep their terms.
+        let customizedIDs = loadCustomizedTermsIDs()
+        let refreshed = saved.map { pick -> FoodCategory in
+            // Custom user-created categories — keep as-is
+            guard !pick.id.hasPrefix("custom_") else { return pick }
+            // User intentionally customized this one — keep their edits
+            guard !customizedIDs.contains(pick.id) else { return pick }
+            // Refresh from static definition if available
+            guard let canonical = FoodCategory.allKnownCategories.first(where: { $0.id == pick.id }) else { return pick }
+            return canonical
+        }
+
         if FeatureFlags.broadSearchEnabled {
-            return saved
+            return refreshed
         }
 
         // Launch mode: respect saved picks from launch categories,
         // plus append saved custom picks (up to maxCustomItems)
         let launchIDs = Set(FeatureFlags.defaultCategories)
-        let savedLaunch = saved.filter { launchIDs.contains($0.id) }
-        let savedCustom = saved.filter { !launchIDs.contains($0.id) }
+        let savedLaunch = refreshed.filter { launchIDs.contains($0.id) }
+        let savedCustom = refreshed.filter { !launchIDs.contains($0.id) }
 
         var result = savedLaunch
         for pick in savedCustom.prefix(FeatureFlags.maxCustomItems) {

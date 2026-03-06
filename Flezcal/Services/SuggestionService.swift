@@ -80,7 +80,8 @@ class SuggestionService: ObservableObject {
     /// every term actually runs without throttling.
     func fetchSuggestions(in region: MKCoordinateRegion,
                           existingSpots: [Spot],
-                          picks: [FoodCategory]) async {
+                          picks: [FoodCategory],
+                          radius: Double = 0.5) async {
         fetchGeneration &+= 1
         let myGeneration = fetchGeneration
 
@@ -157,10 +158,10 @@ class SuggestionService: ObservableObject {
         }
 
         // Enforce a minimum search span so zoomed-in maps still discover
-        // the same venues the Explore tab finds with its fixed 0.5° region.
+        // the same venues the Explore tab finds with its configured region.
         // MKLocalSearch treats region as a relevance hint — a tiny region
         // causes it to return different (often fewer) results for the same query.
-        let minSpan = 0.5
+        let minSpan = radius
         let searchRegion = MKCoordinateRegion(
             center: region.center,
             span: MKCoordinateSpan(
@@ -170,10 +171,10 @@ class SuggestionService: ObservableObject {
         )
 
         // Retail queries ("liquor store", "wine spirits", etc.) use a tighter
-        // region (~10 mi) so Apple Maps prioritizes truly nearby stores.
-        // With the full 0.5° span (~35 mi), MKLocalSearch fills its 25-result
-        // cap with stores across the whole region, pushing out the closest ones.
-        let retailSpan = 0.15
+        // region so Apple Maps prioritizes truly nearby stores.
+        // Without this, MKLocalSearch fills its 25-result cap with stores
+        // across the whole region, pushing out the closest ones.
+        let retailSpan = radius * 0.3
         let retailRegion = MKCoordinateRegion(
             center: region.center,
             span: MKCoordinateSpan(latitudeDelta: retailSpan, longitudeDelta: retailSpan)
@@ -261,6 +262,12 @@ class SuggestionService: ObservableObject {
 
         // Re-sort: green matches first (sorted by distance), then remaining
         // (sorted by distance). Take the best maxDisplayPins.
+        //
+        // Promotion cap: only promote green pins within a reasonable distance
+        // of the search center (the 25th-closest venue's distance × 1.5).
+        // Green pins beyond this cap are interleaved by distance with
+        // non-green pins so a match 30 miles away doesn't displace a
+        // nearby unchecked pin.
         let regionCenter = lastFetchCenter
         func distance(_ s: SuggestedSpot) -> Double {
             guard let center = regionCenter else { return 0 }
@@ -269,23 +276,34 @@ class SuggestionService: ObservableObject {
             return loc.distance(from: center)
         }
 
-        let green = updatedPool
-            .filter { $0.preScreenMatches?.isEmpty == false }
+        // Determine the promotion distance cap: 1.5× the distance of the
+        // 25th-closest venue (i.e. the initial display edge).
+        let sortedByDistance = updatedPool.sorted { distance($0) < distance($1) }
+        let capIndex = min(Self.maxDisplayPins - 1, sortedByDistance.count - 1)
+        let promotionCap = capIndex >= 0
+            ? distance(sortedByDistance[capIndex]) * 1.5
+            : Double.greatestFiniteMagnitude
+
+        // "Nearby green" = green matches within the promotion cap → sorted first
+        // "Far green" + non-green → interleaved by distance
+        let nearbyGreen = updatedPool
+            .filter { $0.preScreenMatches?.isEmpty == false && distance($0) <= promotionCap }
             .sorted { distance($0) < distance($1) }
-        let nonGreen = updatedPool
-            .filter { !($0.preScreenMatches?.isEmpty == false) }
+        let rest = updatedPool
+            .filter { !($0.preScreenMatches?.isEmpty == false && distance($0) <= promotionCap) }
             .sorted { distance($0) < distance($1) }
 
-        let combined = green + nonGreen
+        let combined = nearbyGreen + rest
         let trimmed = Array(combined.prefix(Self.maxDisplayPins))
 
         #if DEBUG
         print("[ApplyPreScreen] Applying \(results.count) results to pool of \(fullPool.count)")
-        print("[ApplyPreScreen] Green matches in pool: \(green.count)")
-        for s in green {
-            print("[ApplyPreScreen]   GREEN: \(s.name) → \(s.preScreenMatches!)")
+        let allGreen = updatedPool.filter { $0.preScreenMatches?.isEmpty == false }
+        print("[ApplyPreScreen] Green matches in pool: \(allGreen.count) (\(nearbyGreen.count) nearby, \(allGreen.count - nearbyGreen.count) beyond cap)")
+        for s in allGreen {
+            print("[ApplyPreScreen]   GREEN: \(s.name) → \(s.preScreenMatches!) dist=\(Int(distance(s)))m")
         }
-        print("[ApplyPreScreen] Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
+        print("[ApplyPreScreen] Promotion cap: \(Int(promotionCap))m, Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
         #endif
 
         suggestions = trimmed

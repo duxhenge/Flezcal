@@ -981,6 +981,8 @@ private struct AddFlezcalFlow: View {
     @State private var savedCategory: SpotCategory? = nil
     /// Spot already had this category — skip straight to rating offer
     @State private var showAlreadyThere = false
+    /// Custom category was added — show info about limited features
+    @State private var showCustomPickInfo = false
 
     /// Live version of the spot — reflects in-session mutations.
     private var liveSpot: Spot {
@@ -1060,6 +1062,11 @@ private struct AddFlezcalFlow: View {
         } message: {
             Text(thankYouMessage)
         }
+        .alert("Custom Flezcal Added!", isPresented: $showCustomPickInfo) {
+            Button("Got It") { dismiss() }
+        } message: {
+            Text("Your custom Flezcal has been tagged on this spot. Custom Flezcals don't include ratings, verifications, or offerings yet. Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
+        }
         .overlay {
             if isSaving {
                 ZStack {
@@ -1103,12 +1110,11 @@ private struct AddFlezcalFlow: View {
             }
 
             // Save custom category tag
-            if category.id.hasPrefix("custom_") {
+            let isCustomPick = category.id.hasPrefix("custom_")
+            if isCustomPick {
                 let tag = String(category.id.dropFirst("custom_".count))
                 _ = await spotService.addCustomCategoryTags(spotID: spot.id, tags: [tag])
                 success = true
-                // Use the first non-legacy SpotCategory as placeholder for rating
-                savedCategory = spot.categories.first
             }
 
             await MainActor.run {
@@ -1118,7 +1124,13 @@ private struct AddFlezcalFlow: View {
                 } else if success {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    showRatingFlow = true
+                    if isCustomPick {
+                        // Custom picks don't have rating infrastructure yet —
+                        // show info message instead of the rating flow.
+                        showCustomPickInfo = true
+                    } else {
+                        showRatingFlow = true
+                    }
                 }
             }
         }

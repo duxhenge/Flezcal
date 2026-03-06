@@ -244,19 +244,24 @@ struct MyRankCard: View {
 
             Divider()
 
-            // Row 1: Spots, Flan, Mezcal
+            // Row 1: Spots + top 2 categories
             HStack(spacing: 0) {
                 StatPill(value: "\(stats.spotsAdded)", label: "Spots") {
                     Image(systemName: "mappin.circle.fill")
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
-                StatPill(value: "\(stats.flanSpotsAdded)", label: "Flan") {
-                    FlanIcon(size: 14)
+                ForEach(stats.topCategories(2), id: \.id) { entry in
+                    Spacer()
+                    if let cat = SpotCategory(rawValue: entry.id) {
+                        StatPill(value: "\(entry.count)", label: cat.displayName) {
+                            Text(cat.emoji)
+                                .font(.caption2)
+                        }
+                    }
                 }
-                Spacer()
-                StatPill(value: "\(stats.mezcalSpotsAdded)", label: "Mezcal") {
-                    VeladoraIcon(size: 14)
+                // Pad with spacers if fewer than 2 top categories
+                if stats.topCategories(2).count < 2 {
+                    Spacer()
                 }
             }
 

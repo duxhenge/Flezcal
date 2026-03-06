@@ -30,11 +30,11 @@ class LocationSearchService: ObservableObject {
         "liquor store", "wine shop", "bottle shop", "wine spirits",
     ]
 
-    private static func makeRegion(center: CLLocationCoordinate2D?) -> MKCoordinateRegion {
+    private static func makeRegion(center: CLLocationCoordinate2D?, radius: Double = 0.5) -> MKCoordinateRegion {
         let c = center ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
         return MKCoordinateRegion(
             center: c,
-            span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+            span: MKCoordinateSpan(latitudeDelta: radius, longitudeDelta: radius)
         )
     }
 
@@ -91,7 +91,7 @@ class LocationSearchService: ObservableObject {
     ///
     /// Results from the first (most specific) query appear first, so
     /// Apple Maps' relevance ranking for "mezcal" is preserved at the top.
-    func multiSearch(queries: [String], userLocation: CLLocationCoordinate2D? = nil) async {
+    func multiSearch(queries: [String], userLocation: CLLocationCoordinate2D? = nil, radius: Double = 0.5) async {
         guard !queries.isEmpty else {
             searchResults = []
             return
@@ -104,7 +104,7 @@ class LocationSearchService: ObservableObject {
         isSearching = true
 
         let center = userLocation ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
-        let region = Self.makeRegion(center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude))
+        let region = Self.makeRegion(center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude), radius: radius)
 
         var allItems: [MKMapItem] = []
         var seenNames: Set<String> = []
@@ -122,14 +122,13 @@ class LocationSearchService: ObservableObject {
                 request.pointOfInterestFilter = Self.poiFilter
                 request.region = region
             } else {
-                // Retail queries use a tighter region (~10 mi) so Apple Maps prioritizes
-                // truly nearby stores. With the full 0.5° span (~35 mi), MKLocalSearch
-                // fills its 25-result cap with stores across the whole region, pushing
-                // out small local shops like "Duxbury Wine & Spirits" even when the user
-                // is standing next to them.
+                // Retail queries use a tighter region so Apple Maps prioritizes
+                // truly nearby stores. Without this, MKLocalSearch fills its 25-result
+                // cap with stores across the whole region, pushing out small local shops.
+                let retailSpan = radius * 0.3
                 request.region = MKCoordinateRegion(
                     center: region.center,
-                    span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
+                    span: MKCoordinateSpan(latitudeDelta: retailSpan, longitudeDelta: retailSpan)
                 )
             }
 
@@ -178,11 +177,11 @@ class LocationSearchService: ObservableObject {
             return aLoc.distance(from: centerLoc) < bLoc.distance(from: centerLoc)
         }
 
-        // Drop results beyond ~35 miles (matches the 0.5° search region span).
-        // Apple Maps treats the region as a hint, not a hard boundary, so niche
-        // queries like "mezcal" or "liquor store" can return venues hundreds of
-        // miles away when nearby results are sparse.
-        let maxDistance: CLLocationDistance = 56_327  // ~35 miles
+        // Drop results beyond the search radius. Apple Maps treats the region
+        // as a hint, not a hard boundary, so niche queries like "mezcal" or
+        // "liquor store" can return venues hundreds of miles away when nearby
+        // results are sparse. Convert degrees → meters (1° ≈ 111 km).
+        let maxDistance: CLLocationDistance = radius * 111_000
         allItems = allItems.filter { item in
             let loc = CLLocation(latitude: item.placemark.coordinate.latitude,
                                   longitude: item.placemark.coordinate.longitude)
@@ -193,7 +192,8 @@ class LocationSearchService: ObservableObject {
         isSearching = false
 
         #if DEBUG
-        print("[Explore] multiSearch done: \(allItems.count) results within 35 mi from \(queries.count) queries")
+        let miles = UserPicksService.radiusInMiles(radius)
+        print("[Explore] multiSearch done: \(allItems.count) results within \(miles) mi from \(queries.count) queries")
         #endif
     }
 

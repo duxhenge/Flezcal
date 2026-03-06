@@ -36,6 +36,13 @@ struct MapTabView: View {
     /// with a fallback region before the user's real location resolves, so
     /// we allow 2 auto-fetches to ensure ghost pins appear for the correct area.
     @State private var bootFetchesRemaining = 2
+    /// Suppresses the next "Search This Area" button appearance.  Set true
+    /// before an auto-zoom so the camera settle doesn't show the button.
+    @State private var suppressSearchButton = false
+    /// Pin-type visibility toggles — all on by default.
+    @State private var showVerifiedPins = true
+    @State private var showPossiblePins = true
+    @State private var showUncheckedPins = true
 
     // On-demand website check — runs when the user taps a ghost pin
     @State private var multiCheckResult: MultiCategoryCheckResult? = nil
@@ -166,10 +173,66 @@ struct MapTabView: View {
         return a.distance(from: b) >= Self.fetchMoveThresholdMeters
     }
 
+    /// Zooms the map camera to fit all ghost pin suggestions with comfortable
+    /// padding.  Only uses search-result pins (suggestions) — NOT confirmed
+    /// spots, which may be far away and would zoom the map to continent scale.
+    private func zoomToFitPins() {
+        var coordinates: [CLLocationCoordinate2D] = []
+
+        // Ghost pins (yellow/green/gray) — the search results
+        for suggestion in filteredSuggestions {
+            coordinates.append(suggestion.coordinate)
+        }
+        // Show-on-Map pin if separate from suggestions
+        if let pinned = showOnMapPin,
+           !suggestionService.suggestions.contains(where: { $0.id == pinned.id }) {
+            coordinates.append(pinned.coordinate)
+        }
+
+        guard coordinates.count >= 2 else { return }
+
+        var minLat = coordinates[0].latitude
+        var maxLat = coordinates[0].latitude
+        var minLon = coordinates[0].longitude
+        var maxLon = coordinates[0].longitude
+        for coord in coordinates.dropFirst() {
+            minLat = min(minLat, coord.latitude)
+            maxLat = max(maxLat, coord.latitude)
+            minLon = min(minLon, coord.longitude)
+            maxLon = max(maxLon, coord.longitude)
+        }
+
+        // Add 20% padding so edge pins aren't clipped
+        let latPad = max((maxLat - minLat) * 0.2, 0.005)
+        let lonPad = max((maxLon - minLon) * 0.2, 0.005)
+
+        let span = MKCoordinateSpan(
+            latitudeDelta: (maxLat - minLat) + latPad * 2,
+            longitudeDelta: (maxLon - minLon) + lonPad * 2
+        )
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+
+        // Suppress the "Search This Area" button that would otherwise
+        // appear when the camera settles at the new position, and update
+        // lastFetchedCenter so shouldFetch returns false.
+        suppressSearchButton = true
+        lastFetchedCenter = center
+
+        withAnimation(.easeInOut(duration: 0.5)) {
+            cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+        }
+    }
+
     /// Fetches ghost pin suggestions then kicks off the batch homepage pre-screen.
     /// Call this everywhere that `fetchSuggestions` is called to ensure the
     /// pre-screen always follows.
-    private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory]) {
+    /// - Parameter zoomToFit: When true, auto-zooms the map to fit all pins after
+    ///   suggestions load. Pass false for boot auto-fetches where the camera
+    ///   should stay at the user's location.
+    private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory], zoomToFit: Bool = false) {
         // Cancel any in-flight fetch + pre-screen so a new call doesn't
         // race with the previous one and overwrite green pin results.
         fetchAndPreScreenTask?.cancel()
@@ -177,12 +240,13 @@ struct MapTabView: View {
 
         fetchAndPreScreenTask = Task {
             #if DEBUG
-            print("[MapTab] fetchAndPreScreen called with \(picks.count) picks")
+            print("[MapTab] fetchAndPreScreen called with \(picks.count) picks, radius \(picksService.searchRadiusDegrees)")
             #endif
             await suggestionService.fetchSuggestions(
                 in: region,
                 existingSpots: spotService.spots,
-                picks: picks
+                picks: picks,
+                radius: picksService.searchRadiusDegrees
             )
             guard !Task.isCancelled else {
                 isPreScreening = false
@@ -219,22 +283,68 @@ struct MapTabView: View {
                 poolToScan.append(pinned)
             }
             preScreenTask = Task {
-                let results = await websiteChecker.batchPreScreen(
-                    suggestions: poolToScan,
+                // Two-wave pre-screen: scan the closest 25 venues first (the
+                // displayed set) so green pins appear fast, then scan the
+                // remaining pool in a second wave for promotion.
+                let wave1Count = min(25, poolToScan.count)
+                let wave1 = Array(poolToScan.prefix(wave1Count))
+                let wave2 = Array(poolToScan.dropFirst(wave1Count))
+
+                // ── Wave 1: closest venues (fast results) ──
+                let wave1Results = await websiteChecker.batchPreScreen(
+                    suggestions: wave1,
                     picks: picks
                 )
                 guard !Task.isCancelled else {
                     isPreScreening = false
                     return
                 }
-                suggestionService.applyPreScreenResults(results)
-                // Update showOnMapPin's pre-screen status if it was scanned
+                // Apply immediately so green pins light up while wave 2 runs.
+                suggestionService.applyPreScreenResults(wave1Results)
                 if let pinned = showOnMapPin,
-                   let matched = results[pinned.id] {
+                   let matched = wave1Results[pinned.id] {
                     showOnMapPin?.preScreenMatches = matched
                 }
+                #if DEBUG
+                let w1Green = wave1Results.values.filter { !$0.isEmpty }.count
+                print("[PreScreen] Wave 1 done: \(w1Green) green out of \(wave1.count) closest venues")
+                #endif
+
+                // ── Wave 2: remaining venues (promotion candidates) ──
+                var allResults = wave1Results
+                if !wave2.isEmpty {
+                    let wave2Results = await websiteChecker.batchPreScreen(
+                        suggestions: wave2,
+                        picks: picks
+                    )
+                    guard !Task.isCancelled else {
+                        isPreScreening = false
+                        return
+                    }
+                    // Merge wave 2 into combined results and re-apply.
+                    for (key, value) in wave2Results {
+                        allResults[key] = value
+                    }
+                    suggestionService.applyPreScreenResults(allResults)
+                    if let pinned = showOnMapPin,
+                       let matched = wave2Results[pinned.id] {
+                        showOnMapPin?.preScreenMatches = matched
+                    }
+                    #if DEBUG
+                    let w2Green = wave2Results.values.filter { !$0.isEmpty }.count
+                    print("[PreScreen] Wave 2 done: \(w2Green) green out of \(wave2.count) remaining venues")
+                    #endif
+                }
+
                 isPreScreening = false
-                // Show "no quick matches" banner if zero green pins
+
+                // Zoom to fit the final pin set (after promotion) so
+                // the user sees all results without scrolling.
+                if zoomToFit {
+                    zoomToFitPins()
+                }
+
+                // Show result banner
                 let likelyCount = suggestionService.suggestions.filter {
                     $0.preScreenMatches?.isEmpty == false
                 }.count
@@ -246,7 +356,7 @@ struct MapTabView: View {
                     if likelyCount == 0 {
                         preScreenBannerMessage = "No quick matches — tap any pin to search deeper"
                     } else {
-                        preScreenBannerMessage = "\(likelyCount) likely match\(likelyCount == 1 ? "" : "es") — tap green pins to review"
+                        preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s") — tap green pins to review"
                     }
                     Task {
                         try? await Task.sleep(for: .seconds(8))
@@ -312,6 +422,25 @@ struct MapTabView: View {
         return suggestionService.suggestions.filter { s in
             s.coordinate.latitude  >= b.minLat && s.coordinate.latitude  <= b.maxLat &&
             s.coordinate.longitude >= b.minLon && s.coordinate.longitude <= b.maxLon
+        }
+    }
+
+    /// Ghost pins that matched on pre-screen (green — "possible Flezcal spots").
+    private var possibleSuggestions: [SuggestedSpot] {
+        filteredSuggestions.filter { $0.preScreenMatches?.isEmpty == false }
+    }
+
+    /// Ghost pins not yet scanned or scanned with no match (yellow/gray).
+    private var uncheckedSuggestions: [SuggestedSpot] {
+        filteredSuggestions.filter { $0.preScreenMatches?.isEmpty != false }
+    }
+
+    /// Ghost pins filtered by pin-type toggles — used directly in the Map content.
+    /// Pre-filtered to avoid conditional `if` inside MapContentBuilder's ForEach.
+    private var visibleGhostPins: [SuggestedSpot] {
+        filteredSuggestions.filter { suggestion in
+            let isGreen = suggestion.preScreenMatches?.isEmpty == false
+            return isGreen ? showPossiblePins : showUncheckedPins
         }
     }
 
@@ -393,18 +522,22 @@ struct MapTabView: View {
             Map(position: $cameraPosition) {
                 UserAnnotation()
 
-                ForEach(filteredSpots) { spot in
-                    Annotation(spot.name, coordinate: spot.coordinate) {
-                        SpotPinView(spot: spot)
-                            .onTapGesture { selectedSpot = spot }
+                // Verified community spots (green pins)
+                if showVerifiedPins {
+                    ForEach(filteredSpots) { spot in
+                        Annotation(spot.name, coordinate: spot.coordinate) {
+                            SpotPinView(spot: spot)
+                                .onTapGesture { selectedSpot = spot }
+                        }
                     }
                 }
 
                 // Ghost pins — unconfirmed Apple Maps suggestions
-                // Yellow = not yet scanned. Green = pre-screen found keywords.
-                // Gray = scanned but no match found.
-                // Filtered to exclude any that overlap with a verified spot.
-                ForEach(filteredSuggestions) { suggestion in
+                // Green = pre-screen found keywords ("possible").
+                // Yellow/gray = not yet scanned or no match ("unchecked").
+                // Filtered to exclude any that overlap with a verified spot,
+                // and respects pin-type toggle visibility.
+                ForEach(visibleGhostPins) { suggestion in
                     let isGreen = suggestion.preScreenMatches?.isEmpty == false
                     let isScanned = suggestion.preScreenMatches != nil
                     Annotation(suggestion.name, coordinate: suggestion.coordinate) {
@@ -451,6 +584,14 @@ struct MapTabView: View {
                 visibleRegion = context.region
                 initialRegionSeen = true
 
+                // Consume suppress flag — auto-zoom moved the camera,
+                // so don't show "Search This Area" for this settle.
+                if suppressSearchButton {
+                    suppressSearchButton = false
+                    lastFetchedCenter = context.region.center
+                    return
+                }
+
                 guard shouldFetch(for: context.region.center) else { return }
 
                 // Auto-fetch ghost pins while the map is still settling on
@@ -465,7 +606,10 @@ struct MapTabView: View {
                     lastFetchedCenter = context.region.center
                     // Boot auto-fetch: ghost pins + pre-screen so green pins
                     // appear on launch, matching Explore tab behavior.
-                    fetchAndPreScreen(in: context.region, picks: activePicks)
+                    // Zoom to fit on the final boot fetch (after real location resolves)
+                    // so the user sees all pins in their area.
+                    let shouldZoom = bootFetchesRemaining == 0
+                    fetchAndPreScreen(in: context.region, picks: activePicks, zoomToFit: shouldZoom)
                 } else {
                     showSearchHereButton = true
                 }
@@ -477,17 +621,35 @@ struct MapTabView: View {
             .onChange(of: selectedPickFilter) { _, _ in
                 emptyStateDismissed = false
                 showSearchHereButton = false
+                bootFetchesRemaining = 0  // prevent boot auto-fetch from racing
                 guard let region = visibleRegion else { return }
                 lastFetchedCenter = region.center
-                fetchAndPreScreen(in: region, picks: activePicks)
+                fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
             }
             .onChange(of: picksService.picks) { _, _ in
                 // User changed their picks in My Flezcals tab — re-fetch with new picks
                 selectedPickFilter = nil   // reset to "All" when picks change
                 showSearchHereButton = false
+                bootFetchesRemaining = 0  // prevent boot auto-fetch from racing
                 guard let region = visibleRegion else { return }
                 lastFetchedCenter = region.center
-                fetchAndPreScreen(in: region, picks: picksService.picks)
+                fetchAndPreScreen(in: region, picks: picksService.picks, zoomToFit: true)
+            }
+            .onChange(of: picksService.searchRadiusDegrees) { _, newRadius in
+                // User changed search radius — re-fetch with new radius and
+                // update the camera to show the new search area.
+                showSearchHereButton = false
+                guard let region = visibleRegion else { return }
+                lastFetchedCenter = region.center
+                // Zoom the map to reflect the new radius
+                let newRegion = MKCoordinateRegion(
+                    center: region.center,
+                    span: MKCoordinateSpan(latitudeDelta: newRadius,
+                                           longitudeDelta: newRadius)
+                )
+                cameraPosition = .region(newRegion)
+                bootFetchesRemaining = 0  // prevent auto-fetch duplicate
+                fetchAndPreScreen(in: newRegion, picks: activePicks)
             }
             .onChange(of: pendingMapSuggestion) { _, newValue in
                 guard let suggestion = newValue else { return }
@@ -500,10 +662,11 @@ struct MapTabView: View {
                 guard let center = pendingMapCenter else { return }
                 pendingMapCenter = nil   // consume immediately
 
-                // Center camera on the area with a neighborhood-level zoom
+                // Center camera on the area using the user's chosen search radius
+                let span = picksService.searchRadiusDegrees
                 let region = MKCoordinateRegion(
                     center: center,
-                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                    span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
                 )
                 cameraPosition = .region(region)
                 lastFetchedCenter = center
@@ -513,7 +676,7 @@ struct MapTabView: View {
                 bootFetchesRemaining = 0
 
                 // Fetch ghost pins + pre-screen for this area
-                fetchAndPreScreen(in: region, picks: activePicks)
+                fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
             }
 
             // Filter pills — "All" + one pill per pick
@@ -521,31 +684,33 @@ struct MapTabView: View {
                 PicksFilterBar(picks: picksService.picks,
                                selectedPick: $selectedPickFilter)
 
-                // Spot count + suggestion count badges
+                // Pin-type toggle buttons — tap to show/hide each category
                 if !spotService.isLoading {
                     HStack(spacing: 6) {
-                        Text("\(visibleSpots.count) spot\(visibleSpots.count == 1 ? "" : "s")")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
+                        PinToggleButton(
+                            count: visibleSpots.count,
+                            label: "Verified",
+                            color: .green,
+                            isOn: $showVerifiedPins
+                        )
 
-                        if !visibleSuggestions.isEmpty {
-                            HStack(spacing: 3) {
-                                Image(systemName: "sparkles")
-                                    .font(.caption2)
-                                    .accessibilityHidden(true)
-                                Text("\(visibleSuggestions.count) suggested")
-                                    .font(.caption2)
-                                    .fontWeight(.medium)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
-                            .foregroundStyle(.secondary)
+                        if !possibleSuggestions.isEmpty {
+                            PinToggleButton(
+                                count: possibleSuggestions.count,
+                                label: "Possible",
+                                color: .green,
+                                filled: false,
+                                isOn: $showPossiblePins
+                            )
+                        }
+
+                        if !uncheckedSuggestions.isEmpty {
+                            PinToggleButton(
+                                count: uncheckedSuggestions.count,
+                                label: "Unchecked",
+                                color: .yellow,
+                                isOn: $showUncheckedPins
+                            )
                         }
                     }
                 }
@@ -575,7 +740,7 @@ struct MapTabView: View {
                             showSearchHereButton = false
                             guard let region = visibleRegion else { return }
                             lastFetchedCenter = region.center
-                            fetchAndPreScreen(in: region, picks: activePicks)
+                            fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
                         } label: {
                             Label("Search This Area", systemImage: "magnifyingglass")
                                 .font(.subheadline)
@@ -777,6 +942,55 @@ struct MapTabView: View {
                 .listStyle(.plain)
             }
         }
+    }
+}
+
+// MARK: - Pin Toggle Button
+
+/// Compact capsule button that toggles visibility of a pin type on the map.
+/// Shows a colored dot, count, and label. Dimmed when toggled off.
+private struct PinToggleButton: View {
+    let count: Int
+    let label: String
+    let color: Color
+    /// When true the dot is a solid fill; when false it's a stroke ring
+    /// (matching the ghost pin style for "Possible").
+    var filled: Bool = true
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isOn.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                if filled {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 12, height: 12)
+                } else {
+                    Circle()
+                        .strokeBorder(color, lineWidth: 2)
+                        .frame(width: 12, height: 12)
+                }
+                Text("\(count)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                Text(label)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .opacity(isOn ? 1.0 : 0.45)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(count) \(label) pins")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityHint(isOn ? "Tap to hide" : "Tap to show")
     }
 }
 

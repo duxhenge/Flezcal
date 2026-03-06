@@ -55,6 +55,29 @@ struct MyPicksTabView: View {
                     }
                     .padding(.horizontal)
 
+                    // Custom picks info banner (only when user has custom picks)
+                    if picksService.picks.contains(where: { $0.id.hasPrefix("custom_") }) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("About Custom Flezcals", systemImage: "info.circle.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.purple)
+
+                            Text("Custom Flezcals let you search and tag spots, but don't include ratings, verifications, or offerings yet. Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(Color.purple.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(.horizontal)
+                    }
+
+                    // Search distance picker
+                    SearchRadiusPicker()
+                        .environmentObject(picksService)
+                        .padding(.horizontal)
+
                     // Button
                     Button {
                         showGrid = true
@@ -121,11 +144,18 @@ private struct PickCard: View {
                     .font(.title3)
                     .fontWeight(.bold)
 
-                // Show websiteKeywords — the terms used for website scanning
-                Text(category.websiteKeywords.prefix(3).joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                // Custom picks show community label; built-in show websiteKeywords
+                if category.id.hasPrefix("custom_") {
+                    Text("Community pick · search & tag")
+                        .font(.caption)
+                        .foregroundStyle(.purple.opacity(0.8))
+                        .lineLimit(1)
+                } else {
+                    Text(category.websiteKeywords.prefix(3).joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -203,6 +233,55 @@ private struct EmptyPickSlot: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
+    }
+}
+
+// MARK: - Search Radius Picker
+
+/// Horizontal pill picker for the user's search distance preference.
+/// Shows discrete options (10, 25, 35, 50, 75 mi) with the selected
+/// option highlighted in orange. Matches the Capsule pill style used
+/// by PicksFilterBar for visual consistency.
+struct SearchRadiusPicker: View {
+    @EnvironmentObject var picksService: UserPicksService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Search Distance")
+                .font(.headline)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(UserPicksService.radiusOptions, id: \.miles) { option in
+                        let isSelected = abs(picksService.searchRadiusDegrees - option.degrees) < 0.01
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                picksService.setSearchRadius(option.degrees)
+                            }
+                        } label: {
+                            Text("\(option.miles) mi / \(option.km) km")
+                                .font(.subheadline)
+                                .fontWeight(isSelected ? .semibold : .regular)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule().fill(isSelected ? Color.orange : Color(.systemBackground))
+                                )
+                                .foregroundStyle(isSelected ? .white : .primary)
+                                .overlay(
+                                    Capsule().stroke(Color.secondary.opacity(0.3),
+                                                      lineWidth: isSelected ? 0 : 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Text("How far to search for spots from your location")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

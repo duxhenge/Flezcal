@@ -12,6 +12,9 @@ struct EditSpotSearchView: View {
     @State private var searchTerms: [String] = []
     @State private var newTerm: String = ""
     @State private var showSavedConfirmation = false
+    /// True when the user tapped "Reset to defaults" — if they save in this
+    /// state, the customized flag is cleared so future code updates propagate.
+    @State private var wasResetToDefaults = false
 
     /// Callback to notify parent that terms were saved (triggers re-search).
     var onSave: (() -> Void)? = nil
@@ -185,6 +188,7 @@ struct EditSpotSearchView: View {
     }
 
     private func resetToDefaults() {
+        wasResetToDefaults = true
         // For built-in picks, restore original hardcoded mapSearchTerms.
         // For custom picks, regenerate using the same logic as CustomCategory.create.
         if let original = FoodCategory.allCategories.first(where: { $0.id == category.id }) {
@@ -222,6 +226,11 @@ struct EditSpotSearchView: View {
             relatedKeywords: category.relatedKeywords,
             addSpotPrompt: category.addSpotPrompt
         )
+        if wasResetToDefaults {
+            // User reset to defaults then saved — clear the customized flag
+            // so future code updates to this category's terms propagate.
+            picksService.clearCustomizedFlag(for: category.id)
+        }
         picksService.updatePick(updated)
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)

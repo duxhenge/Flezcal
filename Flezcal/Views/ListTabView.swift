@@ -31,11 +31,13 @@ private struct SearchTaskID: Equatable, Hashable {
     let filterID: String?           // SpotFilter.category?.rawValue — triggers re-search on pill tap
     let customLocation: CustomSearchLocation?
     let mapTermsVersion: Int        // Incremented when user edits mapSearchTerms — triggers re-search
+    let searchRadius: Double        // Triggers re-search when user changes search distance
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.query == rhs.query && lhs.filterID == rhs.filterID
         && lhs.customLocation == rhs.customLocation
         && lhs.mapTermsVersion == rhs.mapTermsVersion
+        && lhs.searchRadius == rhs.searchRadius
     }
 
     func hash(into hasher: inout Hasher) {
@@ -45,6 +47,7 @@ private struct SearchTaskID: Equatable, Hashable {
         hasher.combine(customLocation?.coordinate.latitude)
         hasher.combine(customLocation?.coordinate.longitude)
         hasher.combine(mapTermsVersion)
+        hasher.combine(searchRadius)
     }
 }
 
@@ -308,6 +311,8 @@ private struct ExplorePanel: View {
     let onSelectExistingSpot: (Spot) -> Void
     /// Incremented when user edits mapSearchTerms — triggers re-search via SearchTaskID.
     let mapTermsVersion: Int
+    /// User's chosen search radius in degrees — triggers re-search via SearchTaskID.
+    let searchRadiusDegrees: Double
     @StateObject private var searchService = LocationSearchService()
 
     // Sheet state lives here so changes never re-render ListTabView
@@ -394,13 +399,19 @@ private struct ExplorePanel: View {
                     List {
                         // ── Status banner (auto-searches only) ──
                         if isFilterSearch {
-                            let categoryLabel = selectedFilterCategory?.displayName.lowercased() ?? "your picks"
+                            // When a specific category is selected, use its name (e.g. "mezcal").
+                            // When "All" is selected (multiple picks), use "Flezcal" as the noun.
+                            let singleCategory = selectedFilterCategory?.displayName.lowercased()
+                            let isMultiSearch = singleCategory == nil
+
                             Section {
                                 if isPreScreening {
                                     HStack(spacing: 8) {
                                         ProgressView()
                                             .controlSize(.small)
-                                        Text("Checking menus for \(categoryLabel)…")
+                                        Text(isMultiSearch
+                                             ? "Checking menus for your Flezcals…"
+                                             : "Checking menus for \(singleCategory!)…")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
@@ -411,7 +422,9 @@ private struct ExplorePanel: View {
                                             Image(systemName: "magnifyingglass")
                                                 .font(.subheadline)
                                                 .foregroundStyle(.secondary)
-                                            Text("No \(categoryLabel) found on menus nearby")
+                                            Text(isMultiSearch
+                                                 ? "No Flezcal matches found on menus nearby"
+                                                 : "No \(singleCategory!) found on menus nearby")
                                                 .font(.subheadline)
                                                 .fontWeight(.medium)
                                         }
@@ -429,7 +442,9 @@ private struct ExplorePanel: View {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .font(.subheadline)
                                                 .foregroundStyle(.green)
-                                            Text("\(matchedCount) possible \(categoryLabel) result\(matchedCount == 1 ? "" : "s")")
+                                            Text(isMultiSearch
+                                                 ? "\(matchedCount) possible Flezcal spot\(matchedCount == 1 ? "" : "s")"
+                                                 : "\(matchedCount) possible \(singleCategory!) spot\(matchedCount == 1 ? "" : "s")")
                                                 .font(.subheadline)
                                                 .fontWeight(.medium)
                                         }
@@ -498,7 +513,8 @@ private struct ExplorePanel: View {
             query: searchText,
             filterID: selectedFilterCategory?.id,
             customLocation: customLocation,
-            mapTermsVersion: mapTermsVersion
+            mapTermsVersion: mapTermsVersion,
+            searchRadius: searchRadiusDegrees
         )) {
             let userTypedText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
             #if DEBUG
@@ -528,7 +544,8 @@ private struct ExplorePanel: View {
                 // that actually carry the item.
                 await searchService.multiSearch(
                     queries: foodCat.mapSearchTerms,
-                    userLocation: effectiveLocation
+                    userLocation: effectiveLocation,
+                    radius: searchRadiusDegrees
                 )
             } else {
                 // "All" filter — multi-query search combining terms from all picks.
@@ -550,7 +567,8 @@ private struct ExplorePanel: View {
                 if allTerms.isEmpty { allTerms = ["restaurant"] }
                 await searchService.multiSearch(
                     queries: allTerms,
-                    userLocation: effectiveLocation
+                    userLocation: effectiveLocation,
+                    radius: searchRadiusDegrees
                 )
             }
 
@@ -577,21 +595,47 @@ private struct ExplorePanel: View {
                 guard let url = item.url else { return nil }
                 return (index: index, url: url)
             }
+
+            // Two-wave pre-screen: scan the first 10 results (most relevant)
+            // first so green badges appear at the top of the list quickly,
+            // then scan the remaining results in a second wave.
+            let wave1Count = min(10, itemURLs.count)
+            let wave1 = Array(itemURLs.prefix(wave1Count))
+            let wave2 = Array(itemURLs.dropFirst(wave1Count))
+
             #if DEBUG
-            print("[Explore] starting batchPreScreenMapItems with \(items.count) items")
+            print("[Explore] starting wave 1 pre-screen: \(wave1.count) items")
             #endif
-            let matched = await websiteChecker.batchPreScreenMapItems(itemURLs, picks: picks)
+
+            // ── Wave 1: top results ──
+            var matched = await websiteChecker.batchPreScreenMapItems(wave1, picks: picks)
             guard !Task.isCancelled else {
-                #if DEBUG
-                print("[Explore] cancelled after pre-screen")
-                #endif
                 isPreScreening = false
                 return
             }
+            // Show wave 1 results immediately so green badges appear fast.
+            preScreenMatchedIndices = matched
+            #if DEBUG
+            print("[Explore] wave 1 done: \(matched.count) matches out of \(wave1.count)")
+            #endif
+
+            // ── Wave 2: remaining results ──
+            if !wave2.isEmpty {
+                let wave2Matched = await websiteChecker.batchPreScreenMapItems(wave2, picks: picks)
+                guard !Task.isCancelled else {
+                    isPreScreening = false
+                    return
+                }
+                matched = matched.union(wave2Matched)
+                preScreenMatchedIndices = matched
+                #if DEBUG
+                print("[Explore] wave 2 done: \(wave2Matched.count) matches out of \(wave2.count)")
+                #endif
+            }
+
             #if DEBUG
             print("[Explore] pre-screen complete: \(matched.count) matches out of \(items.count)")
             #endif
-            preScreenMatchedIndices = matched
             isPreScreening = false
         }
         .onDisappear {
@@ -790,7 +834,8 @@ struct ListTabView: View {
 
         let results: [Spot]
         if searchText.isEmpty {
-            let maxDistance: CLLocationDistance = 56_327  // ~35 miles
+            // Match the user's chosen search radius (degrees → meters).
+            let maxDistance: CLLocationDistance = picksService.searchRadiusDegrees * 111_000
             results = textFiltered.filter { spot in
                 centerCL.distance(from: CLLocation(latitude: spot.latitude, longitude: spot.longitude)) <= maxDistance
             }
@@ -882,6 +927,7 @@ struct ListTabView: View {
                 // Spot search customization — Explore mode only
                 if listMode == .explore {
                     spotSearchButton
+                    searchRadiusLabel
                 }
 
                 // ── Content ───────────────────────────────────────────────────
@@ -902,6 +948,7 @@ struct ListTabView: View {
                             selectedSpot = spot
                         },
                         mapTermsVersion: mapTermsVersion,
+                        searchRadiusDegrees: picksService.searchRadiusDegrees,
                         websiteChecker: websiteChecker
                     )
                 }
@@ -994,6 +1041,31 @@ struct ListTabView: View {
         .padding(.top, 4)
     }
 
+    // MARK: Search radius label (read-only)
+
+    /// Read-only label showing the current search distance setting.
+    /// The interactive picker lives on My Flezcals — this just shows the value
+    /// so users know the setting exists and what it's set to.
+    @ViewBuilder
+    private var searchRadiusLabel: some View {
+        let miles = UserPicksService.radiusInMiles(picksService.searchRadiusDegrees)
+        let km = UserPicksService.radiusInKm(picksService.searchRadiusDegrees)
+        HStack(spacing: 6) {
+            Image(systemName: "circle.dashed")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Searching within \(miles) mi / \(km) km")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text("Change in My Flezcals")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal)
+        .padding(.top, 2)
+    }
+
     // MARK: Community content
 
     private var communityContent: some View {
@@ -1011,28 +1083,85 @@ struct ListTabView: View {
                 Spacer()
             } else if filteredAndSortedSpots.isEmpty {
                 Spacer()
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     Image(systemName: "mappin.slash")
                         .font(.system(size: 40))
                         .foregroundStyle(.secondary)
-                    Text("No spots found")
+                    Text("No verified spots yet")
                         .font(.headline)
-                    Text(searchText.isEmpty
-                         ? "Be the first to add a \(selectedFilter?.displayName.lowercased() ?? "flan or mezcal") spot!"
-                         : "Try a different search term.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    if searchText.isEmpty {
+                        Text("Be the first to add a \(selectedFilter?.displayName.lowercased() ?? "flan or mezcal") spot!")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        // Nudge to switch to Potential Spots
+                        Button {
+                            withAnimation { listMode = .explore }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.subheadline)
+                                Text("Search Potential Spots")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.orange)
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                        }
+                        .padding(.top, 4)
+
+                        Text("Potential Spots scans nearby menus to find places that might carry what you're looking for.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    } else {
+                        Text("Try a different search term.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 .accessibilityElement(children: .combine)
                 .padding()
                 Spacer()
             } else {
-                List(filteredAndSortedSpots) { spot in
+                List {
+                    ForEach(filteredAndSortedSpots) { spot in
+                        Button {
+                            selectedSpot = spot
+                        } label: {
+                            ListTabRowView(spot: spot, userLocation: effectiveLocation)
+                        }
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    }
+
+                    // Nudge to discover more spots via Potential Spots search
                     Button {
-                        selectedSpot = spot
+                        withAnimation { listMode = .explore }
                     } label: {
-                        ListTabRowView(spot: spot, userLocation: effectiveLocation)
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.subheadline)
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Find more spots")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text("Search nearby menus for potential matches")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 4)
                     }
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }

@@ -8,70 +8,99 @@ import SwiftUI
 // so SpotCategory(rawValue: foodCategory.id) always succeeds.
 //
 // Backward-compatible: existing Firestore documents decode
-// without any migration. Legacy cases (sushi, ramen, etc.)
-// are kept but won't appear in the picker grid.
+// without any migration. Legacy cases are kept but won't
+// appear in the picker grid.
 // ============================================================
 
 enum SpotCategory: String, Codable, CaseIterable, Identifiable {
 
-    // Launch trio (permanent)
+    // ── 🍽️ FOOD ──────────────────────────────────────────────
+
+    // Launch trio
     case mezcal
     case flan
     case tortillas
 
-    // Drinks
-    case bourbon
-    case fernetBranca   = "fernet_branca"
-    case newEnglandIPA  = "new_england_ipa"
-    case singleMaltScotch = "single_malt_scotch"
-
-    // Savory
-    case peamealBacon   = "peameal_bacon"
-    case woodFiredPizza = "wood_fired_pizza"
-    case paella
-    case oysters
-    case pho
+    // Latin / Mexican
+    case tacos
+    case birria
     case pozole
-    case tartare
-    case fugu
+    case ceviche
+    case mole
+    case pupusas
+
+    // Asian
+    case ramen
+    case sushi
+    case omakase
+    case dimSum         = "dim_sum"
+    case pho
     case bibimbap
+    case koreanBBQ      = "korean_bbq"
+    case dumplings
+    case poke
+
+    // European / Mediterranean
+    case tapas
+    case paella
     case ibericoHam     = "iberico_ham"
-    case caviar
-    case pierogi
+    case woodFiredPizza = "wood_fired_pizza"
+
+    // Seafood / Raw
+    case oysters
     case lobsterRolls   = "lobster_rolls"
-    case smashburgers
+    case tartare
+    case caviar
 
-    // Sweets & Specialty
-    case mapleSyrup     = "maple_syrup"
-    case artisanChocolate = "artisan_chocolate"
+    // ── 🍹 DRINKS ─────────────────────────────────────────────
 
-    // Legacy cases (kept for Firestore backward compat — not in picker grid)
-    case naturalWine    = "natural_wine"
+    case whiskey
+    case amaro
+    case newEnglandIPA  = "new_england_ipa"
     case craftBeer      = "craft_beer"
+    case naturalWine    = "natural_wine"
     case sake
+    case cocktails
     case specialtyCoffee = "specialty_coffee"
     case boba
-    case cocktails
-    case mochi
+    case negroni
+    case matcha
+    case kombucha
+    case cider
+
+    // ── 🍰 SWEETS & SPECIALTY ─────────────────────────────────
+
+    case artisanChocolate = "artisan_chocolate"
+    case khachapuri
+    case baklava
     case churros
     case gelato
+    case mochi
+    case empanadas
     case crepes
-    case baklava
-    case sushi
-    case ramen
-    case tacos
-    case dimSum         = "dim_sum"
+    case cremeBrulee    = "creme_brulee"
+    case croissants
+    case tresLeches     = "tres_leches"
+
+    // ── Legacy (demoted — kept for Firestore backward compat) ─
+
+    case bourbon
+    case singleMaltScotch = "single_malt_scotch"
+    case fernetBranca   = "fernet_branca"
+    case peamealBacon   = "peameal_bacon"
+    case mapleSyrup     = "maple_syrup"
+    case fugu
+    case pierogi
+    case smashburgers
     case pizza
-    case birria
 
     var id: String { rawValue }
 
     /// Whether this is a legacy category no longer shown in the picker grid.
     var isLegacy: Bool {
         switch self {
-        case .naturalWine, .craftBeer, .sake, .specialtyCoffee, .boba, .cocktails,
-             .mochi, .churros, .gelato, .crepes, .baklava, .sushi, .ramen,
-             .tacos, .dimSum, .pizza, .birria:
+        case .bourbon, .singleMaltScotch, .fernetBranca,
+             .peamealBacon, .mapleSyrup, .fugu, .pierogi, .smashburgers, .pizza:
             return true
         default:
             return false
@@ -81,123 +110,163 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     /// Name shown in the UI
     var displayName: String {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return "Mezcal"
         case .flan:              return "Flan"
         case .tortillas:         return "Handmade Tortillas"
-        // Drinks
-        case .bourbon:           return "Bourbon"
-        case .fernetBranca:      return "Fernet Branca"
-        case .newEnglandIPA:     return "New England IPA"
-        case .singleMaltScotch:  return "Single Malt Scotch"
-        // Savory
-        case .peamealBacon:      return "Peameal Bacon"
-        case .woodFiredPizza:    return "Wood-Fired Pizza"
-        case .paella:            return "Paella"
-        case .oysters:           return "Oysters"
-        case .pho:               return "Pho"
+        case .tacos:             return "Tacos"
+        case .birria:            return "Birria"
         case .pozole:            return "Pozole"
-        case .tartare:           return "Tartare"
-        case .fugu:              return "Fugu"
+        case .ceviche:           return "Ceviche"
+        case .mole:              return "Mole"
+        case .pupusas:           return "Pupusas"
+        case .ramen:             return "Ramen"
+        case .sushi:             return "Sushi"
+        case .omakase:           return "Omakase"
+        case .dimSum:            return "Dim Sum"
+        case .pho:               return "Pho"
         case .bibimbap:          return "Bibimbap"
+        case .koreanBBQ:         return "Korean BBQ"
+        case .dumplings:         return "Dumplings"
+        case .poke:              return "Poke"
+        case .tapas:             return "Tapas"
+        case .paella:            return "Paella"
         case .ibericoHam:        return "Iberico Ham"
-        case .caviar:            return "Caviar"
-        case .pierogi:           return "Pierogi"
+        case .woodFiredPizza:    return "Wood-Fired Pizza"
+        case .oysters:           return "Oysters"
         case .lobsterRolls:      return "Lobster Rolls"
-        case .smashburgers:      return "Smashburgers"
-        // Sweets & Specialty
-        case .mapleSyrup:        return "Maple Syrup"
-        case .artisanChocolate:  return "Artisan Chocolate"
-        // Legacy
-        case .naturalWine:       return "Natural Wine"
+        case .tartare:           return "Tartare"
+        case .caviar:            return "Caviar"
+        // ── Drinks ──
+        case .whiskey:           return "Whiskey"
+        case .amaro:             return "Amaro"
+        case .newEnglandIPA:     return "New England IPA"
         case .craftBeer:         return "Craft Beer"
+        case .naturalWine:       return "Natural Wine"
         case .sake:              return "Sake"
+        case .cocktails:         return "Craft Cocktails"
         case .specialtyCoffee:   return "Specialty Coffee"
         case .boba:              return "Boba"
-        case .cocktails:         return "Craft Cocktails"
-        case .mochi:             return "Mochi"
+        case .negroni:           return "Negroni"
+        case .matcha:            return "Matcha"
+        case .kombucha:          return "Kombucha"
+        case .cider:             return "Cider"
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return "Artisan Chocolate"
+        case .khachapuri:        return "Khachapuri"
+        case .baklava:           return "Baklava"
         case .churros:           return "Churros"
         case .gelato:            return "Gelato"
+        case .mochi:             return "Mochi"
+        case .empanadas:         return "Empanadas"
         case .crepes:            return "Crepes"
-        case .baklava:           return "Baklava"
-        case .sushi:             return "Sushi"
-        case .ramen:             return "Ramen"
-        case .tacos:             return "Tacos"
-        case .dimSum:            return "Dim Sum"
+        case .cremeBrulee:       return "Crème Brûlée"
+        case .croissants:        return "Croissants"
+        case .tresLeches:        return "Tres Leches"
+        // ── Legacy ──
+        case .bourbon:           return "Bourbon"
+        case .singleMaltScotch:  return "Single Malt Scotch"
+        case .fernetBranca:      return "Fernet Branca"
+        case .peamealBacon:      return "Peameal Bacon"
+        case .mapleSyrup:        return "Maple Syrup"
+        case .fugu:              return "Fugu"
+        case .pierogi:           return "Pierogi"
+        case .smashburgers:      return "Smashburgers"
         case .pizza:             return "Neapolitan Pizza"
-        case .birria:            return "Birria"
         }
     }
 
     /// Emoji shown on map pins, badges, and filter chips
     var emoji: String {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return "🥃"
         case .flan:              return "🍮"
         case .tortillas:         return "🫓"
-        // Drinks
-        case .bourbon:           return "🥃"
-        case .fernetBranca:      return "🌿"
-        case .newEnglandIPA:     return "🍺"
-        case .singleMaltScotch:  return "🥃"
-        // Savory
-        case .peamealBacon:      return "🥓"
-        case .woodFiredPizza:    return "🍕"
-        case .paella:            return "🥘"
-        case .oysters:           return "🦪"
-        case .pho:               return "🍲"
+        case .tacos:             return "🌮"
+        case .birria:            return "🫕"
         case .pozole:            return "🍲"
-        case .tartare:           return "🥩"
-        case .fugu:              return "🐡"
+        case .ceviche:           return "🐟"
+        case .mole:              return "🫕"
+        case .pupusas:           return "🫓"
+        case .ramen:             return "🍜"
+        case .sushi:             return "🍣"
+        case .omakase:           return "🍣"
+        case .dimSum:            return "🥟"
+        case .pho:               return "🍲"
         case .bibimbap:          return "🍚"
+        case .koreanBBQ:         return "🥩"
+        case .dumplings:         return "🥟"
+        case .poke:              return "🐟"
+        case .tapas:             return "🍢"
+        case .paella:            return "🥘"
         case .ibericoHam:        return "🍖"
-        case .caviar:            return "🫧"
-        case .pierogi:           return "🥟"
+        case .woodFiredPizza:    return "🍕"
+        case .oysters:           return "🦪"
         case .lobsterRolls:      return "🦞"
-        case .smashburgers:      return "🍔"
-        // Sweets & Specialty
-        case .mapleSyrup:        return "🍁"
-        case .artisanChocolate:  return "🍫"
-        // Legacy
-        case .naturalWine:       return "🍷"
+        case .tartare:           return "🥩"
+        case .caviar:            return "🫧"
+        // ── Drinks ──
+        case .whiskey:           return "🥃"
+        case .amaro:             return "🌿"
+        case .newEnglandIPA:     return "🍺"
         case .craftBeer:         return "🍺"
+        case .naturalWine:       return "🍷"
         case .sake:              return "🍶"
+        case .cocktails:         return "🍸"
         case .specialtyCoffee:   return "☕"
         case .boba:              return "🧋"
-        case .cocktails:         return "🍸"
-        case .mochi:             return "🍡"
+        case .negroni:           return "🍹"
+        case .matcha:            return "🍵"
+        case .kombucha:          return "🫙"
+        case .cider:             return "🍎"
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return "🍫"
+        case .khachapuri:        return "🧀"
+        case .baklava:           return "🍯"
         case .churros:           return "🍩"
         case .gelato:            return "🍨"
+        case .mochi:             return "🍡"
+        case .empanadas:         return "🥟"
         case .crepes:            return "🥞"
-        case .baklava:           return "🍯"
-        case .sushi:             return "🍣"
-        case .ramen:             return "🍜"
-        case .tacos:             return "🌮"
-        case .dimSum:            return "🥟"
+        case .cremeBrulee:       return "🍮"
+        case .croissants:        return "🥐"
+        case .tresLeches:        return "🍰"
+        // ── Legacy ──
+        case .bourbon:           return "🥃"
+        case .singleMaltScotch:  return "🥃"
+        case .fernetBranca:      return "🌿"
+        case .peamealBacon:      return "🥓"
+        case .mapleSyrup:        return "🍁"
+        case .fugu:              return "🐡"
+        case .pierogi:           return "🥟"
+        case .smashburgers:      return "🍔"
         case .pizza:             return "🍕"
-        case .birria:            return "🫕"
         }
     }
 
     /// SF Symbol used where an emoji can't be used (e.g. Picker, map Marker)
     var icon: String {
         switch self {
-        // Drinks get drink icons
-        case .mezcal, .bourbon, .fernetBranca, .singleMaltScotch:
+        // Spirit drinks
+        case .mezcal, .whiskey, .amaro, .negroni, .cider:
             return "cup.and.saucer"
-        case .newEnglandIPA:
+        // Beer
+        case .newEnglandIPA, .craftBeer:
             return "mug"
-        // Legacy drinks
+        // Wine / cocktails / sake
         case .naturalWine, .sake, .cocktails:
             return "wineglass"
-        case .craftBeer:
-            return "mug"
-        case .specialtyCoffee:
+        // Coffee / tea
+        case .specialtyCoffee, .matcha:
             return "cup.and.saucer.fill"
-        case .boba:
+        // Boba / kombucha
+        case .boba, .kombucha:
             return "takeoutbag.and.cup.and.straw"
-        // Everything else
+        // Legacy spirits
+        case .bourbon, .singleMaltScotch, .fernetBranca:
+            return "cup.and.saucer"
+        // Everything else (food + sweets)
         default:
             return "fork.knife"
         }
@@ -206,194 +275,321 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     /// Accent color for badges, filter chips, and map pins
     var color: Color {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return .green
         case .flan:              return .orange
         case .tortillas:         return Color(red: 0.85, green: 0.65, blue: 0.2)
-        // Drinks
-        case .bourbon:           return Color(red: 0.72, green: 0.45, blue: 0.1)
-        case .fernetBranca:      return Color(red: 0.1, green: 0.35, blue: 0.15)
-        case .newEnglandIPA:     return Color(red: 0.85, green: 0.65, blue: 0.15)
-        case .singleMaltScotch:  return Color(red: 0.55, green: 0.3, blue: 0.05)
-        // Savory
-        case .peamealBacon:      return Color(red: 0.7, green: 0.4, blue: 0.2)
-        case .woodFiredPizza:    return Color(red: 0.8, green: 0.2, blue: 0.1)
-        case .paella:            return Color(red: 0.9, green: 0.7, blue: 0.1)
-        case .oysters:           return Color(red: 0.2, green: 0.45, blue: 0.5)
-        case .pho:               return Color(red: 0.6, green: 0.35, blue: 0.1)
+        case .tacos:             return Color(red: 0.95, green: 0.6, blue: 0.0)
+        case .birria:            return Color(red: 0.7, green: 0.1, blue: 0.0)
         case .pozole:            return Color(red: 0.7, green: 0.2, blue: 0.15)
-        case .tartare:           return Color(red: 0.6, green: 0.1, blue: 0.1)
-        case .fugu:              return Color(red: 0.15, green: 0.4, blue: 0.65)
+        case .ceviche:           return Color(red: 0.0, green: 0.6, blue: 0.6)
+        case .mole:              return Color(red: 0.4, green: 0.15, blue: 0.1)
+        case .pupusas:           return Color(red: 0.75, green: 0.5, blue: 0.15)
+        case .ramen:             return Color(red: 0.85, green: 0.2, blue: 0.1)
+        case .sushi:             return Color(red: 0.9, green: 0.3, blue: 0.3)
+        case .omakase:           return Color(red: 0.2, green: 0.2, blue: 0.4)
+        case .dimSum:            return Color(red: 0.8, green: 0.15, blue: 0.15)
+        case .pho:               return Color(red: 0.6, green: 0.35, blue: 0.1)
         case .bibimbap:          return Color(red: 0.8, green: 0.25, blue: 0.15)
+        case .koreanBBQ:         return Color(red: 0.75, green: 0.15, blue: 0.1)
+        case .dumplings:         return Color(red: 0.85, green: 0.55, blue: 0.2)
+        case .poke:              return Color(red: 0.1, green: 0.55, blue: 0.7)
+        case .tapas:             return Color(red: 0.8, green: 0.4, blue: 0.1)
+        case .paella:            return Color(red: 0.9, green: 0.7, blue: 0.1)
         case .ibericoHam:        return Color(red: 0.65, green: 0.15, blue: 0.25)
-        case .caviar:            return Color(red: 0.15, green: 0.2, blue: 0.3)
-        case .pierogi:           return Color(red: 0.8, green: 0.6, blue: 0.15)
+        case .woodFiredPizza:    return Color(red: 0.8, green: 0.2, blue: 0.1)
+        case .oysters:           return Color(red: 0.2, green: 0.45, blue: 0.5)
         case .lobsterRolls:      return Color(red: 0.85, green: 0.3, blue: 0.2)
-        case .smashburgers:      return Color(red: 0.8, green: 0.15, blue: 0.1)
-        // Sweets & Specialty
-        case .mapleSyrup:        return Color(red: 0.72, green: 0.4, blue: 0.08)
-        case .artisanChocolate:  return Color(red: 0.35, green: 0.18, blue: 0.08)
-        // Legacy
-        case .naturalWine:       return Color(red: 0.6, green: 0.1, blue: 0.3)
+        case .tartare:           return Color(red: 0.6, green: 0.1, blue: 0.1)
+        case .caviar:            return Color(red: 0.15, green: 0.2, blue: 0.3)
+        // ── Drinks ──
+        case .whiskey:           return Color(red: 0.65, green: 0.38, blue: 0.08)
+        case .amaro:             return Color(red: 0.1, green: 0.35, blue: 0.15)
+        case .newEnglandIPA:     return Color(red: 0.85, green: 0.65, blue: 0.15)
         case .craftBeer:         return Color(red: 0.8, green: 0.5, blue: 0.1)
+        case .naturalWine:       return Color(red: 0.6, green: 0.1, blue: 0.3)
         case .sake:              return Color(red: 0.2, green: 0.5, blue: 0.7)
+        case .cocktails:         return Color(red: 0.2, green: 0.3, blue: 0.7)
         case .specialtyCoffee:   return Color(red: 0.4, green: 0.25, blue: 0.1)
         case .boba:              return Color(red: 0.7, green: 0.45, blue: 0.2)
-        case .cocktails:         return Color(red: 0.2, green: 0.3, blue: 0.7)
-        case .mochi:             return Color(red: 0.9, green: 0.5, blue: 0.7)
+        case .negroni:           return Color(red: 0.7, green: 0.15, blue: 0.1)
+        case .matcha:            return Color(red: 0.3, green: 0.6, blue: 0.2)
+        case .kombucha:          return Color(red: 0.5, green: 0.7, blue: 0.3)
+        case .cider:             return Color(red: 0.7, green: 0.3, blue: 0.15)
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return Color(red: 0.35, green: 0.18, blue: 0.08)
+        case .khachapuri:        return Color(red: 0.85, green: 0.65, blue: 0.25)
+        case .baklava:           return Color(red: 0.75, green: 0.55, blue: 0.1)
         case .churros:           return Color(red: 0.85, green: 0.55, blue: 0.1)
         case .gelato:            return Color(red: 0.4, green: 0.7, blue: 0.9)
+        case .mochi:             return Color(red: 0.9, green: 0.5, blue: 0.7)
+        case .empanadas:         return Color(red: 0.8, green: 0.5, blue: 0.1)
         case .crepes:            return Color(red: 0.9, green: 0.75, blue: 0.4)
-        case .baklava:           return Color(red: 0.75, green: 0.55, blue: 0.1)
-        case .sushi:             return Color(red: 0.9, green: 0.3, blue: 0.3)
-        case .ramen:             return Color(red: 0.85, green: 0.2, blue: 0.1)
-        case .tacos:             return Color(red: 0.95, green: 0.6, blue: 0.0)
-        case .dimSum:            return Color(red: 0.8, green: 0.15, blue: 0.15)
+        case .cremeBrulee:       return Color(red: 0.9, green: 0.75, blue: 0.3)
+        case .croissants:        return Color(red: 0.85, green: 0.7, blue: 0.3)
+        case .tresLeches:        return Color(red: 0.95, green: 0.85, blue: 0.65)
+        // ── Legacy ──
+        case .bourbon:           return Color(red: 0.72, green: 0.45, blue: 0.1)
+        case .singleMaltScotch:  return Color(red: 0.55, green: 0.3, blue: 0.05)
+        case .fernetBranca:      return Color(red: 0.1, green: 0.35, blue: 0.15)
+        case .peamealBacon:      return Color(red: 0.7, green: 0.4, blue: 0.2)
+        case .mapleSyrup:        return Color(red: 0.72, green: 0.4, blue: 0.08)
+        case .fugu:              return Color(red: 0.15, green: 0.4, blue: 0.65)
+        case .pierogi:           return Color(red: 0.8, green: 0.6, blue: 0.15)
+        case .smashburgers:      return Color(red: 0.8, green: 0.15, blue: 0.1)
         case .pizza:             return Color(red: 0.8, green: 0.2, blue: 0.1)
-        case .birria:            return Color(red: 0.7, green: 0.1, blue: 0.0)
         }
     }
 
     /// Keywords scanned on a venue's homepage (mirrors FoodCategory.websiteKeywords)
     var websiteKeywords: [String] {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:
-            return ["mezcal", "mezcalería", "agave", "mezcales", "mezcal list", "mezcal menu", "mezcal selection"]
+            return ["mezcal", "mezcalería", "mezcales",
+                    "mezcal list", "mezcal menu", "mezcal selection", "agave spirits"]
         case .flan:
-            return ["flan", "flan casero", "postre", "custard", "caramel custard"]
+            return ["flan", "flan casero"]
         case .tortillas:
             return ["handmade tortillas", "tortillas hechas a mano", "fresh tortillas",
-                    "tortilleria", "house-made tortillas", "corn tortillas", "flour tortillas"]
-        // Drinks
+                    "tortilleria", "house-made tortillas", "homemade tortillas"]
+        case .tacos:
+            return ["tacos", "taqueria", "al pastor", "carnitas",
+                    "suadero", "taco menu"]
+        case .birria:
+            return ["birria", "birrieria", "consomé", "birria tacos",
+                    "quesabirria", "birria de res"]
+        case .pozole:
+            return ["pozole", "pozole rojo", "pozole verde",
+                    "pozole blanco", "pozolería"]
+        case .ceviche:
+            return ["ceviche", "cevichería", "leche de tigre",
+                    "ceviche mixto", "ceviche de pescado"]
+        case .mole:
+            return ["mole", "mole negro", "mole poblano", "mole rojo",
+                    "mole oaxaqueño", "mole coloradito"]
+        case .pupusas:
+            return ["pupusas", "pupusería", "curtido", "pupusa",
+                    "pupusas revueltas"]
+        case .ramen:
+            return ["ramen", "tonkotsu", "shoyu ramen", "miso ramen",
+                    "ramen shop", "tsukemen"]
+        case .sushi:
+            return ["sushi", "nigiri", "sashimi", "sushi bar",
+                    "maki", "sushi roll", "chirashi"]
+        case .omakase:
+            return ["omakase", "chef's choice", "tasting menu sushi",
+                    "omakase menu", "kappo"]
+        case .dimSum:
+            return ["dim sum", "yum cha", "har gow", "siu mai",
+                    "dim sum menu", "steamed dumplings"]
+        case .pho:
+            return ["pho", "phở", "pho menu"]
+        case .bibimbap:
+            return ["bibimbap", "dolsot bibimbap", "stone pot bibimbap",
+                    "mixed rice bowl"]
+        case .koreanBBQ:
+            return ["korean bbq", "korean barbecue", "kbbq", "bulgogi",
+                    "galbi", "samgyeopsal", "ssam"]
+        case .dumplings:
+            return ["dumplings", "xiaolongbao", "gyoza", "jiaozi",
+                    "soup dumplings", "potstickers", "mandu"]
+        case .poke:
+            return ["poke", "poké", "poke bowl", "ahi poke",
+                    "poke menu", "build your bowl"]
+        case .tapas:
+            return ["tapas", "pintxos", "pinchos", "tapas bar",
+                    "raciones", "croquetas", "patatas bravas"]
+        case .paella:
+            return ["paella", "paella valenciana", "paella mixta",
+                    "arroz", "bomba rice"]
+        case .ibericoHam:
+            return ["iberico", "ibérico", "jamón ibérico", "jamon iberico",
+                    "pata negra", "bellota"]
+        case .woodFiredPizza:
+            return ["wood fired", "wood-fired", "wood oven", "brick oven",
+                    "neapolitan", "napoletana", "pizza napoletana"]
+        case .oysters:
+            return ["oysters", "oyster bar", "fresh oysters",
+                    "oyster selection", "shucked"]
+        case .lobsterRolls:
+            return ["lobster roll", "lobster rolls", "lobster sandwich",
+                    "maine lobster roll", "connecticut lobster roll"]
+        case .tartare:
+            return ["tartare", "steak tartare", "beef tartare",
+                    "tuna tartare", "salmon tartare"]
+        case .caviar:
+            return ["caviar", "osetra", "beluga caviar",
+                    "sturgeon caviar", "caviar service"]
+        // ── Drinks ──
+        case .whiskey:
+            return ["whiskey", "whisky", "bourbon", "scotch", "rye whiskey",
+                    "single malt", "whiskey selection", "whiskey list"]
+        case .amaro:
+            return ["amaro", "amari", "digestif", "digestivo",
+                    "fernet", "averna", "montenegro"]
+        case .newEnglandIPA:
+            return ["new england ipa", "neipa", "hazy ipa",
+                    "juicy ipa", "hazy pale ale"]
+        case .craftBeer:
+            return ["craft beer", "microbrewery", "taproom", "craft ale",
+                    "local brew", "on tap", "draft list"]
+        case .naturalWine:
+            return ["natural wine", "natty wine", "orange wine",
+                    "biodynamic wine", "skin contact", "low intervention"]
+        case .sake:
+            return ["sake", "nihonshu", "junmai", "sake selection",
+                    "sake list", "sake bar", "daiginjo"]
+        case .cocktails:
+            return ["craft cocktail", "mixology", "artisan cocktail",
+                    "cocktail menu", "signature cocktail", "house cocktail"]
+        case .specialtyCoffee:
+            return ["specialty coffee", "single origin", "pour over",
+                    "third wave", "direct trade", "micro roast"]
+        case .boba:
+            return ["boba", "bubble tea", "tapioca", "milk tea",
+                    "taro", "boba shop"]
+        case .negroni:
+            return ["negroni", "sbagliato", "boulevardier",
+                    "negroni menu", "negroni variations"]
+        case .matcha:
+            return ["matcha", "matcha latte", "ceremonial matcha",
+                    "matcha menu", "koicha", "usucha"]
+        case .kombucha:
+            return ["kombucha", "kombucha on tap", "fermented tea",
+                    "probiotic", "jun kombucha"]
+        case .cider:
+            return ["cider", "hard cider", "craft cider", "cidery",
+                    "cider house", "cider on tap"]
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:
+            return ["artisan chocolate", "bean to bar", "craft chocolate",
+                    "single origin chocolate", "chocolatier", "cacao"]
+        case .khachapuri:
+            return ["khachapuri", "adjaruli", "adjarian",
+                    "cheese bread", "georgian bread"]
+        case .baklava:
+            return ["baklava", "baklawa", "pistachio baklava",
+                    "turkish sweets", "middle eastern sweets"]
+        case .churros:
+            return ["churros", "churro", "churrería",
+                    "churros con chocolate", "churro shop"]
+        case .gelato:
+            return ["gelato", "gelateria", "artigianale",
+                    "italian gelato", "artisan gelato"]
+        case .mochi:
+            return ["mochi", "daifuku", "mochi ice cream",
+                    "wagashi", "japanese sweets"]
+        case .empanadas:
+            return ["empanadas", "empanada", "empanadas argentinas",
+                    "empanada de carne", "empanadas caseras"]
+        case .crepes:
+            return ["crepes", "crêpes", "creperie", "crêperie",
+                    "sweet crepes", "savory crepes", "galettes"]
+        case .cremeBrulee:
+            return ["crème brûlée", "creme brulee", "crema catalana",
+                    "burnt cream"]
+        case .croissants:
+            return ["croissant", "croissants", "viennoiserie",
+                    "pain au chocolat", "butter croissant", "laminated dough"]
+        case .tresLeches:
+            return ["tres leches", "three milk cake", "pastel tres leches",
+                    "tres leches cake"]
+        // ── Legacy ──
         case .bourbon:
-            return ["bourbon", "kentucky bourbon", "small batch bourbon", "single barrel bourbon", "bourbon selection"]
+            return ["bourbon", "kentucky bourbon", "small batch bourbon",
+                    "single barrel bourbon", "bourbon selection"]
+        case .singleMaltScotch:
+            return ["single malt", "scotch whisky", "single malt scotch",
+                    "speyside", "islay", "highland scotch"]
         case .fernetBranca:
             return ["fernet", "fernet branca", "fernet-branca", "amaro", "digestif"]
-        case .newEnglandIPA:
-            return ["new england ipa", "neipa", "hazy ipa", "juicy ipa", "hazy pale ale"]
-        case .singleMaltScotch:
-            return ["single malt", "scotch whisky", "single malt scotch", "speyside", "islay", "highland scotch"]
-        // Savory
         case .peamealBacon:
-            return ["peameal bacon", "peameal", "canadian bacon", "back bacon", "cornmeal bacon"]
-        case .woodFiredPizza:
-            return ["wood fired", "wood-fired", "wood oven", "brick oven", "neapolitan", "napoletana", "pizza napoletana"]
-        case .paella:
-            return ["paella", "paella valenciana", "paella mixta", "arroz", "bomba rice"]
-        case .oysters:
-            return ["oysters", "oyster bar", "fresh oysters", "raw bar", "oyster selection", "shucked"]
-        case .pho:
-            return ["pho", "phở", "vietnamese noodle", "beef noodle soup", "pho menu"]
-        case .pozole:
-            return ["pozole", "pozole rojo", "pozole verde", "pozole blanco", "pozolería"]
-        case .tartare:
-            return ["tartare", "steak tartare", "beef tartare", "tuna tartare", "salmon tartare"]
+            return ["peameal bacon", "peameal", "canadian bacon",
+                    "back bacon", "cornmeal bacon"]
+        case .mapleSyrup:
+            return ["maple syrup", "pure maple", "maple sugar",
+                    "sugar shack", "cabane à sucre", "grade a maple"]
         case .fugu:
             return ["fugu", "pufferfish", "blowfish", "fugu sashimi", "tessa"]
-        case .bibimbap:
-            return ["bibimbap", "dolsot bibimbap", "stone pot bibimbap", "mixed rice bowl"]
-        case .ibericoHam:
-            return ["iberico", "ibérico", "jamón ibérico", "jamon iberico", "pata negra", "bellota"]
-        case .caviar:
-            return ["caviar", "osetra", "beluga caviar", "sturgeon caviar", "caviar service"]
         case .pierogi:
-            return ["pierogi", "pierog", "pierogy", "pierogies", "polish dumplings", "ruskie"]
-        case .lobsterRolls:
-            return ["lobster roll", "lobster rolls", "lobster sandwich", "maine lobster roll", "connecticut lobster roll"]
+            return ["pierogi", "pierog", "pierogy", "pierogies",
+                    "polish dumplings", "ruskie"]
         case .smashburgers:
-            return ["smashburger", "smash burger", "smashed burger", "smash patty", "crispy edges"]
-        // Sweets & Specialty
-        case .mapleSyrup:
-            return ["maple syrup", "pure maple", "maple sugar", "sugar shack", "cabane à sucre", "grade a maple"]
-        case .artisanChocolate:
-            return ["artisan chocolate", "bean to bar", "craft chocolate", "single origin chocolate", "chocolatier", "cacao"]
-        // Legacy
-        case .naturalWine:
-            return ["natural wine", "natty wine", "orange wine", "biodynamic wine", "skin contact"]
-        case .craftBeer:
-            return ["craft beer", "microbrewery", "taproom", "IPA", "craft ale", "local brew"]
-        case .sake:
-            return ["sake", "nihonshu", "junmai", "sake selection", "sake list", "sake bar"]
-        case .specialtyCoffee:
-            return ["specialty coffee", "single origin", "pour over", "espresso", "third wave", "direct trade"]
-        case .boba:
-            return ["boba", "bubble tea", "tapioca", "milk tea", "taro", "boba shop"]
-        case .cocktails:
-            return ["craft cocktail", "mixology", "artisan cocktail", "cocktail menu", "signature cocktail"]
-        case .mochi:
-            return ["mochi", "daifuku", "mochi ice cream", "wagashi", "japanese sweets"]
-        case .churros:
-            return ["churros", "churro", "churrería", "churros con chocolate"]
-        case .gelato:
-            return ["gelato", "gelateria", "artigianale", "italian gelato", "artisan gelato"]
-        case .crepes:
-            return ["crepes", "crêpes", "creperie", "crêperie", "sweet crepes", "savory crepes"]
-        case .baklava:
-            return ["baklava", "baklawa", "turkish sweets", "pistachio baklava", "pastry", "middle eastern sweets"]
-        case .sushi:
-            return ["sushi", "omakase", "nigiri", "sashimi", "sushi bar", "maki", "sushi roll"]
-        case .ramen:
-            return ["ramen", "tonkotsu", "shoyu ramen", "miso ramen", "ramen shop", "noodle soup"]
-        case .tacos:
-            return ["tacos", "taqueria", "al pastor", "birria tacos", "taco", "mexican street food"]
-        case .dimSum:
-            return ["dim sum", "yum cha", "har gow", "siu mai", "dumplings", "dim sum menu"]
+            return ["smashburger", "smash burger", "smashed burger",
+                    "smash patty", "crispy edges"]
         case .pizza:
-            return ["neapolitan", "wood fired", "napoletana", "pizza napoletana", "00 flour", "fior di latte"]
-        case .birria:
-            return ["birria", "birrieria", "consomé", "birria tacos", "quesabirria"]
+            return ["neapolitan", "wood fired", "napoletana",
+                    "pizza napoletana", "00 flour", "fior di latte"]
         }
     }
 
     /// Prompt shown on the Add Spot screen
     var addSpotPrompt: String {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return "Search for a bar, restaurant, or store to add it as a mezcal spot."
         case .flan:              return "Search for a restaurant or bakery to add it as a flan spot."
         case .tortillas:         return "Search for a restaurant or tortilleria that makes handmade tortillas."
-        // Drinks
-        case .bourbon:           return "Search for a bar or restaurant with a bourbon selection."
-        case .fernetBranca:      return "Search for a bar that serves Fernet Branca."
-        case .newEnglandIPA:     return "Search for a brewery or taproom with New England IPAs."
-        case .singleMaltScotch:  return "Search for a bar with a single malt scotch selection."
-        // Savory
-        case .peamealBacon:      return "Search for a restaurant or deli that serves peameal bacon."
-        case .woodFiredPizza:    return "Search for a wood-fired pizzeria."
-        case .paella:            return "Search for a restaurant that serves paella."
-        case .oysters:           return "Search for an oyster bar or raw bar restaurant."
-        case .pho:               return "Search for a pho or Vietnamese noodle restaurant."
+        case .tacos:             return "Search for a taqueria or taco spot."
+        case .birria:            return "Search for a birria restaurant or truck."
         case .pozole:            return "Search for a restaurant that serves pozole."
-        case .tartare:           return "Search for a restaurant that serves tartare."
-        case .fugu:              return "Search for a Japanese restaurant that serves fugu."
+        case .ceviche:           return "Search for a restaurant that serves ceviche."
+        case .mole:              return "Search for a restaurant that serves mole."
+        case .pupusas:           return "Search for a pupuseria or Salvadoran restaurant."
+        case .ramen:             return "Search for a ramen restaurant."
+        case .sushi:             return "Search for a sushi bar or Japanese restaurant."
+        case .omakase:           return "Search for a restaurant offering omakase."
+        case .dimSum:            return "Search for a dim sum restaurant."
+        case .pho:               return "Search for a pho or Vietnamese noodle restaurant."
         case .bibimbap:          return "Search for a Korean restaurant that serves bibimbap."
+        case .koreanBBQ:         return "Search for a Korean BBQ restaurant."
+        case .dumplings:         return "Search for a dumpling restaurant."
+        case .poke:              return "Search for a poke restaurant."
+        case .tapas:             return "Search for a tapas bar or Spanish restaurant."
+        case .paella:            return "Search for a restaurant that serves paella."
         case .ibericoHam:        return "Search for a restaurant or shop that serves Iberico ham."
-        case .caviar:            return "Search for a restaurant with a caviar service."
-        case .pierogi:           return "Search for a restaurant that serves pierogi."
+        case .woodFiredPizza:    return "Search for a wood-fired pizzeria."
+        case .oysters:           return "Search for an oyster bar or raw bar restaurant."
         case .lobsterRolls:      return "Search for a seafood spot that serves lobster rolls."
-        case .smashburgers:      return "Search for a restaurant that serves smashburgers."
-        // Sweets & Specialty
-        case .mapleSyrup:        return "Search for a spot that serves or sells real maple syrup."
-        case .artisanChocolate:  return "Search for a chocolatier or artisan chocolate shop."
-        // Legacy
-        case .naturalWine:       return "Search for a wine bar or shop that carries natural wines."
+        case .tartare:           return "Search for a restaurant that serves tartare."
+        case .caviar:            return "Search for a restaurant with a caviar service."
+        // ── Drinks ──
+        case .whiskey:           return "Search for a bar or restaurant with a whiskey selection."
+        case .amaro:             return "Search for a bar with an amaro selection."
+        case .newEnglandIPA:     return "Search for a brewery or taproom with New England IPAs."
         case .craftBeer:         return "Search for a brewery, taproom, or craft beer bar."
+        case .naturalWine:       return "Search for a wine bar or shop that carries natural wines."
         case .sake:              return "Search for a sake bar or Japanese restaurant with a sake program."
+        case .cocktails:         return "Search for a craft cocktail bar."
         case .specialtyCoffee:   return "Search for a specialty coffee shop or roastery."
         case .boba:              return "Search for a boba or bubble tea shop."
-        case .cocktails:         return "Search for a craft cocktail bar."
-        case .mochi:             return "Search for a mochi shop or Japanese sweets cafe."
-        case .churros:           return "Search for a churro shop or Mexican bakery."
-        case .gelato:            return "Search for a gelateria or artisan ice cream shop."
-        case .crepes:            return "Search for a creperie or cafe that serves crepes."
+        case .negroni:           return "Search for a bar known for its negroni."
+        case .matcha:            return "Search for a matcha cafe or tea house."
+        case .kombucha:          return "Search for a kombucha bar or shop."
+        case .cider:             return "Search for a cidery or cider bar."
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return "Search for a chocolatier or artisan chocolate shop."
+        case .khachapuri:        return "Search for a Georgian restaurant that serves khachapuri."
         case .baklava:           return "Search for a bakery or shop that makes baklava."
-        case .sushi:             return "Search for a sushi bar or Japanese restaurant."
-        case .ramen:             return "Search for a ramen restaurant."
-        case .tacos:             return "Search for a taqueria or taco spot."
-        case .dimSum:            return "Search for a dim sum restaurant."
+        case .churros:           return "Search for a churro shop or bakery."
+        case .gelato:            return "Search for a gelateria or artisan gelato shop."
+        case .mochi:             return "Search for a mochi shop or Japanese sweets cafe."
+        case .empanadas:         return "Search for an empanada shop or Latin American restaurant."
+        case .crepes:            return "Search for a creperie or cafe that serves crepes."
+        case .cremeBrulee:       return "Search for a restaurant that serves crème brûlée."
+        case .croissants:        return "Search for a bakery known for its croissants."
+        case .tresLeches:        return "Search for a bakery or restaurant that serves tres leches."
+        // ── Legacy ──
+        case .bourbon:           return "Search for a bar or restaurant with a bourbon selection."
+        case .singleMaltScotch:  return "Search for a bar with a single malt scotch selection."
+        case .fernetBranca:      return "Search for a bar that serves Fernet Branca."
+        case .peamealBacon:      return "Search for a restaurant or deli that serves peameal bacon."
+        case .mapleSyrup:        return "Search for a spot that serves or sells real maple syrup."
+        case .fugu:              return "Search for a Japanese restaurant that serves fugu."
+        case .pierogi:           return "Search for a restaurant that serves pierogi."
+        case .smashburgers:      return "Search for a restaurant that serves smashburgers."
         case .pizza:             return "Search for a Neapolitan or wood-fired pizzeria."
-        case .birria:            return "Search for a birria restaurant or truck."
         }
     }
 
@@ -403,153 +599,207 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     /// Label for the offerings section header
     var offeringsLabel: String {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return "Mezcal Brands"
         case .flan:              return "Flan Styles"
         case .tortillas:         return "Tortilla Types"
-        // Drinks
-        case .bourbon:           return "Bourbon Brands"
-        case .fernetBranca:      return "Serving Styles"
-        case .newEnglandIPA:     return "Beer Brands"
-        case .singleMaltScotch:  return "Scotch Brands"
-        // Savory
-        case .peamealBacon:      return "Serving Styles"
-        case .woodFiredPizza:    return "Pizza Styles"
-        case .paella:            return "Paella Types"
-        case .oysters:           return "Oyster Varieties"
-        case .pho:               return "Pho Types"
+        case .tacos:             return "Taco Types"
+        case .birria:            return "Birria Styles"
         case .pozole:            return "Pozole Styles"
-        case .tartare:           return "Tartare Types"
-        case .fugu:              return "Fugu Preparations"
+        case .ceviche:           return "Ceviche Types"
+        case .mole:              return "Mole Varieties"
+        case .pupusas:           return "Pupusa Fillings"
+        case .ramen:             return "Ramen Styles"
+        case .sushi:             return "Sushi Highlights"
+        case .omakase:           return "Omakase Style"
+        case .dimSum:            return "Dim Sum Dishes"
+        case .pho:               return "Pho Types"
         case .bibimbap:          return "Bibimbap Types"
+        case .koreanBBQ:         return "BBQ Cuts"
+        case .dumplings:         return "Dumpling Types"
+        case .poke:              return "Poke Bowls"
+        case .tapas:             return "Tapas Dishes"
+        case .paella:            return "Paella Types"
         case .ibericoHam:        return "Ham Grades"
-        case .caviar:            return "Caviar Types"
-        case .pierogi:           return "Pierogi Fillings"
+        case .woodFiredPizza:    return "Pizza Styles"
+        case .oysters:           return "Oyster Varieties"
         case .lobsterRolls:      return "Roll Styles"
-        case .smashburgers:      return "Burger Styles"
-        // Sweets & Specialty
-        case .mapleSyrup:        return "Syrup Grades"
-        case .artisanChocolate:  return "Chocolate Types"
-        // Legacy
-        case .naturalWine:       return "Wine Styles"
+        case .tartare:           return "Tartare Types"
+        case .caviar:            return "Caviar Types"
+        // ── Drinks ──
+        case .whiskey:           return "Whiskey Brands"
+        case .amaro:             return "Amaro Brands"
+        case .newEnglandIPA:     return "Beer Brands"
         case .craftBeer:         return "Beer Styles"
+        case .naturalWine:       return "Wine Styles"
         case .sake:              return "Sake Types"
+        case .cocktails:         return "Cocktail Styles"
         case .specialtyCoffee:   return "Coffee Methods"
         case .boba:              return "Drink Flavors"
-        case .cocktails:         return "Cocktail Styles"
-        case .mochi:             return "Mochi Types"
+        case .negroni:           return "Negroni Variations"
+        case .matcha:            return "Matcha Types"
+        case .kombucha:          return "Kombucha Flavors"
+        case .cider:             return "Cider Styles"
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return "Chocolate Types"
+        case .khachapuri:        return "Khachapuri Styles"
+        case .baklava:           return "Baklava Types"
         case .churros:           return "Churro Varieties"
         case .gelato:            return "Gelato Flavors"
+        case .mochi:             return "Mochi Types"
+        case .empanadas:         return "Empanada Fillings"
         case .crepes:            return "Crepe Varieties"
-        case .baklava:           return "Baklava Types"
-        case .sushi:             return "Sushi Highlights"
-        case .ramen:             return "Ramen Styles"
-        case .tacos:             return "Taco Types"
-        case .dimSum:            return "Dim Sum Dishes"
+        case .cremeBrulee:       return "Brûlée Flavors"
+        case .croissants:        return "Croissant Types"
+        case .tresLeches:        return "Tres Leches Styles"
+        // ── Legacy ──
+        case .bourbon:           return "Bourbon Brands"
+        case .singleMaltScotch:  return "Scotch Brands"
+        case .fernetBranca:      return "Serving Styles"
+        case .peamealBacon:      return "Serving Styles"
+        case .mapleSyrup:        return "Syrup Grades"
+        case .fugu:              return "Fugu Preparations"
+        case .pierogi:           return "Pierogi Fillings"
+        case .smashburgers:      return "Burger Styles"
         case .pizza:             return "Pizza Styles"
-        case .birria:            return "Birria Styles"
         }
     }
 
     /// Singular label for an offering entry (e.g. "brand", "style", "flavor")
     var offeringSingular: String {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return "brand"
         case .flan:              return "style"
         case .tortillas:         return "type"
-        // Drinks
-        case .bourbon:           return "brand"
-        case .fernetBranca:      return "style"
-        case .newEnglandIPA:     return "brand"
-        case .singleMaltScotch:  return "brand"
-        // Savory
-        case .peamealBacon:      return "style"
-        case .woodFiredPizza:    return "style"
-        case .paella:            return "type"
-        case .oysters:           return "variety"
-        case .pho:               return "type"
+        case .tacos:             return "type"
+        case .birria:            return "style"
         case .pozole:            return "style"
-        case .tartare:           return "type"
-        case .fugu:              return "preparation"
+        case .ceviche:           return "type"
+        case .mole:              return "variety"
+        case .pupusas:           return "filling"
+        case .ramen:             return "style"
+        case .sushi:             return "highlight"
+        case .omakase:           return "style"
+        case .dimSum:            return "dish"
+        case .pho:               return "type"
         case .bibimbap:          return "type"
+        case .koreanBBQ:         return "cut"
+        case .dumplings:         return "type"
+        case .poke:              return "bowl"
+        case .tapas:             return "dish"
+        case .paella:            return "type"
         case .ibericoHam:        return "grade"
-        case .caviar:            return "type"
-        case .pierogi:           return "filling"
+        case .woodFiredPizza:    return "style"
+        case .oysters:           return "variety"
         case .lobsterRolls:      return "style"
-        case .smashburgers:      return "style"
-        // Sweets & Specialty
-        case .mapleSyrup:        return "grade"
-        case .artisanChocolate:  return "type"
-        // Legacy
-        case .naturalWine:       return "style"
+        case .tartare:           return "type"
+        case .caviar:            return "type"
+        // ── Drinks ──
+        case .whiskey:           return "brand"
+        case .amaro:             return "brand"
+        case .newEnglandIPA:     return "brand"
         case .craftBeer:         return "style"
+        case .naturalWine:       return "style"
         case .sake:              return "type"
+        case .cocktails:         return "style"
         case .specialtyCoffee:   return "method"
         case .boba:              return "flavor"
-        case .cocktails:         return "style"
-        case .mochi:             return "type"
+        case .negroni:           return "variation"
+        case .matcha:            return "type"
+        case .kombucha:          return "flavor"
+        case .cider:             return "style"
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return "type"
+        case .khachapuri:        return "style"
+        case .baklava:           return "type"
         case .churros:           return "variety"
         case .gelato:            return "flavor"
+        case .mochi:             return "type"
+        case .empanadas:         return "filling"
         case .crepes:            return "variety"
-        case .baklava:           return "type"
-        case .sushi:             return "highlight"
-        case .ramen:             return "style"
-        case .tacos:             return "type"
-        case .dimSum:            return "dish"
+        case .cremeBrulee:       return "flavor"
+        case .croissants:        return "type"
+        case .tresLeches:        return "style"
+        // ── Legacy ──
+        case .bourbon:           return "brand"
+        case .singleMaltScotch:  return "brand"
+        case .fernetBranca:      return "style"
+        case .peamealBacon:      return "style"
+        case .mapleSyrup:        return "grade"
+        case .fugu:              return "preparation"
+        case .pierogi:           return "filling"
+        case .smashburgers:      return "style"
         case .pizza:             return "style"
-        case .birria:            return "style"
         }
     }
 
     /// Example offerings shown as placeholder hints
     var offeringsExamples: String {
         switch self {
-        // Launch trio
+        // ── Food ──
         case .mezcal:            return "e.g. Del Maguey, Vago, Bozal"
         case .flan:              return "e.g. Classic, Coconut, Cheese Flan"
         case .tortillas:         return "e.g. Corn, Flour, Blue Corn, Handmade"
-        // Drinks
-        case .bourbon:           return "e.g. Maker's Mark, Woodford Reserve, Buffalo Trace"
-        case .fernetBranca:      return "e.g. Neat, with Cola, Cocktail"
-        case .newEnglandIPA:     return "e.g. Trillium, Tree House, Other Half"
-        case .singleMaltScotch:  return "e.g. Lagavulin, Macallan, Glenfiddich"
-        // Savory
-        case .peamealBacon:      return "e.g. Classic Sandwich, Eggs Benedict, Platter"
-        case .woodFiredPizza:    return "e.g. Margherita, Marinara, Diavola"
-        case .paella:            return "e.g. Valenciana, Mixta, Mariscos"
-        case .oysters:           return "e.g. Wellfleet, Kumamoto, Blue Point"
-        case .pho:               return "e.g. Tai (Rare Beef), Dac Biet (Special)"
+        case .tacos:             return "e.g. Al Pastor, Carnitas, Suadero"
+        case .birria:            return "e.g. Tacos, Consomme, Quesabirria"
         case .pozole:            return "e.g. Rojo, Verde, Blanco"
-        case .tartare:           return "e.g. Steak, Tuna, Salmon"
-        case .fugu:              return "e.g. Sashimi (Tessa), Hot Pot (Tecchiri)"
+        case .ceviche:           return "e.g. Mixto, Pescado, Shrimp"
+        case .mole:              return "e.g. Negro, Poblano, Rojo, Coloradito"
+        case .pupusas:           return "e.g. Revueltas, Queso, Frijol, Loroco"
+        case .ramen:             return "e.g. Tonkotsu, Shoyu, Miso, Tsukemen"
+        case .sushi:             return "e.g. Omakase, Chirashi, Salmon Nigiri"
+        case .omakase:           return "e.g. Edomae, Seasonal, Chef's Special"
+        case .dimSum:            return "e.g. Har Gow, Siu Mai, Char Siu Bao"
+        case .pho:               return "e.g. Tai (Rare Beef), Dac Biet (Special)"
         case .bibimbap:          return "e.g. Dolsot (Stone Pot), Vegetable, Beef"
+        case .koreanBBQ:         return "e.g. Bulgogi, Galbi, Samgyeopsal"
+        case .dumplings:         return "e.g. Xiaolongbao, Gyoza, Potstickers"
+        case .poke:              return "e.g. Ahi Tuna, Salmon, Spicy Mayo"
+        case .tapas:             return "e.g. Croquetas, Patatas Bravas, Gambas"
+        case .paella:            return "e.g. Valenciana, Mixta, Mariscos"
         case .ibericoHam:        return "e.g. Bellota, Cebo, Reserva"
-        case .caviar:            return "e.g. Osetra, Beluga, Paddlefish"
-        case .pierogi:           return "e.g. Potato & Cheese, Sauerkraut, Meat"
+        case .woodFiredPizza:    return "e.g. Margherita, Marinara, Diavola"
+        case .oysters:           return "e.g. Wellfleet, Kumamoto, Blue Point"
         case .lobsterRolls:      return "e.g. Maine Style, Connecticut Style"
-        case .smashburgers:      return "e.g. Single, Double, Cheese, Special Sauce"
-        // Sweets & Specialty
-        case .mapleSyrup:        return "e.g. Grade A Amber, Dark Robust, Maple Candy"
-        case .artisanChocolate:  return "e.g. Single Origin Bar, Truffles, Bonbons"
-        // Legacy
+        case .tartare:           return "e.g. Steak, Tuna, Salmon"
+        case .caviar:            return "e.g. Osetra, Beluga, Paddlefish"
+        // ── Drinks ──
+        case .whiskey:           return "e.g. Maker's Mark, Lagavulin, Nikka"
+        case .amaro:             return "e.g. Fernet, Averna, Montenegro, Cynar"
+        case .newEnglandIPA:     return "e.g. Trillium, Tree House, Other Half"
+        case .craftBeer:         return "e.g. Hazy IPA, Stout, Sour, Pilsner"
         case .naturalWine:       return "e.g. Pet-Nat, Orange, Skin Contact"
-        case .craftBeer:         return "e.g. Hazy IPA, Stout, Sour"
         case .sake:              return "e.g. Junmai, Daiginjo, Nigori"
+        case .cocktails:         return "e.g. Negroni, Old Fashioned, Mezcal Mule"
         case .specialtyCoffee:   return "e.g. Pour Over, Espresso, Cold Brew"
         case .boba:              return "e.g. Taro, Brown Sugar, Matcha"
-        case .cocktails:         return "e.g. Negroni, Old Fashioned, Mezcal Mule"
-        case .mochi:             return "e.g. Daifuku, Ice Cream, Strawberry"
+        case .negroni:           return "e.g. Classic, Sbagliato, White, Mezcal"
+        case .matcha:            return "e.g. Ceremonial, Latte, Iced, Koicha"
+        case .kombucha:          return "e.g. Ginger, Lavender, Hibiscus"
+        case .cider:             return "e.g. Dry, Semi-Sweet, Rosé, Perry"
+        // ── Sweets & Specialty ──
+        case .artisanChocolate:  return "e.g. Single Origin Bar, Truffles, Bonbons"
+        case .khachapuri:        return "e.g. Adjaruli, Imeruli, Megruli"
+        case .baklava:           return "e.g. Pistachio, Walnut, Bird's Nest"
         case .churros:           return "e.g. Classic, Filled, Chocolate Dipped"
         case .gelato:            return "e.g. Pistachio, Stracciatella, Hazelnut"
+        case .mochi:             return "e.g. Daifuku, Ice Cream, Strawberry"
+        case .empanadas:         return "e.g. Beef, Chicken, Cheese, Spinach"
         case .crepes:            return "e.g. Nutella, Savory Ham & Cheese"
-        case .baklava:           return "e.g. Pistachio, Walnut, Bird's Nest"
-        case .sushi:             return "e.g. Omakase, Chirashi, Salmon Nigiri"
-        case .ramen:             return "e.g. Tonkotsu, Shoyu, Miso, Tsukemen"
-        case .tacos:             return "e.g. Al Pastor, Carnitas, Suadero"
-        case .dimSum:            return "e.g. Har Gow, Siu Mai, Char Siu Bao"
+        case .cremeBrulee:       return "e.g. Classic Vanilla, Lavender, Espresso"
+        case .croissants:        return "e.g. Butter, Almond, Pain au Chocolat"
+        case .tresLeches:        return "e.g. Classic, Chocolate, Strawberry"
+        // ── Legacy ──
+        case .bourbon:           return "e.g. Maker's Mark, Woodford Reserve, Buffalo Trace"
+        case .singleMaltScotch:  return "e.g. Lagavulin, Macallan, Glenfiddich"
+        case .fernetBranca:      return "e.g. Neat, with Cola, Cocktail"
+        case .peamealBacon:      return "e.g. Classic Sandwich, Eggs Benedict, Platter"
+        case .mapleSyrup:        return "e.g. Grade A Amber, Dark Robust, Maple Candy"
+        case .fugu:              return "e.g. Sashimi (Tessa), Hot Pot (Tecchiri)"
+        case .pierogi:           return "e.g. Potato & Cheese, Sauerkraut, Meat"
+        case .smashburgers:      return "e.g. Single, Double, Cheese, Special Sauce"
         case .pizza:             return "e.g. Margherita, Marinara, Diavola"
-        case .birria:            return "e.g. Tacos, Consomme, Quesabirria"
         }
     }
 }
