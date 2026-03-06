@@ -136,6 +136,26 @@ actor WebsiteCheckService {
         return .notFound
     }
 
+    /// Instant cache-only pre-screen — returns results for suggestions whose
+    /// URLs are already in htmlCache. No network calls. Use this to apply
+    /// cached results immediately (e.g. from Explore tab) before running the
+    /// full batchPreScreen for uncached venues.
+    func cachedPreScreen(
+        suggestions: [SuggestedSpot],
+        picks: [FoodCategory]
+    ) -> [String: Set<String>] {
+        let pickIDs = Set(picks.map(\.id))
+        var results: [String: Set<String>] = [:]
+        for suggestion in suggestions {
+            guard let url = suggestion.mapItem.url,
+                  !isSocialMediaURL(url) else { continue }
+            if let cached = htmlCache[url.absoluteString] {
+                results[suggestion.id] = cached.confirmed.intersection(pickIDs)
+            }
+        }
+        return results
+    }
+
     /// Homepage-only scan for batch pre-screening ghost pins.
     /// Fetches homepages concurrently, scans for all category keywords, and
     /// returns matched category IDs per suggestion ID.

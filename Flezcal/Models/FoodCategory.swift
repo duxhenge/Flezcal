@@ -114,7 +114,7 @@ extension FoodCategory {
         displayName: "Mezcal",
         emoji: "🥃",
         color: .green,
-        mapSearchTerms: ["mezcal", "bar", "liquor store", "restaurante", "restaurant"],
+        mapSearchTerms: ["mezcal", "bar", "liquor store", "wine spirits", "restaurante", "restaurant"],
         websiteKeywords: ["mezcal", "mezcalería", "mezcales",
                           "mezcal list", "mezcal menu", "mezcal selection",
                           "agave spirits"],

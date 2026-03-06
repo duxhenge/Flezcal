@@ -64,7 +64,7 @@ struct Spot: Identifiable, Codable, Hashable {
     /// When the import script ran; nil for user-added spots
     var importDate: Date? = nil
     /// Flips to true the first time a real Flezcal user confirms this spot exists
-    var communityVerified: Bool = false
+    var isCommunityVerified: Bool = false
 
     // Per-category attribution — tracks which user added each category.
     // Key: SpotCategory.rawValue, Value: userID who added that category.
@@ -93,7 +93,7 @@ struct Spot: Identifiable, Codable, Hashable {
     var locationStatus: String?  // nil = open, "closed" = confirmed closed by admin
 
     // Owner Verified — manually set by admin; owner fields editable by ownerUserId
-    var ownerVerified: Bool = false
+    var isOwnerVerified: Bool = false
     var ownerUserId: String?
     var ownerBrands: [String]?        // Brands/products the owner wants to highlight
     var ownerDetails: String?         // Free-text from the owner (hours, story, etc.)
@@ -225,13 +225,15 @@ struct Spot: Identifiable, Codable, Hashable {
         case websiteURL
         case photoURL, userPhotoURL
         case isReported, reportCount, reportedByUserIDs, isHidden
-        case source, importDate, communityVerified, categoryAddedBy
+        case source, importDate, categoryAddedBy
+        case isCommunityVerified = "communityVerified"
         case verificationUpCount, verificationDownCount
         case lastVerificationDate, verificationUserCount
         case websiteDetectedCategories
         case customCategoryTags
         case closureReportCount, locationStatus
-        case ownerVerified, ownerUserId, ownerBrands, ownerDetails
+        case isOwnerVerified = "ownerVerified"
+        case ownerUserId, ownerBrands, ownerDetails
         case reservationURL, ownerLockedCategories
         case analyticsViewCount, analyticsReservationClicks, geohash4
     }
@@ -249,7 +251,7 @@ struct Spot: Identifiable, Codable, Hashable {
          userPhotoURL: String? = nil,
          source: String? = nil,
          importDate: Date? = nil,
-         communityVerified: Bool = false,
+         isCommunityVerified: Bool = false,
          categoryAddedBy: [String: String]? = nil,
          verificationUpCount: [String: Int]? = nil,
          verificationDownCount: [String: Int]? = nil,
@@ -259,7 +261,7 @@ struct Spot: Identifiable, Codable, Hashable {
          customCategoryTags: [String]? = nil,
          closureReportCount: Int = 0,
          locationStatus: String? = nil,
-         ownerVerified: Bool = false,
+         isOwnerVerified: Bool = false,
          ownerUserId: String? = nil,
          ownerBrands: [String]? = nil,
          ownerDetails: String? = nil,
@@ -286,7 +288,7 @@ struct Spot: Identifiable, Codable, Hashable {
         self.userPhotoURL = userPhotoURL
         self.source = source
         self.importDate = importDate
-        self.communityVerified = communityVerified
+        self.isCommunityVerified = isCommunityVerified
         self.categoryAddedBy = categoryAddedBy
         self.verificationUpCount = verificationUpCount
         self.verificationDownCount = verificationDownCount
@@ -296,7 +298,7 @@ struct Spot: Identifiable, Codable, Hashable {
         self.customCategoryTags = customCategoryTags
         self.closureReportCount = closureReportCount
         self.locationStatus = locationStatus
-        self.ownerVerified = ownerVerified
+        self.isOwnerVerified = isOwnerVerified
         self.ownerUserId = ownerUserId
         self.ownerBrands = ownerBrands
         self.ownerDetails = ownerDetails
@@ -347,7 +349,7 @@ struct Spot: Identifiable, Codable, Hashable {
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
         source = try container.decodeIfPresent(String.self, forKey: .source)
         importDate = try container.decodeIfPresent(Date.self, forKey: .importDate)
-        communityVerified = try container.decodeIfPresent(Bool.self, forKey: .communityVerified) ?? false
+        isCommunityVerified = try container.decodeIfPresent(Bool.self, forKey: .isCommunityVerified) ?? false
         categoryAddedBy = try container.decodeIfPresent([String: String].self, forKey: .categoryAddedBy)
         verificationUpCount = try container.decodeIfPresent([String: Int].self, forKey: .verificationUpCount)
         verificationDownCount = try container.decodeIfPresent([String: Int].self, forKey: .verificationDownCount)
@@ -357,7 +359,7 @@ struct Spot: Identifiable, Codable, Hashable {
         customCategoryTags = try container.decodeIfPresent([String].self, forKey: .customCategoryTags)
         closureReportCount = try container.decodeIfPresent(Int.self, forKey: .closureReportCount) ?? 0
         locationStatus = try container.decodeIfPresent(String.self, forKey: .locationStatus)
-        ownerVerified = try container.decodeIfPresent(Bool.self, forKey: .ownerVerified) ?? false
+        isOwnerVerified = try container.decodeIfPresent(Bool.self, forKey: .isOwnerVerified) ?? false
         ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId)
         ownerBrands = try container.decodeIfPresent([String].self, forKey: .ownerBrands)
         ownerDetails = try container.decodeIfPresent(String.self, forKey: .ownerDetails)
@@ -394,7 +396,7 @@ struct Spot: Identifiable, Codable, Hashable {
         try container.encode(isHidden, forKey: .isHidden)
         try container.encodeIfPresent(source, forKey: .source)
         try container.encodeIfPresent(importDate, forKey: .importDate)
-        try container.encode(communityVerified, forKey: .communityVerified)
+        try container.encode(isCommunityVerified, forKey: .isCommunityVerified)
         try container.encodeIfPresent(categoryAddedBy, forKey: .categoryAddedBy)
         try container.encodeIfPresent(verificationUpCount, forKey: .verificationUpCount)
         try container.encodeIfPresent(verificationDownCount, forKey: .verificationDownCount)
@@ -404,7 +406,7 @@ struct Spot: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(customCategoryTags, forKey: .customCategoryTags)
         try container.encode(closureReportCount, forKey: .closureReportCount)
         try container.encodeIfPresent(locationStatus, forKey: .locationStatus)
-        try container.encode(ownerVerified, forKey: .ownerVerified)
+        try container.encode(isOwnerVerified, forKey: .isOwnerVerified)
         try container.encodeIfPresent(ownerUserId, forKey: .ownerUserId)
         try container.encodeIfPresent(ownerBrands, forKey: .ownerBrands)
         try container.encodeIfPresent(ownerDetails, forKey: .ownerDetails)
@@ -419,7 +421,7 @@ struct Spot: Identifiable, Codable, Hashable {
 
     /// Whether the given user is the verified owner of this spot
     func isOwner(userID: String?) -> Bool {
-        guard let userID, ownerVerified, let ownerUserId else { return false }
+        guard let userID, isOwnerVerified, let ownerUserId else { return false }
         return userID == ownerUserId
     }
 

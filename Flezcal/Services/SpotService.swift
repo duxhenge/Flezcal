@@ -181,15 +181,15 @@ class SpotService: ObservableObject {
     // MARK: - Backfill: mark user-added spots as verified
 
     /// One-time migration: any spot added by a real user (source == nil) that
-    /// isn't already communityVerified gets flipped to true.  No-ops once all
+    /// isn't already isCommunityVerified gets flipped to true.  No-ops once all
     /// user-added spots are verified.
     private func backfillUserAddedVerification() async {
-        for spot in spots where spot.source == nil && !spot.communityVerified {
+        for spot in spots where spot.source == nil && !spot.isCommunityVerified {
             do {
-                let data: [String: Any] = ["communityVerified": true]
+                let data: [String: Any] = ["communityVerified": true]  // Firestore field name stays unchanged
                 try await db.collection(collectionName).document(spot.id).updateData(data)
                 if let index = spots.firstIndex(where: { $0.id == spot.id }) {
-                    spots[index].communityVerified = true
+                    spots[index].isCommunityVerified = true
                 }
             } catch {
                 // Permission denied or network error — stop the entire batch
@@ -432,17 +432,17 @@ class SpotService: ObservableObject {
 
     // MARK: - Community Verification (imported spots)
 
-    /// Flips `communityVerified` to true on a spot that was seeded from an external
+    /// Flips `isCommunityVerified` to true on a spot that was seeded from an external
     /// source (source != nil).  Idempotent — safe to call multiple times.
     /// Also clears any accumulated flags so a legitimate re-confirmation resets
     /// the soft-warning state (abuse protection: the report threshold still applies).
     func markCommunityVerified(spotID: String) async {
         guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return }
-        guard !spots[index].communityVerified else { return }  // Already verified — no-op
+        guard !spots[index].isCommunityVerified else { return }  // Already verified — no-op
 
         do {
             let data: [String: Any] = [
-                "communityVerified": true,
+                "communityVerified": true,  // Firestore field name stays unchanged
                 // Clear accumulated flags so the warning banner is dismissed
                 "isReported": false,
                 "reportCount": 0,
@@ -450,7 +450,7 @@ class SpotService: ObservableObject {
                 "isHidden": false
             ]
             try await db.collection(collectionName).document(spotID).updateData(data)
-            spots[index].communityVerified = true
+            spots[index].isCommunityVerified = true
             spots[index].isReported = false
             spots[index].reportCount = 0
             spots[index].reportedByUserIDs = []

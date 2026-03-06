@@ -536,7 +536,7 @@ struct ConfirmSpotView: View {
                     reviewCount: 0,
                     offerings: filteredOfferings.isEmpty ? nil : [category.rawValue: filteredOfferings],
                     websiteURL: mapItem.url?.absoluteString,
-                    communityVerified: preVerified,
+                    isCommunityVerified: preVerified,
                     categoryAddedBy: [category.rawValue: userID],
                     websiteDetectedCategories: websiteDetectedCategories,
                     customCategoryTags: customCategoryTag.map { [$0] }

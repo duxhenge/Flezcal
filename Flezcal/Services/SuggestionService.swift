@@ -119,7 +119,12 @@ class SuggestionService: ObservableObject {
             for item in items {
                 guard let name = item.name else { continue }
                 let key = name.lowercased()
-                if existingNames.contains(key) { continue }
+                if existingNames.contains(key) {
+                    #if DEBUG
+                    print("[Suggestions] Skipped \"\(name)\" — already a confirmed spot")
+                    #endif
+                    continue
+                }
                 if !seenNames.insert(key).inserted { continue }
                 pool.append(SuggestedSpot(mapItem: item, suggestedCategory: pick))
             }
@@ -164,12 +169,26 @@ class SuggestionService: ObservableObject {
             )
         )
 
+        // Retail queries ("liquor store", "wine spirits", etc.) use a tighter
+        // region (~10 mi) so Apple Maps prioritizes truly nearby stores.
+        // With the full 0.5° span (~35 mi), MKLocalSearch fills its 25-result
+        // cap with stores across the whole region, pushing out the closest ones.
+        let retailSpan = 0.15
+        let retailRegion = MKCoordinateRegion(
+            center: region.center,
+            span: MKCoordinateSpan(latitudeDelta: retailSpan, longitudeDelta: retailSpan)
+        )
+        let retailQueries: Set<String> = [
+            "liquor store", "wine spirits", "wine shop", "bottle shop",
+        ]
+
         // ── Run each pick's mapSearchTerms as text queries ────────────────
         for entry in allQueries {
             guard fetchGeneration == myGeneration else { break }
+            let isRetail = retailQueries.contains(entry.query.lowercased())
             let request = MKLocalSearch.Request()
             request.naturalLanguageQuery = entry.query
-            request.region = searchRegion
+            request.region = isRetail ? retailRegion : searchRegion
             request.resultTypes = .pointOfInterest
             await runQuery(request, as: entry.category, label: "\(entry.category.id) \"\(entry.query)\"")
         }

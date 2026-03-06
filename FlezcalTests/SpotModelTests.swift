@@ -15,7 +15,7 @@ final class SpotModelTests: XCTestCase {
         verificationDownCount: [String: Int]? = nil,
         websiteDetectedCategories: [String]? = nil,
         locationStatus: String? = nil,
-        ownerVerified: Bool = false,
+        isOwnerVerified: Bool = false,
         ownerUserId: String? = nil,
         ownerLockedCategories: [String]? = nil,
         categoryAddedBy: [String: String]? = nil
@@ -37,7 +37,7 @@ final class SpotModelTests: XCTestCase {
             verificationDownCount: verificationDownCount,
             websiteDetectedCategories: websiteDetectedCategories,
             locationStatus: locationStatus,
-            ownerVerified: ownerVerified,
+            isOwnerVerified: ownerVerified,
             ownerUserId: ownerUserId,
             ownerLockedCategories: ownerLockedCategories,
             categoryAddedBy: categoryAddedBy
@@ -209,14 +209,14 @@ final class SpotModelTests: XCTestCase {
     // MARK: - Owner Helpers
 
     func testIsOwner() {
-        let spot = makeSpot(ownerVerified: true, ownerUserId: "owner123")
+        let spot = makeSpot(isOwnerVerified: true, ownerUserId: "owner123")
         XCTAssertTrue(spot.isOwner(userID: "owner123"))
         XCTAssertFalse(spot.isOwner(userID: "otherUser"))
         XCTAssertFalse(spot.isOwner(userID: nil))
     }
 
     func testIsOwner_notVerified() {
-        let spot = makeSpot(ownerVerified: false, ownerUserId: "owner123")
+        let spot = makeSpot(isOwnerVerified: false, ownerUserId: "owner123")
         XCTAssertFalse(spot.isOwner(userID: "owner123"))
     }
 

@@ -339,7 +339,7 @@ class AdminViewModel: ObservableObject {
         let total = spots.count
         let newThisWeek = spots.filter { $0.addedDate >= weekAgo }.count
         let newThisMonth = spots.filter { $0.addedDate >= monthAgo }.count
-        let pendingVerification = spots.filter { $0.source != nil && !$0.communityVerified }.count
+        let pendingVerification = spots.filter { $0.source != nil && !$0.isCommunityVerified }.count
 
         var byCat: [String: Int] = [:]
         for spot in spots {

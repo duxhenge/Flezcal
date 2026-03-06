@@ -139,7 +139,7 @@ struct ListTabRowView: View {
                     .foregroundStyle(.secondary)
                 }
             }
-        } else if spot.communityVerified || spot.hasAnyVerificationVotes {
+        } else if spot.isCommunityVerified || spot.hasAnyVerificationVotes {
             // Has some votes but nothing at confirmed threshold yet — show categories
             FlowLayout(spacing: 6) {
                 ForEach(spot.categories) { cat in
@@ -308,7 +308,7 @@ private struct ExplorePanel: View {
     @State private var selectedSuggestion: SuggestedSpot? = nil
     @State private var multiCheckResult: MultiCategoryCheckResult? = nil
     @State private var websiteCheckTask: Task<Void, Never>? = nil
-    private let websiteChecker = WebsiteCheckService()
+    let websiteChecker: WebsiteCheckService
 
     /// Indices of search results whose homepage matched category keywords.
     /// nil = pre-screen not yet run. Empty = ran, no matches.
@@ -702,10 +702,14 @@ struct ListTabView: View {
     // Only forwarded into SpotDetailView's sheet environment so the Add Category flow works.
     let picksService: UserPicksService
 
-    init(locationManager: LocationManager, picksService: UserPicksService) {
+    // Shared with MapTabView so htmlCache carries over between tabs.
+    let websiteChecker: WebsiteCheckService
+
+    init(locationManager: LocationManager, picksService: UserPicksService, websiteChecker: WebsiteCheckService) {
         self.locationManager = locationManager
         self.currentLocation = { [locationManager] in locationManager.userLocation }
         self.picksService = picksService
+        self.websiteChecker = websiteChecker
     }
 
     @State private var selectedFilter: FoodCategory? = nil   // nil = "All"
@@ -873,7 +877,8 @@ struct ListTabView: View {
                         },
                         onSelectExistingSpot: { spot in
                             selectedSpot = spot
-                        }
+                        },
+                        websiteChecker: websiteChecker
                     )
                 }
             }
@@ -1106,6 +1111,6 @@ struct ListTabView: View {
 }
 
 #Preview {
-    ListTabView(locationManager: LocationManager(), picksService: UserPicksService())
+    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
 }

@@ -32,16 +32,21 @@ struct ContentView: View {
     // contract for a full explanation.
     let locationManager: LocationManager
 
+    /// Single shared instance so htmlCache is reused across both tabs.
+    /// Explore pre-screen results carry over to Map ghost pins instantly.
+    private let websiteChecker = WebsiteCheckService()
+
     var body: some View {
         ZStack(alignment: .top) {
             TabView(selection: $selectedTab) {
                 MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
-                          pendingMapCenter: $pendingMapCenter)
+                          pendingMapCenter: $pendingMapCenter,
+                          websiteChecker: websiteChecker)
                     .environmentObject(picksService)
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
-                ListTabView(locationManager: locationManager, picksService: picksService)
+                ListTabView(locationManager: locationManager, picksService: picksService, websiteChecker: websiteChecker)
                     .tabItem { Label("Spots", systemImage: "list.bullet") }
                     .tag(AppTab.spots)
 

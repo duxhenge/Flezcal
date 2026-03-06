@@ -40,7 +40,7 @@ struct MapTabView: View {
     // On-demand website check — runs when the user taps a ghost pin
     @State private var multiCheckResult: MultiCategoryCheckResult? = nil
     @State private var websiteCheckTask: Task<Void, Never>? = nil
-    private let websiteChecker = WebsiteCheckService()
+    let websiteChecker: WebsiteCheckService
 
     /// Finds an existing Spot in Firestore that matches a SuggestedSpot.
     /// Used to route taps on ghost pins directly to SpotDetailView when
@@ -188,6 +188,22 @@ struct MapTabView: View {
                 isPreScreening = false
                 return
             }
+
+            // Instant pass: apply any cached pre-screen results immediately.
+            // When the shared htmlCache already has results (e.g. from Explore tab),
+            // green pins appear the moment ghost pins load — no waiting for fetches.
+            let cachedResults = await websiteChecker.cachedPreScreen(
+                suggestions: suggestionService.fullPool,
+                picks: picks
+            )
+            if !cachedResults.isEmpty {
+                suggestionService.applyPreScreenResults(cachedResults)
+                #if DEBUG
+                let greenCount = cachedResults.values.filter { !$0.isEmpty }.count
+                print("[MapTab] Instant cache hit: \(greenCount) green out of \(cachedResults.count) cached")
+                #endif
+            }
+
             // Kick off batch homepage pre-screen after pins appear.
             // Pre-screen the FULL pool (not just displayed 25) so that
             // venues beyond the 25th closest can be promoted if they match.
@@ -273,25 +289,19 @@ struct MapTabView: View {
         }
     }
 
-    /// Ghost pins filtered to exclude any that overlap with a verified spot.
-    /// Uses name matching (same as SuggestionService) plus coordinate proximity
-    /// so a ghost pin never renders on top of a green pin.
+    /// Ghost pins filtered to exclude any that share a name with a confirmed spot.
+    /// Name-only matching avoids suppressing different restaurants that happen to
+    /// be near each other — important in small towns where venues cluster.
     private var filteredSuggestions: [SuggestedSpot] {
         let spotNames = Set(spotService.spots.filter { !$0.isHidden && !$0.isClosed }.map { $0.name.lowercased() })
-        let spotCoords = spotService.spots.filter { !$0.isHidden && !$0.isClosed }
-            .map { ($0.latitude, $0.longitude) }
-        let threshold = 0.005 // ~550 meters — same as findExistingSpot
         return suggestionService.suggestions.filter { suggestion in
-            let key = suggestion.name.lowercased()
-            if spotNames.contains(key) { return false }
-            // Also check coordinate proximity for name mismatches
-            let coord = suggestion.coordinate
-            for (lat, lon) in spotCoords {
-                if abs(coord.latitude - lat) < threshold && abs(coord.longitude - lon) < threshold {
-                    return false
-                }
+            let dominated = spotNames.contains(suggestion.name.lowercased())
+            #if DEBUG
+            if dominated {
+                print("[FilteredSuggestions] Hiding ghost pin \"\(suggestion.name)\" — matches confirmed spot name")
             }
-            return true
+            #endif
+            return !dominated
         }
     }
 
@@ -698,52 +708,15 @@ struct MapTabView: View {
             if !spotService.isLoading && spotService.errorMessage == nil
                 && visibleSpots.isEmpty && visibleSuggestions.isEmpty
                 && showOnMapPin == nil && !emptyStateDismissed {
-                VStack {
-                    HStack(spacing: 12) {
-                        FoodCategoryIcon(
-                            category: selectedPickFilter ?? picksService.picks.first ?? .mezcal,
-                            size: 28
-                        )
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("No spots here yet")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Text("Be the first to add a \(selectedPickFilter?.displayName.lowercased() ?? "spot") here!")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button {
-                            NotificationCenter.default.post(name: .switchToSpots, object: nil)
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .padding(8)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
-                        Button {
-                            withAnimation(.easeOut(duration: 0.2)) { emptyStateDismissed = true }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(.secondary)
-                        }
-                        .accessibilityLabel("Dismiss empty state")
+                MapEmptyBanner(
+                    category: selectedPickFilter ?? picksService.picks.first ?? .mezcal,
+                    onSearch: {
+                        NotificationCenter.default.post(name: .switchToSpots, object: nil)
+                    },
+                    onDismiss: {
+                        withAnimation(.easeOut(duration: 0.2)) { emptyStateDismissed = true }
                     }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("No spots here yet. Be the first to add a spot.")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.1), radius: 3, y: 2)
-                    .padding(.horizontal, 16)
-
-                    Spacer()
-                }
-                .padding(.top, 80)
+                )
             }
         }
     }
@@ -788,21 +761,10 @@ struct MapTabView: View {
                 Spacer()
             } else if filteredSpots.isEmpty {
                 Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "mappin.slash")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.secondary)
-                    Text("No spots found")
-                        .font(.headline)
-                    Text(searchText.isEmpty
-                         ? "Be the first to add a \(selectedPickFilter?.displayName.lowercased() ?? "spot") here!"
-                         : "Try a different search term.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .accessibilityElement(children: .combine)
-                .padding()
+                MapEmptyListState(
+                    categoryName: selectedPickFilter?.displayName.lowercased() ?? "spot",
+                    isSearchActive: !searchText.isEmpty
+                )
                 Spacer()
             } else {
                 List(filteredSpots) { spot in
@@ -928,19 +890,7 @@ struct SpotListRowView: View {
                         .monospacedDigit()
                         .fixedSize()
                 }
-                if let catRating = bestCategoryRating,
-                   let level = RatingLevel.from(max(1, min(5, Int(catRating.average.rounded())))) {
-                    // Per-category rating display
-                    HStack(spacing: 2) {
-                        Text(level.emoji)
-                            .font(.caption2)
-                        Text(level.label)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
-                } else if spot.reviewCount > 0,
-                   let level = RatingLevel.from(max(1, min(5, Int(spot.averageRating.rounded())))) {
-                    // Legacy fallback
+                if let level = displayRatingLevel {
                     HStack(spacing: 2) {
                         Text(level.emoji)
                             .font(.caption2)
@@ -966,6 +916,16 @@ struct SpotListRowView: View {
             if let rating = spot.rating(for: cat), rating.count > 0 {
                 return rating
             }
+        }
+        return nil
+    }
+
+    /// Rating level to display — prefers per-category, falls back to legacy aggregate
+    private var displayRatingLevel: RatingLevel? {
+        if let catRating = bestCategoryRating {
+            return RatingLevel.from(max(1, min(5, Int(catRating.average.rounded()))))
+        } else if spot.reviewCount > 0 {
+            return RatingLevel.from(max(1, min(5, Int(spot.averageRating.rounded()))))
         }
         return nil
     }
@@ -1018,9 +978,85 @@ struct CategoryFilterBar: View {
     }
 }
 
+// MARK: - Map Empty States
+
+/// Compact banner overlay shown on the map when no spots exist in the area.
+private struct MapEmptyBanner: View {
+    let category: FoodCategory
+    let onSearch: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack {
+            HStack(spacing: 12) {
+                FoodCategoryIcon(category: category, size: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No spots here yet")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Be the first to add a \(category.displayName.lowercased()) here!")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onSearch) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .padding(8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Dismiss empty state")
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("No spots here yet. Be the first to add a spot.")
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.1), radius: 3, y: 2)
+            .padding(.horizontal, 16)
+
+            Spacer()
+        }
+        .padding(.top, 80)
+    }
+}
+
+/// Centered empty state shown in the list view when no spots match.
+private struct MapEmptyListState: View {
+    let categoryName: String
+    let isSearchActive: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "mappin.slash")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text("No spots found")
+                .font(.headline)
+            Text(isSearchActive
+                 ? "Try a different search term."
+                 : "Be the first to add a \(categoryName) here!")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .accessibilityElement(children: .combine)
+        .padding()
+    }
+}
+
 #Preview {
     MapTabView(pendingMapSuggestion: .constant(nil),
-               pendingMapCenter: .constant(nil))
+               pendingMapCenter: .constant(nil),
+               websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())
 }

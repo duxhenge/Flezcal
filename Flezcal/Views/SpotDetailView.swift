@@ -52,7 +52,7 @@ struct SpotDetailView: View {
     @State private var showOwnerEdit = false
 
     /// Live version of this spot from SpotService, reflecting any in-session mutations
-    /// (e.g. communityVerified flip, report updates). Falls back to the original `let spot`.
+    /// (e.g. isCommunityVerified flip, report updates). Falls back to the original `let spot`.
     private var liveSpot: Spot {
         spotService.spots.first { $0.id == spot.id } ?? spot
     }
@@ -163,7 +163,7 @@ struct SpotDetailView: View {
                         }
 
                         // Owner Verified badge
-                        if liveSpot.ownerVerified {
+                        if liveSpot.isOwnerVerified {
                             OwnerVerifiedBadge()
                         }
 
@@ -203,7 +203,7 @@ struct SpotDetailView: View {
                         }
 
                         // Owner details section (brands, details, reservation)
-                        if liveSpot.ownerVerified {
+                        if liveSpot.isOwnerVerified {
                             ownerDetailsSection
                         }
 
@@ -292,7 +292,7 @@ struct SpotDetailView: View {
                     }
 
                     // "Own this spot?" teaser — shown on non-owner-verified spots
-                    if !liveSpot.ownerVerified {
+                    if !liveSpot.isOwnerVerified {
                         ownThisSpotTeaser
                     }
 
@@ -545,7 +545,7 @@ struct SpotDetailView: View {
         let isFlagged = liveSpot.reportCount >= 2
 
         VStack(spacing: 8) {
-            if !liveSpot.communityVerified {
+            if !liveSpot.isCommunityVerified {
                 // ── Amber: awaiting first real check-in ──
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Curated listing — not yet visited by a Flezcal member",
