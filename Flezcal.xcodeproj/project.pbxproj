@@ -11,6 +11,7 @@
 		4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18D16C2EB484EC992C1B35 /* CustomCategoryService.swift */; };
 		65327E3F685BFF9B52AB64AC /* CustomCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB135D53650572B2339AC0B /* CustomCategory.swift */; };
 		756E836F41CC53C867C035C4 /* EditCustomCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */; };
+		8E6E74B305DB453388049FF8 /* EditSpotSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E453D483CC40BFAD13770D /* EditSpotSearchView.swift */; };
 		AD0000010000000000000001 /* AdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000001 /* AdminModels.swift */; };
 		AD0000010000000000000002 /* AdminViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000002 /* AdminViewModel.swift */; };
 		AD0000010000000000000003 /* AdminAccessGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000020000000000000003 /* AdminAccessGate.swift */; };
@@ -172,6 +173,7 @@
 		D22355A4714E4831AF36DB21 /* LocationUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationUtils.swift; sourceTree = "<group>"; };
 		E411E1DB98B471DE3DB85784 /* ExploreSearchUITest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExploreSearchUITest.swift; sourceTree = "<group>"; };
 		EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditCustomCategoryView.swift; sourceTree = "<group>"; };
+		34E453D483CC40BFAD13770D /* EditSpotSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditSpotSearchView.swift; sourceTree = "<group>"; };
 		F4A8B31AA11DC786E5093A4F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		GH0000020000000000000001 /* Geohash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geohash.swift; sourceTree = "<group>"; };
 		RL0000020000000000000001 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
@@ -318,6 +320,7 @@
 				B200000100000000000000B4 /* FoodCategoryGridView.swift */,
 				96A8FF0F3ACEDE0322DED0E9 /* CreateCustomCategoryView.swift */,
 				EC96CBC8FCA21D428ADC029C /* EditCustomCategoryView.swift */,
+				34E453D483CC40BFAD13770D /* EditSpotSearchView.swift */,
 				AE0000020000000000000001 /* AgeVerificationView.swift */,
 				FP0000020000000000000001 /* FlezcalPickerView.swift */,
 
@@ -625,6 +628,7 @@
 				4296EB83D521AFCEC06E1119 /* CustomCategoryService.swift in Sources */,
 				CAB4B65A1D3A48DB38C9BB7A /* CreateCustomCategoryView.swift in Sources */,
 				756E836F41CC53C867C035C4 /* EditCustomCategoryView.swift in Sources */,
+				8E6E74B305DB453388049FF8 /* EditSpotSearchView.swift in Sources */,
 				AE0000010000000000000001 /* AgeVerificationView.swift in Sources */,
 				AD0000010000000000000001 /* AdminModels.swift in Sources */,
 				AD0000010000000000000002 /* AdminViewModel.swift in Sources */,
@@ -734,7 +738,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -850,6 +854,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -886,6 +891,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

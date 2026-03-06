@@ -307,9 +307,10 @@ extension CustomCategory {
             return "\"\(trimmed)\" is too broad. Try something more specific like a particular dish."
         }
 
-        // Check fuzzy match against existing hardcoded categories
-        let existingNames = FoodCategory.allKnownCategories.map { $0.displayName.lowercased() }
-        let existingIDs = FoodCategory.allKnownCategories.map { $0.id }
+        // Check against visible categories only — legacy/hidden categories
+        // shouldn't block custom creation since the user can't see them.
+        let existingNames = FoodCategory.allCategories.map { $0.displayName.lowercased() }
+        let existingIDs = FoodCategory.allCategories.map { $0.id }
         if existingNames.contains(lower) || existingIDs.contains(lower) {
             return "\"\(trimmed)\" already exists as a category."
         }
@@ -317,7 +318,7 @@ extension CustomCategory {
         // Check for very close matches (e.g. "taco" vs "tacos")
         for existing in existingNames {
             if lower.hasPrefix(existing) || existing.hasPrefix(lower) {
-                let match = FoodCategory.allKnownCategories.first {
+                let match = FoodCategory.allCategories.first {
                     $0.displayName.lowercased() == existing
                 }
                 if let match {

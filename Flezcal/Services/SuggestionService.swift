@@ -1,5 +1,5 @@
 import Foundation
-import MapKit
+@preconcurrency import MapKit
 
 /// A suggested (unconfirmed) spot found via Apple Maps search.
 /// Shown on the map as a ghost pin until a user confirms or dismisses it.

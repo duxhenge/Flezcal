@@ -210,7 +210,7 @@ class UserPicksService: ObservableObject {
         let docRef = db.collection(Self.pickCollection).document(categoryID)
         let pickerRef = docRef.collection("pickers").document(uid)
 
-        Task.detached {
+        Task.detached { @Sendable in
             do {
                 let pickerDoc = try await pickerRef.getDocument()
                 if pickerDoc.exists { return } // Already counted
@@ -241,7 +241,7 @@ class UserPicksService: ObservableObject {
         let docRef = db.collection(Self.pickCollection).document(categoryID)
         let pickerRef = docRef.collection("pickers").document(uid)
 
-        Task.detached {
+        Task.detached { @Sendable in
             do {
                 let pickerDoc = try await pickerRef.getDocument()
                 guard pickerDoc.exists else { return } // Wasn't counted
@@ -281,6 +281,37 @@ class UserPicksService: ObservableObject {
         } catch {
             #if DEBUG
             print("[PickTrack] fetchPickCounts error: \(error.localizedDescription)")
+            #endif
+            return []
+        }
+    }
+
+    /// Fetches pick counts filtered by time window. Counts only pickers whose
+    /// `pickedDate` falls on or after `since`. Returns results ranked by count.
+    static func fetchPickCounts(since: Date) async -> [(categoryID: String, displayName: String, pickCount: Int)] {
+        let db = Firestore.firestore()
+        do {
+            let catSnapshot = try await db.collection(pickCollection).getDocuments()
+            var results: [(categoryID: String, displayName: String, pickCount: Int)] = []
+
+            for doc in catSnapshot.documents {
+                let data = doc.data()
+                guard let displayName = data["displayName"] as? String else { continue }
+
+                let pickersSnapshot = try await doc.reference.collection("pickers")
+                    .whereField("pickedDate", isGreaterThanOrEqualTo: Timestamp(date: since))
+                    .getDocuments()
+
+                let count = pickersSnapshot.documents.count
+                if count > 0 {
+                    results.append((categoryID: doc.documentID, displayName: displayName, pickCount: count))
+                }
+            }
+
+            return results.sorted { $0.pickCount > $1.pickCount }
+        } catch {
+            #if DEBUG
+            print("[PickTrack] fetchPickCounts(since:) error: \(error.localizedDescription)")
             #endif
             return []
         }

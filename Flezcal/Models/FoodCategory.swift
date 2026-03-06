@@ -520,20 +520,65 @@ extension FoodCategory {
         pizza, birria, baklava,
     ]
 
+    /// Common venue types offered as quick-add suggestions in EditSpotSearchView.
+    static let commonVenueTypes: [String] = [
+        "restaurant", "bar", "cafe", "bakery", "pizzeria", "diner", "bistro", "deli",
+        "brewery", "winery", "taproom", "pub", "cocktail bar",
+        "liquor store", "wine shop", "grocery store", "market", "butcher", "cheese shop",
+        "taqueria", "trattoria", "brasserie", "izakaya", "cantina",
+        "food hall", "food truck", "hotel", "fine dining", "steakhouse",
+    ]
+
+    /// SF Symbol icon for a venue type string. Used by EditSpotSearchView grid.
+    static func venueTypeIcon(for type: String) -> String {
+        switch type.lowercased() {
+        case "restaurant":      return "fork.knife"
+        case "bar":             return "wineglass"
+        case "cafe":            return "cup.and.saucer"
+        case "bakery":          return "birthday.cake"
+        case "pizzeria":        return "flame"
+        case "diner":           return "fork.knife"
+        case "bistro":          return "fork.knife"
+        case "deli":            return "basket"
+        case "brewery":         return "mug"
+        case "winery":          return "wineglass.fill"
+        case "taproom":         return "mug.fill"
+        case "pub":             return "mug"
+        case "cocktail bar":    return "wineglass"
+        case "liquor store":    return "bottle.nalgene"
+        case "wine shop":       return "wineglass.fill"
+        case "grocery store":   return "cart"
+        case "market":          return "cart"
+        case "butcher":         return "takeoutbag.and.cup.and.straw"
+        case "cheese shop":     return "takeoutbag.and.cup.and.straw"
+        case "taqueria":        return "fork.knife"
+        case "trattoria":       return "fork.knife"
+        case "brasserie":       return "fork.knife"
+        case "izakaya":         return "wineglass"
+        case "cantina":         return "wineglass"
+        case "food hall":       return "building.2"
+        case "food truck":      return "box.truck"
+        case "hotel":           return "bed.double"
+        case "fine dining":     return "star"
+        case "steakhouse":      return "flame.fill"
+        default:                return "mappin"
+        }
+    }
+
     // MARK: - User picks registration (for website scanning)
 
     /// Custom picks registered by the user — merged into scanning loops.
     /// Set by UserPicksService when picks change.
-    private(set) static var activeCustomPicks: [FoodCategory] = []
+    @MainActor private(set) static var activeCustomPicks: [FoodCategory] = []
 
     /// Built-in picks whose websiteKeywords have been edited by the user.
     /// Keyed by category ID. These override the static defaults in allScannable.
-    private(set) static var modifiedBuiltInPicks: [String: FoodCategory] = [:]
+    @MainActor private(set) static var modifiedBuiltInPicks: [String: FoodCategory] = [:]
 
     /// All scannable categories: the 20 built-in (with user overrides) + custom picks.
     /// Used by WebsiteCheckService.scanForCategories() to include user-edited
     /// keywords and user-created categories in HTML keyword matching.
-    static var allScannable: [FoodCategory] {
+    @MainActor static var allScannable: [FoodCategory] {
         let builtIn = allCategories.map { cat in
             modifiedBuiltInPicks[cat.id] ?? cat
         }
@@ -543,7 +588,7 @@ extension FoodCategory {
     /// Registers the user's picks so modified keywords are included in website scanning.
     /// Custom picks (custom_ prefix) are added alongside the built-in categories.
     /// Modified built-in picks override their static counterparts during scanning.
-    static func registerUserPicks(_ picks: [FoodCategory]) {
+    @MainActor static func registerUserPicks(_ picks: [FoodCategory]) {
         activeCustomPicks = picks.filter { $0.id.hasPrefix("custom_") }
         modifiedBuiltInPicks = [:]
         for pick in picks where !pick.id.hasPrefix("custom_") {

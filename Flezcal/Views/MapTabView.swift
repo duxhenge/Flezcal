@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+@preconcurrency import MapKit
 import CoreLocation
 
 struct MapTabView: View {
@@ -192,8 +192,9 @@ struct MapTabView: View {
             // Instant pass: apply any cached pre-screen results immediately.
             // When the shared htmlCache already has results (e.g. from Explore tab),
             // green pins appear the moment ghost pins load — no waiting for fetches.
+            let pool = suggestionService.fullPool
             let cachedResults = await websiteChecker.cachedPreScreen(
-                suggestions: suggestionService.fullPool,
+                suggestions: pool,
                 picks: picks
             )
             if !cachedResults.isEmpty {

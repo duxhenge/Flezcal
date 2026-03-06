@@ -1,5 +1,5 @@
 import Foundation
-import MapKit
+@preconcurrency import MapKit
 import Combine
 
 /// Provides real-time typeahead city/region suggestions using `MKLocalSearchCompleter`.

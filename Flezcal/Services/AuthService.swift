@@ -1,8 +1,8 @@
 import Foundation
-import FirebaseAuth
-import FirebaseCrashlytics
+@preconcurrency import FirebaseAuth
+@preconcurrency import FirebaseCrashlytics
 import FirebaseFirestore
-import AuthenticationServices
+@preconcurrency import AuthenticationServices
 import CryptoKit
 
 @MainActor
@@ -17,23 +17,26 @@ class AuthService: ObservableObject {
 
     // For Sign in with Apple
     private var currentNonce: String?
-    private var authStateHandle: AuthStateDidChangeListenerHandle?
+    private nonisolated(unsafe) var authStateHandle: AuthStateDidChangeListenerHandle?
 
     init() {
         // Listen for auth state changes
-        authStateHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        authStateHandle = Auth.auth().addStateDidChangeListener { @Sendable [weak self] _, _ in
+            // Re-read currentUser on MainActor to avoid sending non-Sendable
+            // Firebase User across isolation boundaries.
             Task { @MainActor in
-                self?.user = user
-                self?.isSignedIn = user != nil
+                let current = Auth.auth().currentUser
+                self?.user = current
+                self?.isSignedIn = current != nil
                 self?.isLoading = false
 
                 // Tag Crashlytics with user ID so crash reports can be correlated.
                 // Cleared on sign-out (user == nil) for privacy.
-                Crashlytics.crashlytics().setUserID(user?.uid ?? "")
+                Crashlytics.crashlytics().setUserID(current?.uid ?? "")
 
                 // Sync display name to Firestore on every app launch for signed-in users.
                 // This auto-migrates existing users who already have a Firebase Auth name.
-                if user != nil {
+                if current != nil {
                     await self?.syncDisplayNameToFirestore()
                 }
             }

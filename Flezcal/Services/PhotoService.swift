@@ -1,8 +1,8 @@
 import Foundation
 import UIKit
-import MapKit
+@preconcurrency import MapKit
 import FirebaseFirestore
-import FirebaseStorage
+@preconcurrency import FirebaseStorage
 
 /// Handles all photo operations for spots:
 /// - Generating map snapshot thumbnails (auto-photo when a spot is added)
@@ -32,7 +32,7 @@ class PhotoService: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             let snapshotter = MKMapSnapshotter(options: options)
-            snapshotter.start { snapshot, error in
+            snapshotter.start { @Sendable snapshot, error in
                 guard let snapshot = snapshot, error == nil else {
                     continuation.resume(returning: nil)
                     return

@@ -9,6 +9,7 @@ import FirebaseAuth
 ///
 /// All public methods return `Void` and dispatch Firestore writes on a background
 /// task. Failures are silently logged in DEBUG only (matches VerificationService pattern).
+@MainActor
 final class AnalyticsService {
     static let shared = AnalyticsService()
 

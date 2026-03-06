@@ -8,6 +8,8 @@ struct AdminCustomPicksView: View {
 
     @State private var trendingTerms: [(term: String, count: Int)] = []
     @State private var trendWindow: TrendWindow = .week
+    @State private var rankingFilter: RankingFilter = .allTime
+    @State private var filteredRankings: [(category: CustomCategory, pickCount: Int)] = []
 
     enum TrendWindow: String, CaseIterable {
         case week = "7 Days"
@@ -20,6 +22,23 @@ struct AdminCustomPicksView: View {
             case .week: return cal.date(byAdding: .day, value: -7, to: Date()) ?? Date()
             case .month: return cal.date(byAdding: .month, value: -1, to: Date()) ?? Date()
             case .allTime: return Date.distantPast
+            }
+        }
+    }
+
+    enum RankingFilter: String, CaseIterable {
+        case week = "Week"
+        case month = "Month"
+        case year = "Year"
+        case allTime = "All"
+
+        var since: Date? {
+            let cal = Calendar.current
+            switch self {
+            case .week: return cal.date(byAdding: .day, value: -7, to: Date())
+            case .month: return cal.date(byAdding: .month, value: -1, to: Date())
+            case .year: return cal.date(byAdding: .year, value: -1, to: Date())
+            case .allTime: return nil
             }
         }
     }
@@ -90,18 +109,34 @@ struct AdminCustomPicksView: View {
 
     @ViewBuilder
     private var rankingsSection: some View {
-        let ranked = customService.topCandidates(limit: 20)
-
         VStack(alignment: .leading, spacing: 10) {
             Label("Rankings by Pick Count", systemImage: "list.number")
                 .font(.headline)
 
+            Picker("Time", selection: $rankingFilter) {
+                ForEach(RankingFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: rankingFilter) { _, newValue in
+                Task { await refreshRankings(filter: newValue) }
+            }
+
+            let ranked: [(category: CustomCategory, pickCount: Int)] = {
+                if rankingFilter == .allTime {
+                    return customService.topCandidates(limit: 20).map { (category: $0, pickCount: $0.pickCount) }
+                } else {
+                    return Array(filteredRankings.prefix(20))
+                }
+            }()
+
             if ranked.isEmpty {
-                Text("No custom categories yet.")
+                Text("No custom picks for this time period.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(Array(ranked.enumerated()), id: \.element.id) { index, cat in
+                ForEach(Array(ranked.enumerated()), id: \.offset) { index, item in
                     HStack(spacing: 10) {
                         Text("#\(index + 1)")
                             .font(.caption)
@@ -109,14 +144,14 @@ struct AdminCustomPicksView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 28, alignment: .trailing)
 
-                        Text(cat.emoji)
+                        Text(item.category.emoji)
                             .font(.title3)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(cat.displayName)
+                            Text(item.category.displayName)
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                            Text(cat.websiteKeywords.joined(separator: ", "))
+                            Text(item.category.websiteKeywords.joined(separator: ", "))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -128,12 +163,12 @@ struct AdminCustomPicksView: View {
                             Image(systemName: "person.2")
                                 .font(.caption)
                                 .foregroundStyle(.purple)
-                            Text("\(cat.pickCount)")
+                            Text("\(item.pickCount)")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                         }
 
-                        if cat.pickCount >= 5 {
+                        if item.pickCount >= 5 {
                             Image(systemName: "arrow.up.circle.fill")
                                 .foregroundStyle(.green)
                                 .font(.caption)
@@ -261,5 +296,13 @@ struct AdminCustomPicksView: View {
 
     private func refreshTrending() async {
         trendingTerms = await customService.trendingTerms(since: trendWindow.date, limit: 15)
+    }
+
+    private func refreshRankings(filter: RankingFilter) async {
+        if let since = filter.since {
+            filteredRankings = await customService.fetchPickCounts(since: since)
+        } else {
+            filteredRankings = []
+        }
     }
 }

@@ -177,6 +177,35 @@ class CustomCategoryService: ObservableObject {
         }
     }
 
+    /// Returns custom pick counts filtered by time window. Counts only pickers
+    /// whose `pickedDate` falls on or after `since`. Returns results ranked by count.
+    func fetchPickCounts(since: Date) async -> [(category: CustomCategory, pickCount: Int)] {
+        do {
+            let snapshot = try await db.collection(Self.collectionName).getDocuments()
+            var results: [(category: CustomCategory, pickCount: Int)] = []
+
+            for doc in snapshot.documents {
+                guard let cat = try? doc.data(as: CustomCategory.self) else { continue }
+
+                let pickersSnapshot = try await doc.reference.collection("pickers")
+                    .whereField("pickedDate", isGreaterThanOrEqualTo: Timestamp(date: since))
+                    .getDocuments()
+
+                let count = pickersSnapshot.documents.count
+                if count > 0 {
+                    results.append((category: cat, pickCount: count))
+                }
+            }
+
+            return results.sorted { $0.pickCount > $1.pickCount }
+        } catch {
+            #if DEBUG
+            print("[CustomCategory] fetchPickCounts(since:) error: \(error.localizedDescription)")
+            #endif
+            return []
+        }
+    }
+
     /// Returns custom category terms picked within the given time window,
     /// sorted by frequency (most popular first). Useful for identifying
     /// trending terms for promotion to hardcoded categories.

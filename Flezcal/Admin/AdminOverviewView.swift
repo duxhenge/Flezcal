@@ -1,28 +1,48 @@
 import SwiftUI
 import Charts
 
+/// Time window filter for pick counts.
+private enum PickTimeFilter: String, CaseIterable {
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
+    case allTime = "All"
+
+    var since: Date? {
+        let cal = Calendar.current
+        switch self {
+        case .week: return cal.date(byAdding: .day, value: -7, to: Date())
+        case .month: return cal.date(byAdding: .month, value: -1, to: Date())
+        case .year: return cal.date(byAdding: .year, value: -1, to: Date())
+        case .allTime: return nil
+        }
+    }
+}
+
 struct AdminOverviewView: View {
     @ObservedObject var viewModel: AdminViewModel
     @EnvironmentObject var spotService: SpotService
     @StateObject private var customService = CustomCategoryService()
     @State private var categoryPickCounts: [(categoryID: String, displayName: String, pickCount: Int)] = []
+    @State private var picksTimeFilter: PickTimeFilter = .allTime
+    @State private var customPicksTimeFilter: PickTimeFilter = .allTime
+    @State private var filteredCustomPicks: [(category: CustomCategory, pickCount: Int)] = []
 
     var body: some View {
         let metrics = viewModel.spotMetrics(spots: spotService.spots)
-        let health = viewModel.healthScore(spotMetrics: metrics)
 
         ScrollView {
             VStack(spacing: 20) {
-                // Health Scorecard
-                healthScorecardSection(health: health, metrics: metrics)
-
                 // Financial Snapshot
                 financialSnapshotSection()
 
                 // Spot Metrics
                 spotMetricsSection(metrics: metrics)
 
-                // Top Categories
+                // Spots by Flezcal (confirmed spots per category)
+                spotsByCategorySection(metrics: metrics)
+
+                // Flezcal Picks (user selections)
                 categoriesSection(metrics: metrics)
 
                 // Custom Picks Ranking
@@ -53,73 +73,6 @@ struct AdminOverviewView: View {
             await customService.fetchAll()
             categoryPickCounts = await UserPicksService.fetchPickCounts()
         }
-    }
-
-    // MARK: - Health Scorecard
-
-    @ViewBuilder
-    private func healthScorecardSection(health: HealthScore, metrics: SpotMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Business Health", systemImage: "heart.text.square")
-                .font(.headline)
-
-            HStack(spacing: 16) {
-                healthIndicator(
-                    title: "Break-Even",
-                    status: health.breakEven
-                )
-
-                healthIndicator(
-                    title: "Submissions",
-                    status: metrics.newThisWeek > 0 ? .green : .yellow
-                )
-            }
-
-            // Revenue Gates
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Revenue Milestones")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                ForEach(Array(health.revenueGate.gates.enumerated()), id: \.offset) { idx, gate in
-                    HStack {
-                        Image(systemName: health.revenueGate.passedGate > idx
-                              ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(health.revenueGate.passedGate > idx ? .green : .secondary)
-                        Text("$\(Int(gate))/month")
-                            .font(.subheadline)
-                        Spacer()
-                        if health.revenueGate.passedGate <= idx {
-                            let remaining = gate - health.revenueGate.current
-                            Text("$\(Int(max(0, remaining))) to go")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    @ViewBuilder
-    private func healthIndicator(title: String, status: HealthStatus) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: status.systemImage)
-                .font(.title2)
-                .foregroundStyle(colorForStatus(status))
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(status.label)
-                .font(.caption2)
-                .fontWeight(.medium)
-                .foregroundStyle(colorForStatus(status))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: - Financial Snapshot
@@ -162,6 +115,64 @@ struct AdminOverviewView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
+    // MARK: - Spots by Flezcal Category
+
+    @ViewBuilder
+    private func spotsByCategorySection(metrics: SpotMetrics) -> some View {
+        let ranked = metrics.byCategory
+            .sorted { $0.value > $1.value }
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Spots by Flezcal", systemImage: "mappin.and.ellipse")
+                    .font(.headline)
+                Spacer()
+                Text("confirmed spots")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if ranked.isEmpty {
+                Text("No spots in the database yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(Array(ranked.enumerated()), id: \.element.key) { index, item in
+                    HStack(spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, alignment: .trailing)
+
+                        let emoji = FoodCategory.allKnownCategories.first(where: { $0.displayName == item.key })?.emoji
+                        if let emoji {
+                            Text(emoji)
+                        }
+
+                        Text(item.key)
+                            .font(.subheadline)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        HStack(spacing: 3) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                            Text("\(item.value)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
     // MARK: - Categories by Pick Popularity
 
     @ViewBuilder
@@ -171,13 +182,20 @@ struct AdminOverviewView: View {
                 Label("Flezcal Picks", systemImage: "square.grid.2x2")
                     .font(.headline)
                 Spacer()
-                Text("user picks")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            }
+
+            Picker("Time", selection: $picksTimeFilter) {
+                ForEach(PickTimeFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: picksTimeFilter) { _, newValue in
+                Task { await refreshPickCounts(filter: newValue) }
             }
 
             if categoryPickCounts.isEmpty {
-                Text("No pick data yet. Data appears as users select categories.")
+                Text("No pick data for this time period.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
@@ -334,8 +352,6 @@ struct AdminOverviewView: View {
 
     @ViewBuilder
     private func customPicksSection() -> some View {
-        let ranked = customService.topCandidates(limit: 20)
-
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("Custom Picks", systemImage: "sparkles")
@@ -346,6 +362,16 @@ struct AdminOverviewView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Picker("Time", selection: $customPicksTimeFilter) {
+                ForEach(PickTimeFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: customPicksTimeFilter) { _, newValue in
+                Task { await refreshCustomPickCounts(filter: newValue) }
+            }
+
             if customService.isLoading {
                 HStack {
                     Spacer()
@@ -353,41 +379,51 @@ struct AdminOverviewView: View {
                     Spacer()
                 }
                 .padding(.vertical, 8)
-            } else if ranked.isEmpty {
-                Text("No custom categories created yet.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
             } else {
-                ForEach(Array(ranked.enumerated()), id: \.element.id) { index, cat in
-                    HStack(spacing: 8) {
-                        Text("\(index + 1)")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 20, alignment: .trailing)
+                let ranked: [(category: CustomCategory, pickCount: Int)] = {
+                    if customPicksTimeFilter == .allTime {
+                        return customService.topCandidates(limit: 20).map { (category: $0, pickCount: $0.pickCount) }
+                    } else {
+                        return Array(filteredCustomPicks.prefix(20))
+                    }
+                }()
 
-                        Text(cat.emoji)
-
-                        Text(cat.displayName)
-                            .font(.subheadline)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        HStack(spacing: 3) {
-                            Image(systemName: "person.2.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.purple)
-                            Text("\(cat.pickCount)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
-
-                        if cat.pickCount >= 5 {
-                            Image(systemName: "arrow.up.circle.fill")
+                if ranked.isEmpty {
+                    Text("No custom picks for this time period.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 4)
+                } else {
+                    ForEach(Array(ranked.enumerated()), id: \.offset) { index, item in
+                        HStack(spacing: 8) {
+                            Text("\(index + 1)")
                                 .font(.caption)
-                                .foregroundStyle(.green)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20, alignment: .trailing)
+
+                            Text(item.category.emoji)
+
+                            Text(item.category.displayName)
+                                .font(.subheadline)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            HStack(spacing: 3) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.purple)
+                                Text("\(item.pickCount)")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
+
+                            if item.pickCount >= 5 {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                            }
                         }
                     }
                 }
@@ -395,6 +431,24 @@ struct AdminOverviewView: View {
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Data Refresh
+
+    private func refreshPickCounts(filter: PickTimeFilter) async {
+        if let since = filter.since {
+            categoryPickCounts = await UserPicksService.fetchPickCounts(since: since)
+        } else {
+            categoryPickCounts = await UserPicksService.fetchPickCounts()
+        }
+    }
+
+    private func refreshCustomPickCounts(filter: PickTimeFilter) async {
+        if let since = filter.since {
+            filteredCustomPicks = await customService.fetchPickCounts(since: since)
+        } else {
+            filteredCustomPicks = []
+        }
     }
 
     // MARK: - Helpers
@@ -424,11 +478,4 @@ struct AdminOverviewView: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
     }
 
-    private func colorForStatus(_ status: HealthStatus) -> Color {
-        switch status {
-        case .green: return .green
-        case .yellow: return .yellow
-        case .red: return .red
-        }
-    }
 }

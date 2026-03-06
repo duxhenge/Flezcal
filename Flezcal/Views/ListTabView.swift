@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+@preconcurrency import MapKit
 import CoreLocation
 
 // MARK: - List mode
@@ -30,9 +30,12 @@ private struct SearchTaskID: Equatable, Hashable {
     let query: String
     let filterID: String?           // SpotFilter.category?.rawValue — triggers re-search on pill tap
     let customLocation: CustomSearchLocation?
+    let mapTermsVersion: Int        // Incremented when user edits mapSearchTerms — triggers re-search
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.query == rhs.query && lhs.filterID == rhs.filterID && lhs.customLocation == rhs.customLocation
+        lhs.query == rhs.query && lhs.filterID == rhs.filterID
+        && lhs.customLocation == rhs.customLocation
+        && lhs.mapTermsVersion == rhs.mapTermsVersion
     }
 
     func hash(into hasher: inout Hasher) {
@@ -41,6 +44,7 @@ private struct SearchTaskID: Equatable, Hashable {
         hasher.combine(customLocation?.name)
         hasher.combine(customLocation?.coordinate.latitude)
         hasher.combine(customLocation?.coordinate.longitude)
+        hasher.combine(mapTermsVersion)
     }
 }
 
@@ -302,6 +306,8 @@ private struct ExplorePanel: View {
     let findExistingSpot: (_ name: String, _ lat: Double, _ lon: Double) -> Spot?
     /// Called when a search result matches an existing spot — parent opens SpotDetailView.
     let onSelectExistingSpot: (Spot) -> Void
+    /// Incremented when user edits mapSearchTerms — triggers re-search via SearchTaskID.
+    let mapTermsVersion: Int
     @StateObject private var searchService = LocationSearchService()
 
     // Sheet state lives here so changes never re-render ListTabView
@@ -491,7 +497,8 @@ private struct ExplorePanel: View {
         .task(id: SearchTaskID(
             query: searchText,
             filterID: selectedFilterCategory?.id,
-            customLocation: customLocation
+            customLocation: customLocation,
+            mapTermsVersion: mapTermsVersion
         )) {
             let userTypedText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
             #if DEBUG
@@ -564,10 +571,16 @@ private struct ExplorePanel: View {
             #endif
             guard !items.isEmpty, !userTypedText else { return }
             isPreScreening = true
+            // Extract (index, url) pairs on @MainActor before crossing into the
+            // WebsiteCheckService actor — MKMapItem is non-Sendable.
+            let itemURLs: [(index: Int, url: URL)] = items.enumerated().compactMap { index, item in
+                guard let url = item.url else { return nil }
+                return (index: index, url: url)
+            }
             #if DEBUG
             print("[Explore] starting batchPreScreenMapItems with \(items.count) items")
             #endif
-            let matched = await websiteChecker.batchPreScreenMapItems(items, picks: picks)
+            let matched = await websiteChecker.batchPreScreenMapItems(itemURLs, picks: picks)
             guard !Task.isCancelled else {
                 #if DEBUG
                 print("[Explore] cancelled after pre-screen")
@@ -717,6 +730,11 @@ struct ListTabView: View {
     @State private var searchText = ""
     @State private var listMode: ListMode = .community
 
+    // Spot search term customization
+    @State private var editingSpotSearchCategory: FoodCategory? = nil
+    @State private var showSpotSearchOverview = false
+    @State private var mapTermsVersion = 0
+
     // Custom search location — shared between Explore and Verified tabs
     @State private var customLocation: CustomSearchLocation? = nil
     @State private var isEditingLocation = false
@@ -861,6 +879,11 @@ struct ListTabView: View {
                 PicksFilterBar(picks: picksService.picks, selectedPick: $selectedFilter)
                     .padding(.top, 8)
 
+                // Spot search customization — Explore mode only
+                if listMode == .explore {
+                    spotSearchButton
+                }
+
                 // ── Content ───────────────────────────────────────────────────
                 switch listMode {
                 case .community:
@@ -878,6 +901,7 @@ struct ListTabView: View {
                         onSelectExistingSpot: { spot in
                             selectedSpot = spot
                         },
+                        mapTermsVersion: mapTermsVersion,
                         websiteChecker: websiteChecker
                     )
                 }
@@ -908,6 +932,25 @@ struct ListTabView: View {
                 SpotDetailView(spot: spot)
                     .environmentObject(picksService)
             }
+            .sheet(item: $editingSpotSearchCategory) { category in
+                EditSpotSearchView(category: category, onSave: {
+                    mapTermsVersion += 1
+                })
+                .environmentObject(picksService)
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showSpotSearchOverview) {
+                SpotSearchOverviewView(
+                    picks: picksService.picks,
+                    onEditCategory: { category in
+                        showSpotSearchOverview = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            editingSpotSearchCategory = category
+                        }
+                    }
+                )
+                .presentationDetents([.medium, .large])
+            }
             .onChange(of: listMode) { _, _ in
                 searchText = ""
             }
@@ -915,6 +958,40 @@ struct ListTabView: View {
                 await spotService.fetchSpots()
             }
         }
+    }
+
+    // MARK: Spot search customization
+
+    @ViewBuilder
+    private var spotSearchButton: some View {
+        Button {
+            if let filter = selectedFilter {
+                editingSpotSearchCategory = filter
+            } else {
+                showSpotSearchOverview = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                Text("Customize Spot Search")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal)
+        .padding(.top, 4)
     }
 
     // MARK: Community content

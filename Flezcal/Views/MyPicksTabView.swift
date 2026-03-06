@@ -90,7 +90,9 @@ struct MyPicksTabView: View {
     }
 
     private var subtitleText: some View {
-        Text("Your Flezcals shape everything — map pins, ghost suggestions, and search filters. Tap below to customize!")
+        (Text("Your Flezcals are your cravings and the heart of this app. Tap ") +
+         Text(Image(systemName: "slider.horizontal.3")) +
+         Text(" on any Flezcal to customize its search terms."))
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -130,7 +132,6 @@ private struct PickCard: View {
 
             // Right-side actions
             if isEditable, let onEdit {
-                // Edit button for custom picks
                 Button {
                     onEdit()
                 } label: {

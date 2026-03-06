@@ -55,33 +55,67 @@ struct FoodCategoryGridView: View {
 
                 counterBadge
 
-                // Launch categories at top
-                launchGrid
-                    .padding(.horizontal)
+                if FeatureFlags.broadSearchEnabled {
+                    // Selected built-in picks shown as a row at the top
+                    let selectedBuiltIn = picksService.picks.filter { !$0.id.hasPrefix("custom_") }
+                    if !selectedBuiltIn.isEmpty {
+                        selectedPicksGrid(selectedBuiltIn)
+                            .padding(.horizontal)
+                    }
 
-                // Custom picks section
-                let customPicks = picksService.customPicks
-                if !customPicks.isEmpty {
-                    customPicksSection(customPicks)
+                    // Custom picks section
+                    let customPicks = picksService.customPicks
+                    if !customPicks.isEmpty {
+                        customPicksSection(customPicks)
+                            .padding(.horizontal)
+                    }
+
+                    // Create custom button
+                    if authService.isSignedIn && picksService.canCreateCustom {
+                        createCustomButton
+                            .padding(.horizontal)
+                    }
+
+                    // Unselected built-in categories to choose from
+                    let unselected = FoodCategory.allCategories.filter { cat in
+                        !picksService.isSelected(cat)
+                    }
+                    if !unselected.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("All Categories")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal)
+
+                            UnselectedGridContent(
+                                columns: columns,
+                                categories: unselected,
+                                picksService: picksService
+                            )
+                            .padding(.horizontal)
+                        }
+                    }
+                } else {
+                    // Launch mode layout
+                    launchGrid
                         .padding(.horizontal)
-                }
 
-                // Create custom button
-                if authService.isSignedIn && picksService.canCreateCustom {
-                    createCustomButton
-                        .padding(.horizontal)
-                }
+                    let customPicks = picksService.customPicks
+                    if !customPicks.isEmpty {
+                        customPicksSection(customPicks)
+                            .padding(.horizontal)
+                    }
 
-                // Coming soon divider
-                if !FeatureFlags.broadSearchEnabled {
+                    if authService.isSignedIn && picksService.canCreateCustom {
+                        createCustomButton
+                            .padding(.horizontal)
+                    }
+
                     comingSoonSection
                         .padding(.horizontal)
 
-                    // Grayed out future categories
                     futureGrid
-                        .padding(.horizontal)
-                } else {
-                    categoryGrid
                         .padding(.horizontal)
                 }
             }
@@ -162,9 +196,13 @@ struct FoodCategoryGridView: View {
         .opacity(0.4)
     }
 
-    /// Full grid of all categories (Phase 4).
-    private var categoryGrid: some View {
-        CategoryGridContent(columns: columns, picksService: picksService)
+    /// Selected built-in picks shown at the top with checkmarks (tappable to deselect).
+    private func selectedPicksGrid(_ selected: [FoodCategory]) -> some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(selected) { cat in
+                FoodCategoryCell(category: cat, picksService: picksService)
+            }
+        }
     }
 
     private func customPicksSection(_ customPicks: [FoodCategory]) -> some View {
@@ -246,16 +284,16 @@ struct FoodCategoryGridView: View {
     }
 }
 
-/// Isolated view that renders the 3-column grid of category cells.
-/// Kept separate so its @ViewBuilder body compiles in its own type context,
-/// away from the SwiftUICore/SwiftUI ambiguity that affects FoodCategoryGridView.
-private struct CategoryGridContent: View {
+/// Grid of unselected built-in categories. Kept as a separate view to avoid
+/// SwiftUICore/SwiftUI module ambiguity in the parent's body.
+private struct UnselectedGridContent: View {
     let columns: [GridItem]
+    let categories: [FoodCategory]
     @ObservedObject var picksService: UserPicksService
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(FoodCategory.allCategories) { cat in
+            ForEach(categories) { cat in
                 FoodCategoryCell(category: cat, picksService: picksService)
             }
         }

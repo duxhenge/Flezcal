@@ -1,5 +1,5 @@
 import Foundation
-import MapKit
+@preconcurrency import MapKit
 import CoreLocation
 
 /// The result of checking a venue's website for category-relevant keywords.
@@ -86,7 +86,7 @@ actor WebsiteCheckService {
         config.httpAdditionalHeaders = [
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
         ]
-        config.tlsMinimumSupportedProtocolVersion = .TLSv10
+        config.tlsMinimumSupportedProtocolVersion = .TLSv12
         // Disable URL caching — we maintain our own in-memory htmlCache and
         // don't want stale disk-cached responses consuming storage.
         config.urlCache = nil
@@ -118,6 +118,19 @@ actor WebsiteCheckService {
     /// 5 is enough for lunch/dinner/drinks/dessert/location-specific menus
     /// while staying under ~6 seconds total even on slow hosts.
     private let maxSubpageCrawls = 5
+
+    /// Social media / aggregator domains whose pages never contain venue-specific
+    /// menu keywords. When Apple Maps lists one of these as a venue's "website",
+    /// we skip it and fall through to Brave Search discovery.
+    private static let blockedDomains: Set<String> = [
+        "facebook.com", "www.facebook.com", "m.facebook.com",
+        "instagram.com", "www.instagram.com",
+        "twitter.com", "x.com",
+        "yelp.com", "www.yelp.com",
+        "tripadvisor.com", "www.tripadvisor.com",
+        "tiktok.com", "www.tiktok.com",
+        "linkedin.com", "www.linkedin.com",
+    ]
 
     // MARK: - Public API
 
@@ -204,40 +217,7 @@ actor WebsiteCheckService {
         // restaurant servers cause network timeouts to pile up, stalling
         // the URLSession and making the app feel frozen.
         if !toFetch.isEmpty {
-            let fetched = await withTaskGroup(
-                of: (String, URL, HTMLScanResult)?.self,
-                returning: [(String, URL, HTMLScanResult)].self
-            ) { group in
-                var pending = 0
-                var index = 0
-                var collected: [(String, URL, HTMLScanResult)] = []
-
-                while index < toFetch.count {
-                    while pending < 6 && index < toFetch.count {
-                        let item = toFetch[index]
-                        index += 1
-                        pending += 1
-                        group.addTask { [self] in
-                            guard let (html, isValid) = await self.fetchPage(item.url),
-                                  isValid else {
-                                return nil
-                            }
-                            let scanResult = await self.scanForCategories(in: html)
-                            return (item.id, item.url, scanResult)
-                        }
-                    }
-                    // Wait for one to finish before adding more
-                    if let result = await group.next() {
-                        pending -= 1
-                        if let r = result { collected.append(r) }
-                    }
-                }
-                // Drain remaining
-                for await result in group {
-                    if let r = result { collected.append(r) }
-                }
-                return collected
-            }
+            let fetched = await fetchAndScanHomepages(toFetch)
 
             // Cache results and filter to picks.
             // Only confirmed matches drive pre-screen ranking (not related).
@@ -279,60 +259,35 @@ actor WebsiteCheckService {
     /// Returns a set of MKMapItem indices (position in the input array) that
     /// had at least one keyword match (confirmed or related) for the user's picks.
     /// Homepage-only, no Brave API calls, no subpage crawling.
+    /// Pre-screen venues for Explore result re-ranking.
+    /// Accepts pre-extracted (index, url) pairs so that non-Sendable MKMapItem
+    /// doesn't cross the actor boundary.
     func batchPreScreenMapItems(
-        _ mapItems: [MKMapItem],
+        _ items: [(index: Int, url: URL)],
         picks: [FoodCategory]
     ) async -> Set<Int> {
         let pickIDs = Set(picks.map(\.id))
         var matchedIndices = Set<Int>()
 
         // Separate cached vs needs-fetch
-        var toFetch: [(index: Int, url: URL)] = []
+        var toFetch: [(id: Int, url: URL)] = []
 
-        for (index, item) in mapItems.enumerated() {
-            guard let url = item.url, !isSocialMediaURL(url) else { continue }
-            let key = url.absoluteString
+        for item in items {
+            guard !isSocialMediaURL(item.url) else { continue }
+            let key = item.url.absoluteString
             if let cached = htmlCache[key] {
                 if !cached.confirmed.intersection(pickIDs).isEmpty {
-                    matchedIndices.insert(index)
+                    matchedIndices.insert(item.index)
                 }
             } else {
-                toFetch.append((index: index, url: url))
+                toFetch.append((id: item.index, url: item.url))
             }
         }
 
         // Fetch uncached homepages concurrently (max 6 at a time).
         // Keeps connection count manageable to avoid timeout pile-ups.
         if !toFetch.isEmpty {
-            let fetched = await withTaskGroup(
-                of: (Int, URL, HTMLScanResult)?.self,
-                returning: [(Int, URL, HTMLScanResult)].self
-            ) { group in
-                var pending = 0
-                var idx = 0
-                var collected: [(Int, URL, HTMLScanResult)] = []
-                while idx < toFetch.count {
-                    while pending < 6 && idx < toFetch.count {
-                        let item = toFetch[idx]
-                        idx += 1
-                        pending += 1
-                        group.addTask { [self] in
-                            guard let (html, isValid) = await self.fetchPage(item.url),
-                                  isValid else { return nil }
-                            let scanResult = await self.scanForCategories(in: html)
-                            return (item.index, item.url, scanResult)
-                        }
-                    }
-                    if let result = await group.next() {
-                        pending -= 1
-                        if let r = result { collected.append(r) }
-                    }
-                }
-                for await result in group {
-                    if let r = result { collected.append(r) }
-                }
-                return collected
-            }
+            let fetched = await fetchAndScanHomepages(toFetch)
 
             for (index, url, scanResult) in fetched {
                 htmlCache[url.absoluteString] = scanResult
@@ -341,8 +296,7 @@ actor WebsiteCheckService {
                 }
                 #if DEBUG
                 if !scanResult.confirmed.isEmpty || !scanResult.related.isEmpty {
-                    let name = mapItems[index].name ?? "?"
-                    print("[PreScreen-Explore] \(name): confirmed=\(scanResult.confirmed) related=\(scanResult.related) pickIDs=\(pickIDs)")
+                    print("[PreScreen-Explore] index \(index): confirmed=\(scanResult.confirmed) related=\(scanResult.related) pickIDs=\(pickIDs)")
                 }
                 #endif
             }
@@ -641,13 +595,14 @@ actor WebsiteCheckService {
     /// rather than "empty / JS-heavy", preventing false-positive Brave searches.
     private func fetchAndScanAllCategories(_ url: URL) async -> (HTMLScanResult, Bool, Bool) {
         let key = url.absoluteString
+        let categories = await MainActor.run { FoodCategory.allScannable }
 
         // Step 1: fetch and scan the homepage
         guard let (homeHTML, isValid) = await fetchPage(url), isValid else {
             htmlCache[key] = .empty
             return (.empty, false, false)
         }
-        var matched = scanForCategories(in: homeHTML)
+        var matched = scanForCategories(in: homeHTML, categories: categories)
 
         // Detect PDF menu links — sites like Mustards Grill host menus as
         // downloadable PDFs (.pdf) that our HTML scanner can't read. When we
@@ -714,13 +669,7 @@ actor WebsiteCheckService {
 
             // Check if already cached from a previous check
             if let cached = htmlCache[menuKey] {
-                matched.confirmed.formUnion(cached.confirmed)
-                // Merge related: only add if not already confirmed
-                for (catID, keyword) in cached.related where !matched.confirmed.contains(catID) {
-                    if matched.related[catID] == nil {
-                        matched.related[catID] = keyword
-                    }
-                }
+                mergeHTMLResult(cached, into: &matched)
                 crawlCount += 1
                 continue
             }
@@ -729,20 +678,9 @@ actor WebsiteCheckService {
                 crawlCount += 1
                 continue
             }
-            let subMatched = scanForCategories(in: subHTML)
+            let subMatched = scanForCategories(in: subHTML, categories: categories)
             htmlCache[menuKey] = subMatched
-            // Merge: confirmed takes precedence
-            matched.confirmed.formUnion(subMatched.confirmed)
-            // Remove from related if now confirmed on any page
-            for confirmedID in subMatched.confirmed {
-                matched.related.removeValue(forKey: confirmedID)
-            }
-            // Add new related matches (only if not already confirmed)
-            for (catID, keyword) in subMatched.related where !matched.confirmed.contains(catID) {
-                if matched.related[catID] == nil {
-                    matched.related[catID] = keyword
-                }
-            }
+            mergeHTMLResult(subMatched, into: &matched)
             crawlCount += 1
             #if DEBUG
             let subTotal = subMatched.confirmed.count + subMatched.related.count
@@ -840,6 +778,61 @@ actor WebsiteCheckService {
         }
     }
 
+    /// Merges a subpage's scan result into an accumulated result.
+    /// Confirmed matches take precedence: if a category is confirmed on any page,
+    /// it's removed from the related dict to avoid showing it as "uncertain".
+    private func mergeHTMLResult(_ new: HTMLScanResult, into accumulated: inout HTMLScanResult) {
+        accumulated.confirmed.formUnion(new.confirmed)
+        for confirmedID in new.confirmed {
+            accumulated.related.removeValue(forKey: confirmedID)
+        }
+        for (catID, keyword) in new.related where !accumulated.confirmed.contains(catID) {
+            if accumulated.related[catID] == nil {
+                accumulated.related[catID] = keyword
+            }
+        }
+    }
+
+    /// Fetches homepages concurrently (max 6 at a time) and scans each for all
+    /// category keywords. Returns the ID, URL, and scan result for each successful fetch.
+    /// Shared by batchPreScreen and batchPreScreenMapItems to avoid duplicating
+    /// the throttled task-group loop.
+    private func fetchAndScanHomepages<ID: Sendable>(
+        _ items: [(id: ID, url: URL)]
+    ) async -> [(ID, URL, HTMLScanResult)] {
+        let categories = await MainActor.run { FoodCategory.allScannable }
+        return await withTaskGroup(
+            of: (ID, URL, HTMLScanResult)?.self,
+            returning: [(ID, URL, HTMLScanResult)].self
+        ) { group in
+            var pending = 0
+            var index = 0
+            var collected: [(ID, URL, HTMLScanResult)] = []
+
+            while index < items.count {
+                while pending < 6 && index < items.count {
+                    let item = items[index]
+                    index += 1
+                    pending += 1
+                    group.addTask { [self] in
+                        guard let (html, isValid) = await self.fetchPage(item.url),
+                              isValid else { return nil }
+                        let scanResult = await self.scanForCategories(in: html, categories: categories)
+                        return (item.id, item.url, scanResult)
+                    }
+                }
+                if let result = await group.next() {
+                    pending -= 1
+                    if let r = result { collected.append(r) }
+                }
+            }
+            for await result in group {
+                if let r = result { collected.append(r) }
+            }
+            return collected
+        }
+    }
+
     /// Scans raw HTML for all FoodCategory keywords and returns an `HTMLScanResult`
     /// with both confirmed (websiteKeywords) and related (relatedKeywords) matches.
     ///
@@ -852,11 +845,11 @@ actor WebsiteCheckService {
     ///   1. First scan `websiteKeywords` — if any match → confirmed (skip relatedKeywords).
     ///   2. Only if no websiteKeyword matched AND relatedKeywords is non-empty →
     ///      scan relatedKeywords → add to related dict with the matched keyword.
-    private func scanForCategories(in html: String) -> HTMLScanResult {
+    private func scanForCategories(in html: String, categories: [FoodCategory]) -> HTMLScanResult {
         let lower = html.lowercased()
         var result = HTMLScanResult.empty
 
-        for category in FoodCategory.allScannable {
+        for category in categories {
             // Step 1: check specific websiteKeywords first
             var foundSpecific = false
             for keyword in category.websiteKeywords {
@@ -1024,21 +1017,9 @@ actor WebsiteCheckService {
         return nil
     }
 
-    /// Returns true for social media / aggregator domains whose pages will never
-    /// contain venue-specific menu keywords. When Apple Maps lists one of these as
-    /// a venue's "website", we skip it and fall through to Brave Search discovery.
     private func isSocialMediaURL(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
-        let blockedDomains = [
-            "facebook.com", "www.facebook.com", "m.facebook.com",
-            "instagram.com", "www.instagram.com",
-            "twitter.com", "x.com",
-            "yelp.com", "www.yelp.com",
-            "tripadvisor.com", "www.tripadvisor.com",
-            "tiktok.com", "www.tiktok.com",
-            "linkedin.com", "www.linkedin.com",
-        ]
-        return blockedDomains.contains(host)
+        return Self.blockedDomains.contains(host)
     }
 
     /// Upgrades http:// to https:// — iOS ATS blocks plain HTTP fetches.
