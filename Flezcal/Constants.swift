@@ -74,6 +74,13 @@ enum FirestoreCollections {
     static let adminCosts        = "admin_costs"
     static let adminReminders    = "admin_reminders"
     static let adminNotes        = "admin_notes"
+
+    // Feature flags and beta feedback
+    // app_config/feature_flags — read: any auth user, write: admin only
+    // beta_feedback — create: any auth user, read/update/delete: admin only
+    static let appConfig         = "app_config"
+    static let featureFlags      = "feature_flags"  // document under app_config
+    static let betaFeedback      = "beta_feedback"
 }
 
 /// Feature flags for phased rollout.

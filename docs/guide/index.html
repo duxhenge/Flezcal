@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Guide v2 - deployed 2026-03-07 -->
+    <title>User Guide - Flezcal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #e8e8e8;
+            background: #0f1b2d;
+            line-height: 1.7;
+        }
+
+        a { color: #4ecdc4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* Top nav bar */
+        .topnav {
+            background: #0a1520;
+            border-bottom: 1px solid #1e3347;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .topnav-brand {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #e67e22;
+        }
+        .topnav-links a {
+            margin-left: 20px;
+            font-size: 0.9rem;
+            color: #b0bec5;
+        }
+        .topnav-links a:hover { color: #fff; }
+        .topnav-links a.active { color: #e67e22; }
+
+        /* Layout */
+        .page-wrapper {
+            display: flex;
+            max-width: 1100px;
+            margin: 0 auto;
+            min-height: calc(100vh - 60px);
+        }
+
+        /* Sidebar TOC */
+        .sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            position: sticky;
+            top: 52px;
+            height: calc(100vh - 52px);
+            overflow-y: auto;
+            border-right: 1px solid #1e3347;
+        }
+        .sidebar h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #607d8b;
+            margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block;
+            font-size: 0.85rem;
+            color: #90a4ae;
+            padding: 5px 0;
+            border-left: 2px solid transparent;
+            padding-left: 12px;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .sidebar a:hover {
+            color: #fff;
+            text-decoration: none;
+            border-left-color: #e67e22;
+        }
+
+        /* Main content */
+        .content {
+            flex: 1;
+            padding: 40px 32px 80px;
+            max-width: 720px;
+        }
+
+        .content h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .content .subtitle {
+            font-size: 1.05rem;
+            color: #90a4ae;
+            margin-bottom: 48px;
+        }
+
+        .content h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
+            margin-top: 56px;
+            margin-bottom: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #1e3347;
+        }
+        .content h2:first-of-type { border-top: none; margin-top: 0; }
+
+        .content h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #e8e8e8;
+            margin-top: 32px;
+            margin-bottom: 12px;
+        }
+
+        .content p {
+            font-size: 0.95rem;
+            color: #b0bec5;
+            margin-bottom: 16px;
+        }
+
+        .content strong { color: #e8e8e8; }
+
+        .content ul, .content ol {
+            margin: 0 0 20px 20px;
+            color: #b0bec5;
+            font-size: 0.95rem;
+        }
+        .content li { margin-bottom: 8px; }
+
+        /* Screenshot images */
+        .screenshot {
+            width: 100%;
+            max-width: 320px;
+            margin: 24px auto;
+            display: block;
+            border-radius: 20px;
+            border: 2px solid #1e3347;
+            background: #162a3e;
+        }
+        .screenshot-placeholder {
+            width: 100%;
+            max-width: 320px;
+            margin: 24px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 560px;
+            border-radius: 20px;
+            border: 2px dashed #2a4a5e;
+            background: #0d1926;
+            color: #3a6070;
+            font-size: 0.85rem;
+            text-align: center;
+            padding: 20px;
+        }
+        .screenshot-caption {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #607d8b;
+            margin-top: -10px;
+            margin-bottom: 28px;
+        }
+        .screenshot-caption .fig-num {
+            color: #e67e22;
+            font-weight: 600;
+        }
+
+        /* Screenshot row for side-by-side on wider screens */
+        .screenshot-row {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .screenshot-row .screenshot,
+        .screenshot-row .screenshot-placeholder {
+            margin: 0;
+            max-width: 280px;
+        }
+
+        /* Info callout */
+        .callout {
+            background: #162a3e;
+            border-left: 3px solid #e67e22;
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            margin: 24px 0;
+            font-size: 0.9rem;
+            color: #b0bec5;
+        }
+        .callout strong { color: #e67e22; }
+
+        /* Rating table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0 24px;
+            font-size: 0.9rem;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #162a3e;
+            color: #e8e8e8;
+            font-weight: 600;
+            border-bottom: 1px solid #1e3347;
+        }
+        td {
+            padding: 8px 12px;
+            color: #b0bec5;
+            border-bottom: 1px solid #1a2d40;
+        }
+        tr:last-child td { border-bottom: none; }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid #1e3347;
+            padding: 36px 24px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #607d8b;
+        }
+        footer .links { margin-bottom: 12px; }
+        footer .links a { margin: 0 12px; }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px 20px 60px; }
+            .content h1 { font-size: 1.6rem; }
+            .content h2 { font-size: 1.2rem; }
+            .topnav { padding: 12px 16px; }
+            .topnav-links a { margin-left: 14px; font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Nav -->
+    <nav class="topnav">
+        <a href="/" class="topnav-brand">Flezcal</a>
+        <div class="topnav-links">
+            <a href="/">Home</a>
+            <a href="/guide" class="active">Guide</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/support">Support</a>
+        </div>
+    </nav>
+
+    <div class="page-wrapper">
+
+        <!-- Sidebar TOC -->
+        <aside class="sidebar">
+            <h3>User Guide</h3>
+            <a href="#what-is-flezcal">What is Flezcal?</a>
+            <a href="#first-launch">First Launch</a>
+            <a href="#signing-in">Signing In</a>
+            <a href="#your-picks">Your Picks</a>
+            <a href="#customizing-terms">Customizing Search Terms</a>
+            <a href="#the-map">The Map</a>
+            <a href="#searching">Searching for Spots</a>
+            <a href="#ghost-pins">Ghost Pins</a>
+            <a href="#adding-a-spot">Adding a Spot</a>
+            <a href="#spot-details">Spot Details</a>
+            <a href="#verifying">Verifying a Spot</a>
+            <a href="#rating">Rating a Spot</a>
+            <a href="#spots-tab">The Spots Tab</a>
+            <a href="#leaderboard">Leaderboard</a>
+            <a href="#profile">Profile</a>
+            <a href="#feedback">Share Your Feedback</a>
+            <a href="#venue-owners">For Venue Owners</a>
+            <a href="#tips">Tips and Tricks</a>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content">
+
+            <h1>Flezcal User Guide</h1>
+            <p class="subtitle">Everything you need to know about finding the food and drinks you crave.</p>
+
+
+            <!-- ============================================ -->
+            <!-- WHAT IS FLEZCAL                              -->
+            <!-- ============================================ -->
+
+            <h2 id="what-is-flezcal">What is Flezcal?</h2>
+
+            <p>Flezcal is a community-powered guide for finding specific foods and drinks you're passionate about. The name combines "flan" and "mezcal" &mdash; two of the original categories &mdash; but the concept extends far beyond those two items. A "Flezcal" is any specific food or drink you love and want to track down wherever you go.</p>
+
+            <p>The app helps you answer one question: <strong>"Does this place have what I'm looking for?"</strong></p>
+
+            <p>Rather than reviewing entire restaurants, Flezcal focuses on individual items. You might want to know which bars near you carry mezcal, which bakeries make flan, or which restaurants serve wood-fired pizza. Flezcal finds those places, checks their websites automatically, and lets the community verify and rate them (Figure 3).</p>
+
+            <h3>Web Checks vs. Community Verification</h3>
+
+            <p><strong>Web checks</strong> are automated scans that happen when the app searches your area. The app visits venue websites and searches for keywords related to your picks. This is a best-effort scan &mdash; it works well when restaurants list their menu items online, but it can miss items that aren't on the website.</p>
+
+            <p><strong>Community verification</strong> is powered by real people. When a user has physically been to a spot and confirms it serves a particular item, that carries more weight than any automated scan. Users can vote thumbs-up or thumbs-down on each category at a spot, building a trust score over time.</p>
+
+            <div class="callout">
+                <strong>Think of it this way:</strong> Web checks are a helpful first guess. Community verification is the real answer. Both work together.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- FIRST LAUNCH                                 -->
+            <!-- ============================================ -->
+
+            <h2 id="first-launch">First Launch</h2>
+
+            <p>Here's what happens the first time you open Flezcal.</p>
+
+            <h3>Age Verification</h3>
+
+            <p>Because the app includes alcohol-related categories (mezcal, bourbon, scotch, etc.), you'll see an age verification screen first. Confirm you're 21+ to proceed. This only appears once.</p>
+
+            <h3>Welcome Screen</h3>
+
+            <p>A welcome screen introduces the app's key features. Tap <strong>"Let's go!"</strong> to enter the app. This screen may reappear when new features are added. You can also revisit it anytime from <strong>Profile &gt; What's New</strong>.</p>
+
+            <h3>Your Default Picks</h3>
+
+            <p>Every new user starts with three default picks: <strong>Mezcal</strong>, <strong>Flan</strong>, and <strong>Handmade Tortillas</strong>. These are loaded automatically so you can start exploring the map right away. You can swap them out anytime from the <strong>My Flezcals</strong> tab.</p>
+
+            <h3>Location Permission</h3>
+
+            <p>The app will ask for location access so it can show venues near you. You can also search other cities manually without granting location access.</p>
+
+
+            <!-- ============================================ -->
+            <!-- SIGNING IN                                   -->
+            <!-- ============================================ -->
+
+            <h2 id="signing-in">Signing In</h2>
+
+            <p>You can browse the map, view ghost pins, and explore venues without signing in. But the community features that make Flezcal valuable &mdash; adding spots, rating them, verifying categories, and logging offerings &mdash; all require an account.</p>
+
+            <h3>Why Sign In?</h3>
+
+            <p>Signing in unlocks everything that turns Flezcal from a map viewer into a community tool:</p>
+
+            <ul>
+                <li><strong>Add spots</strong> to the database so others can find them</li>
+                <li><strong>Rate</strong> items you've tried on the flan scale</li>
+                <li><strong>Verify</strong> categories with a thumbs-up or thumbs-down vote</li>
+                <li><strong>Log offerings</strong> &mdash; brands, styles, and varieties at a spot</li>
+                <li><strong>Earn points</strong> and climb the leaderboard</li>
+                <li><strong>Send feedback</strong> during the beta</li>
+            </ul>
+
+            <p>Without an account, none of these actions are available. If you try to add a spot or rate one without being signed in, the app will prompt you to sign in first and then continue right where you left off.</p>
+
+            <h3>Sign-In Options</h3>
+
+            <p>Flezcal offers two ways to create an account:</p>
+
+            <ul>
+                <li><strong>Sign in with Apple</strong> &mdash; the fastest option. Uses your Apple ID with Face ID or Touch ID. You can choose to share or hide your email address.</li>
+                <li><strong>Continue with Email</strong> &mdash; create an account with your email address and a password. You'll also choose a display name during sign-up.</li>
+            </ul>
+
+            <h3>Where to Sign In</h3>
+
+            <p>You can sign in from two places:</p>
+
+            <ul>
+                <li><strong>The Profile tab</strong> &mdash; go there anytime to sign in proactively before you start exploring.</li>
+                <li><strong>Any community action</strong> &mdash; if you tap "Add spot," "Rate," or "Verify" while signed out, a compact sign-in sheet slides up automatically. After signing in, the app returns you to the action you were trying to take. No need to start over.</li>
+            </ul>
+
+            <h3>Setting Your Display Name</h3>
+
+            <p>After your first sign-in, the app asks <strong>"What should we call you?"</strong> This display name is how you appear on the leaderboard, in your ratings, and in community contributions. You can change it anytime from the Profile tab.</p>
+
+            <div class="callout">
+                <strong>Privacy note:</strong> Only your display name is visible to other users. Your email address is never shared with the community.
+            </div>
+
+            <div class="callout">
+                <strong>Our recommendation:</strong> Sign in early. Even if you're just browsing at first, being signed in means you can instantly add a spot or verify a category the moment you find something worth contributing.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- YOUR PICKS                                   -->
+            <!-- ============================================ -->
+
+            <h2 id="your-picks">Your Picks</h2>
+
+            <p>Your picks are the heart of the app. They determine what shows up on your map, which ghost pins appear, and what the web checker searches for. You can have up to <strong>3 active picks</strong> at a time (Figure 1).</p>
+
+            <!-- Figure 1: My Flezcals tab -->
+            <img src="images/01-my-flezcals.png" alt="The My Flezcals tab showing your active picks" class="screenshot" loading="lazy">
+            <p class="screenshot-caption"><span class="fig-num">Figure 1.</span> The My Flezcals tab showing your active picks.</p>
+
+            <h3>Managing Picks</h3>
+
+            <p>Go to the <strong>My Flezcals</strong> tab (heart icon) to see your current picks. Each pick card shows the category emoji and name, the search terms used for website scanning, an edit button to customize terms, and a remove button.</p>
+
+            <p>Tap <strong>"Customize My Flezcals"</strong> to open the full category grid, where you can browse all available options and swap picks in and out.</p>
+
+            <h3>Available Categories</h3>
+
+            <p>Flezcal launches with 23 curated categories:</p>
+
+            <ul>
+                <li><strong>The Launch Trio:</strong> Mezcal, Flan, Handmade Tortillas</li>
+                <li><strong>Drinks:</strong> Bourbon, Fernet Branca, New England IPA, Single Malt Scotch</li>
+                <li><strong>Savory:</strong> Peameal Bacon, Wood-Fired Pizza, Paella, Oysters, Pho, Pozole, Tartare, Fugu, Bibimbap, Iberico Ham, Caviar, Pierogi, Lobster Rolls, Smashburgers</li>
+                <li><strong>Sweets &amp; Specialty:</strong> Maple Syrup, Artisan Chocolate</li>
+            </ul>
+
+            <h3>Creating a Custom Category</h3>
+
+            <p>Can't find what you're looking for? Tap <strong>"Create Your Own"</strong> at the bottom of the category grid. You'll choose a name, an emoji, and the search terms the app should use. Be specific: "Pupusas" or "Empanadas" works great. Broad terms like "Italian" or "Seafood" are too generic for useful results.</p>
+
+            <div class="callout">
+                <strong>Note:</strong> Creating a custom category requires signing in, since custom categories are stored with your account.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- CUSTOMIZING SEARCH TERMS                     -->
+            <!-- ============================================ -->
+
+            <h2 id="customizing-terms">Customizing Search Terms</h2>
+
+            <p>Every category has <strong>search terms</strong> the app uses when scanning venue websites, and <strong>map search terms</strong> that control which venues appear as ghost pins. Tap the edit button (slider icon) on any pick card to open the customization page (Figure 2).</p>
+
+            <!-- Figure 2: Search terms customization -->
+            <img src="images/02-customize-terms.png" alt="The search terms customization page for a category" class="screenshot" loading="lazy">
+            <p class="screenshot-caption"><span class="fig-num">Figure 2.</span> Customizing the search terms and map queries for a pick.</p>
+
+            <p>The customization page lets you adjust two sets of terms:</p>
+
+            <ul>
+                <li><strong>Website Keywords:</strong> Words the web checker looks for on restaurant menus and websites. Adding alternate spellings, regional names, or terms in other languages improves scan accuracy.</li>
+                <li><strong>Map Search Terms:</strong> The queries sent to Apple Maps to discover venues. These control which restaurants, bars, and stores appear as ghost pins on the map.</li>
+            </ul>
+
+            <div class="callout">
+                <strong>Tip:</strong> Use words that appear on actual restaurant menus. If a category isn't finding matches, try adding terms that chefs and bartenders actually use (e.g., "agave spirit" for mezcal, "custard" for flan).
+            </div>
+
+            <p>Tap <strong>"Reset to defaults"</strong> at any time to restore the original terms for a built-in category.</p>
+
+
+            <!-- ============================================ -->
+            <!-- THE MAP                                      -->
+            <!-- ============================================ -->
+
+            <h2 id="the-map">The Map (Explore Tab)</h2>
+
+            <p>The <strong>Explore</strong> tab is the main screen. It shows your location (blue dot), confirmed spots (solid colored pins with category emoji), and ghost pins (suggested spots that haven't been verified yet).</p>
+
+            <h3>Filter Buttons</h3>
+
+            <p>The filter bar at the top lets you show or hide different types of pins (Figure 3). Each button displays a count and shows <strong style="color:#4caf50;">Filter on</strong> (green) or <strong style="color:#ef5350;">Filter off</strong> (red) so you always know which pins are visible.</p>
+
+            <!-- Figure 3: Map with green pins and filter buttons -->
+            <img src="images/03-map-filters.png" alt="The map showing green ghost pins with filter buttons at the top" class="screenshot" loading="lazy">
+            <p class="screenshot-caption"><span class="fig-num">Figure 3.</span> Green ghost pins indicate likely matches. Filter buttons at the top show which pin types are visible.</p>
+
+
+            <!-- ============================================ -->
+            <!-- SEARCHING                                    -->
+            <!-- ============================================ -->
+
+            <h2 id="searching">Searching for Spots</h2>
+
+            <p>Flezcal uses a two-stage search to get you results quickly.</p>
+
+            <h3>Stage 1: Quick Scan</h3>
+
+            <p>When the map loads or you tap <strong>"Search This Area"</strong>, the app immediately fetches nearby venues from Apple Maps and runs a quick homepage scan on the closest 25. Yellow ghost pins appear on the map. Venues whose websites mention your picks turn green. This usually takes just a few seconds.</p>
+
+            <h3>Stage 2: Search Wider Area</h3>
+
+            <p>After the quick scan finishes, a <strong>"Search Wider Area?"</strong> button appears at the bottom of the map (visible in Figure 3). Tap it to scan the remaining venues in the wider area. This may take a bit longer but can reveal matches that are farther away from the map center.</p>
+
+            <div class="callout">
+                <strong>You don't have to wait.</strong> You can interact with the map, tap pins, and explore results from Stage 1 while deciding whether to run Stage 2.
+            </div>
+
+            <h3>Search This Area</h3>
+
+            <p>Pan or zoom the map and a <strong>"Search This Area"</strong> button appears. Tapping it starts a fresh two-stage search for the new area.</p>
+
+
+            <!-- ============================================ -->
+            <!-- GHOST PINS                                   -->
+            <!-- ============================================ -->
+
+            <h2 id="ghost-pins">Ghost Pins</h2>
+
+            <p>Ghost pins are unconfirmed suggestions from Apple Maps. They represent places that <em>might</em> have what you're looking for. Both types are visible in Figure 3.</p>
+
+            <p><strong>Yellow ghost pins</strong> (dashed border, "?" icon) are untested suggestions. The app hasn't confirmed anything about their menu yet.</p>
+
+            <p><strong>Green ghost pins</strong> (solid border, checkmark icon, gently pulsing) are likely matches. The app found keywords related to your picks on their website during the pre-screen. These are worth checking first.</p>
+
+            <h3>Tapping a Ghost Pin</h3>
+
+            <p>When you tap any ghost pin, a detail sheet slides up and the app runs a thorough <strong>3-pass website check</strong>:</p>
+
+            <ol>
+                <li><strong>Pass 1:</strong> Downloads the venue's homepage and menu subpages, scanning for your pick's keywords</li>
+                <li><strong>Pass 2:</strong> If Pass 1 didn't find a match, searches the web for your keywords on that venue's domain</li>
+                <li><strong>Pass 3:</strong> (Only for venues with no website) Searches the broader web for your pick at that venue name</li>
+            </ol>
+
+            <p>While the primary pick is being checked, all your other active picks are scanned against the same cached pages at no extra cost.</p>
+
+            <p>The sheet shows category chips indicating what was found, a result banner, and actions to add the spot or dismiss the pin (Figure 4).</p>
+
+            <!-- Figure 4: Ghost pin detail sheet -->
+            <img src="images/04-ghost-pin-detail.png" alt="Ghost pin detail sheet showing category chips and website check results" class="screenshot" loading="lazy">
+            <p class="screenshot-caption"><span class="fig-num">Figure 4.</span> A ghost pin detail sheet showing website check results. Green chips confirm a match; gray chips were not found.</p>
+
+
+            <!-- ============================================ -->
+            <!-- ADDING A SPOT                                -->
+            <!-- ============================================ -->
+
+            <h2 id="adding-a-spot">Adding a Spot</h2>
+
+            <p>Adding a spot is the most valuable action you can take in Flezcal. It creates a permanent listing that others in the community can find, verify, and rate. <strong>You'll need to be signed in to add a spot</strong> &mdash; if you're not, the app will prompt you.</p>
+
+            <h3>From a Ghost Pin</h3>
+
+            <p>Tap a ghost pin on the map, then tap <strong>"Yes, add it to Flezcal!"</strong> This pre-fills the venue info and any categories the web check confirmed.</p>
+
+            <h3>From Explore Search</h3>
+
+            <p>Go to the <strong>Spots</strong> tab, switch to Explore mode, and search for a venue by name. Tap any result to open the detail sheet, then add it.</p>
+
+            <h3>The Confirm Spot Screen</h3>
+
+            <p>After selecting a venue, you'll see a map preview, the venue name and address, and the categories to be added. If the spot already exists in Flezcal, your categories merge with the existing entry.</p>
+
+            <p>Each category has a specific type of offering you can list. For example, Mezcal asks for brands, Flan asks for styles, Oysters asks for varieties. Offerings are optional but helpful for the community.</p>
+
+            <div class="callout">
+                <strong>First spot celebration:</strong> When you add your very first spot, you'll get a congratulatory message. Welcome to the community!
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- SPOT DETAILS                                 -->
+            <!-- ============================================ -->
+
+            <h2 id="spot-details">Spot Details</h2>
+
+            <p>Tap any confirmed spot (the solid colored pins on the map, or any row in the Spots tab) to see its full detail page.</p>
+
+            <h3>What You'll See</h3>
+
+            <p>The detail page shows:</p>
+
+            <ul>
+                <li>A photo or map preview at the top</li>
+                <li>The spot name, address, and distance from you</li>
+                <li>Category badges for each item confirmed at this venue</li>
+                <li>The average community rating (displayed with flan emoji)</li>
+                <li>Fun badges like <strong>"Hidden Gem"</strong> or <strong>"New"</strong></li>
+            </ul>
+
+            <h3>Offerings</h3>
+
+            <p>Each category lists the specific brands, styles, or varieties the community has logged at that venue. You can tap the + button to add more offerings if you've been there and know what they carry.</p>
+
+            <h3>Actions</h3>
+
+            <ul>
+                <li><strong>Open in Maps:</strong> Get directions via Apple Maps</li>
+                <li><strong>Add a Flezcal:</strong> Add another category to this spot (if the venue has more of your picks)</li>
+                <li><strong>Rate:</strong> Give your personal rating</li>
+                <li><strong>Report Spot:</strong> Flag inaccurate or inappropriate listings</li>
+                <li><strong>Report as Permanently Closed:</strong> Let the community know if a place has shut down</li>
+            </ul>
+
+
+            <!-- ============================================ -->
+            <!-- VERIFYING                                    -->
+            <!-- ============================================ -->
+
+            <h2 id="verifying">Verifying a Spot</h2>
+
+            <p>Verification is the backbone of Flezcal's community trust system. It's quick, it's easy, and it makes the data better for everyone. <strong>You'll need to be signed in to verify.</strong></p>
+
+            <h3>How It Works</h3>
+
+            <p>On every spot detail page, under each category, you'll see a verification prompt asking the community to confirm whether this venue actually has that item. This is separate from rating &mdash; you don't need to score the quality. Just confirm whether it's there.</p>
+
+            <ul>
+                <li><strong>Thumbs up</strong> &mdash; "Yes, they have this." You've been there and can confirm.</li>
+                <li><strong>Thumbs down</strong> &mdash; "No, they don't have this (anymore)." The item was missing or has been removed from the menu.</li>
+            </ul>
+
+            <h3>Why It Matters</h3>
+
+            <p>A confirmation percentage shows the community consensus on each category at each spot. The more people who verify, the more trustworthy the listing becomes. This is especially important for items that web checks might get wrong &mdash; a website might still list an item that was removed from the menu months ago.</p>
+
+            <p>Verification earns you <strong>+1 point</strong> on the leaderboard for each category you verify.</p>
+
+            <div class="callout">
+                <strong>Quick contribution:</strong> Verifying is the fastest way to help. Stopped in for a drink? Tap thumbs-up on mezcal. Didn't see it on the menu? Tap thumbs-down. Takes two seconds.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- RATING                                       -->
+            <!-- ============================================ -->
+
+            <h2 id="rating">Rating a Spot</h2>
+
+            <p>Flezcal uses a flan-based rating scale instead of stars. <strong>You'll need to be signed in to rate.</strong></p>
+
+            <table>
+                <thead>
+                    <tr><th>Rating</th><th>Label</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>1 flan</td><td>Confirmed Spot</td><td>They have it</td></tr>
+                    <tr><td>2 flans</td><td>Neighborhood Option</td><td>Satisfies the craving</td></tr>
+                    <tr><td>3 flans</td><td>Best Local Choice</td><td>Best of the nearby choices</td></tr>
+                    <tr><td>4 flans</td><td>Best in Region</td><td>Worthy of a road trip</td></tr>
+                    <tr><td>5 flans</td><td>World Class</td><td>Worthy of a pilgrimage</td></tr>
+                </tbody>
+            </table>
+
+            <h3>How to Rate</h3>
+
+            <p>Open the spot detail page, tap <strong>"Rate"</strong>, select the category you're rating, choose your flan level, and confirm. The app will ask you to confirm higher ratings (4 and 5 flans) to make sure you really mean it &mdash; those levels carry weight.</p>
+
+            <p>You can edit or remove your rating anytime by revisiting the spot detail page.</p>
+
+            <div class="callout">
+                <strong>Important:</strong> Only rate items you've personally tried at that specific location. The rating is about that item at that place, not the restaurant overall. Rating earns you <strong>+5 points</strong> on the leaderboard.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- SPOTS TAB                                    -->
+            <!-- ============================================ -->
+
+            <h2 id="spots-tab">The Spots Tab (List View)</h2>
+
+            <p>The <strong>Spots</strong> tab has two modes, toggled by a segmented control at the top:</p>
+
+            <h3>Community Mode</h3>
+
+            <p>Shows all confirmed Flezcal spots from the database. Use the filter pills to narrow by category. Each row shows category icons, spot name, rating or status, and distance from you.</p>
+
+            <h3>Explore Mode</h3>
+
+            <p>A live search powered by Apple Maps. Type a venue name to find any restaurant, bar, or store. Results show green highlighting if the homepage pre-screen found a keyword match.</p>
+
+            <p>Explore mode also uses the two-stage search. After the initial results appear, a <strong>"Search Wider Area?"</strong> button lets you scan additional venues for matches.</p>
+
+            <p>Tap any result to open the detail sheet with an automated website check. From there you can add it to Flezcal or tap <strong>"Show on Map"</strong> to see it on the map.</p>
+
+            <div class="callout">
+                <strong>Trip planning:</strong> You can search for venues in any city, not just near you. Heading to a new town? Search it in Explore mode before you go.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- LEADERBOARD                                  -->
+            <!-- ============================================ -->
+
+            <h2 id="leaderboard">Leaderboard</h2>
+
+            <p>The <strong>Leaderboard</strong> tab tracks community contributions. Every spot you add, every rating and verification you submit, and every offering you log earns you points.</p>
+
+            <h3>Scoring</h3>
+
+            <table>
+                <thead>
+                    <tr><th>Action</th><th>Points</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Add a new spot</td><td>+10</td></tr>
+                    <tr><td>Rate a spot</td><td>+5</td></tr>
+                    <tr><td>Identify a category on a spot</td><td>+3</td></tr>
+                    <tr><td>Log an offering (brand, style, etc.)</td><td>+1</td></tr>
+                    <tr><td>Verify a spot</td><td>+1</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Contributor Ranks</h3>
+
+            <p>Ranks are based on where you fall relative to all contributors &mdash; the more you contribute compared to others, the higher your heat level on the pepper scale:</p>
+
+            <table>
+                <thead>
+                    <tr><th>Rank</th><th>Percentile</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Ghost Pepper</td><td>Top 10%</td></tr>
+                    <tr><td>Habanero</td><td>Top 10&ndash;30%</td></tr>
+                    <tr><td>Serrano</td><td>Top 30&ndash;50%</td></tr>
+                    <tr><td>Jalape&ntilde;o</td><td>Top 50&ndash;70%</td></tr>
+                    <tr><td>Poblano</td><td>Top 70&ndash;90%</td></tr>
+                    <tr><td>Bell Pepper</td><td>Bottom 10%</td></tr>
+                </tbody>
+            </table>
+
+            <p>When the community is still small, everyone is ranked as <strong>New</strong> until there are enough contributors for percentile ranking to kick in.</p>
+
+            <p><strong>Brand Collector badge:</strong> Log 10+ brands or offerings to earn this special badge next to your name.</p>
+
+
+            <!-- ============================================ -->
+            <!-- PROFILE                                      -->
+            <!-- ============================================ -->
+
+            <h2 id="profile">Profile</h2>
+
+            <p>The <strong>Profile</strong> tab is your home base. What you see depends on whether you're signed in.</p>
+
+            <h3>Signed Out</h3>
+
+            <p>You'll see sign-in buttons (Apple and Email) and a link to <strong>What's New</strong>.</p>
+
+            <h3>Signed In</h3>
+
+            <p>The Profile tab shows your full contributor dashboard:</p>
+
+            <ul>
+                <li>Your display name and account info</li>
+                <li>Your contributor rank, points, and progress toward the next rank</li>
+                <li>A breakdown of your contributions &mdash; spots added, categories identified, ratings given, brands logged, and verifications</li>
+                <li>Your top Flezcal categories (what you contribute to most)</li>
+                <li>A verification and rating history with links back to each spot</li>
+            </ul>
+
+            <p>From here you can also change your display name, view <strong>What's New</strong>, access the privacy policy and terms, sign out, or delete your account.</p>
+
+
+            <!-- ============================================ -->
+            <!-- FEEDBACK                                     -->
+            <!-- ============================================ -->
+
+            <h2 id="feedback">Share Your Feedback</h2>
+
+            <p>During beta testing, you may see a floating <strong>orange feedback button</strong> in the bottom-right corner of the screen (visible in Figure 3). Tap it to open the feedback form.</p>
+
+            <h3>Submitting Feedback</h3>
+
+            <ol>
+                <li>Tap the orange feedback button</li>
+                <li>Choose a category: Bug, Suggestion, Content, Design, or Other</li>
+                <li>Optionally enter the city you're exploring</li>
+                <li>Write your feedback (at least 10 characters)</li>
+                <li>Tap <strong>"Submit Feedback"</strong></li>
+            </ol>
+
+            <p>Your feedback is sent along with basic device info (app version, device model, iOS version) so we can investigate any issues. No personal data beyond your anonymous user ID is included.</p>
+
+            <div class="callout">
+                <strong>Your input shapes the app.</strong> Every piece of feedback is read by the Flezcal team. Bug reports, feature ideas, and content suggestions all help us build a better experience.
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- VENUE OWNERS                                 -->
+            <!-- ============================================ -->
+
+            <h2 id="venue-owners">For Venue Owners</h2>
+
+            <p>If you own or manage a spot that's on Flezcal, you can update your listing just like any other user, for free. To go further, contact <a href="mailto:support@flezcal.app">support@flezcal.app</a> to become <strong>Owner Verified</strong>. Owner verification gives you:</p>
+
+            <ul>
+                <li>A verified badge on your listing</li>
+                <li>The ability to lock your menu details so others can't modify them</li>
+                <li>A section to list your featured brands</li>
+                <li>A reservation link on your spot page</li>
+            </ul>
+
+
+            <!-- ============================================ -->
+            <!-- TIPS AND TRICKS                              -->
+            <!-- ============================================ -->
+
+            <h2 id="tips">Tips and Tricks</h2>
+
+            <ul>
+                <li><strong>Sign in early.</strong> You can browse without an account, but signing in means you can add spots and verify categories the moment you discover something.</li>
+                <li><strong>Shake your phone</strong> for a surprise.</li>
+                <li><strong>Green ghost pins are your best bet.</strong> The app already found keyword matches on their website. Tap those first.</li>
+                <li><strong>Tap "Search Wider Area?"</strong> after a search to scan more venues beyond the closest 25. This often reveals matches that are farther from the center.</li>
+                <li><strong>Edit your search terms</strong> if you're not getting good results. Adding terms that restaurants actually use on their menus makes the web check more accurate.</li>
+                <li><strong>The web check scans menu subpages too</strong>, not just the homepage. It follows links to pages like "/menu" or "/food" to find your items.</li>
+                <li><strong>Your picks shape everything.</strong> Change your picks and the map, ghost pins, and filters all update to match.</li>
+                <li><strong>You can search other cities</strong> in the Explore tab. Great for trip planning.</li>
+                <li><strong>Check the filter buttons.</strong> If pins seem to be missing, make sure the filters show "Filter on" (green).</li>
+                <li><strong>Rate only what you've tried in person.</strong> The rating scale is about the specific item at that specific place, not the restaurant overall.</li>
+                <li><strong>Verify even if you don't rate.</strong> A quick thumbs-up or thumbs-down helps the community even if you don't have a rating to give.</li>
+            </ul>
+
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="links">
+            <a href="/">Home</a>
+            <a href="/guide">User Guide</a>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/support">Support</a>
+        </div>
+        <p>Contact: <a href="mailto:support@flezcal.app">support@flezcal.app</a></p>
+        <p style="margin-top: 12px;">&copy; 2026 Duxhenge Consulting LLC</p>
+    </footer>
+
+</body>
+</html>

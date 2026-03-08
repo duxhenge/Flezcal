@@ -33,6 +33,9 @@ struct AdminOverviewView: View {
 
         ScrollView {
             VStack(spacing: 20) {
+                // Quick Links — Beta Feedback & Feature Flags
+                quickLinksSection()
+
                 // Financial Snapshot
                 financialSnapshotSection()
 
@@ -73,6 +76,56 @@ struct AdminOverviewView: View {
             await customService.fetchAll()
             categoryPickCounts = await UserPicksService.fetchPickCounts()
         }
+    }
+
+    // MARK: - Quick Links
+
+    @ViewBuilder
+    private func quickLinksSection() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Quick Links", systemImage: "link")
+                .font(.headline)
+
+            NavigationLink {
+                AdminFeedbackListView()
+            } label: {
+                HStack {
+                    Image(systemName: "text.bubble")
+                        .foregroundStyle(.orange)
+                        .frame(width: 24)
+                    Text("Beta Feedback")
+                        .font(.subheadline)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
+            NavigationLink {
+                AdminFeatureFlagsView(featureFlags: FeatureFlagService.shared)
+            } label: {
+                HStack {
+                    Image(systemName: "flag")
+                        .foregroundStyle(.orange)
+                        .frame(width: 24)
+                    Text("Feature Flags")
+                        .font(.subheadline)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Financial Snapshot
@@ -146,9 +199,8 @@ struct AdminOverviewView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 20, alignment: .trailing)
 
-                        let emoji = FoodCategory.allKnownCategories.first(where: { $0.displayName == item.key })?.emoji
-                        if let emoji {
-                            Text(emoji)
+                        if let cat = FoodCategory.allKnownCategories.first(where: { $0.displayName == item.key }) {
+                            FoodCategoryIcon(category: cat, size: 20)
                         }
 
                         Text(item.key)
@@ -208,9 +260,8 @@ struct AdminOverviewView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 20, alignment: .trailing)
 
-                        let emoji = FoodCategory.allCategories.first(where: { $0.id == item.categoryID })?.emoji
-                        if let emoji {
-                            Text(emoji)
+                        if let cat = FoodCategory.allCategories.first(where: { $0.id == item.categoryID }) {
+                            FoodCategoryIcon(category: cat, size: 20)
                         }
 
                         Text(item.displayName)

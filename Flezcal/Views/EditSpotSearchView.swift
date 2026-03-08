@@ -27,6 +27,12 @@ struct EditSpotSearchView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Search distance picker — at the top for easy access
+                    SearchRadiusPicker()
+                        .environmentObject(picksService)
+
+                    Divider()
+
                     // Category header
                     HStack(spacing: 12) {
                         FoodCategoryIcon(category: category, size: 36)
@@ -247,12 +253,20 @@ struct EditSpotSearchView: View {
 struct SpotSearchOverviewView: View {
     let picks: [FoodCategory]
     let onEditCategory: (FoodCategory) -> Void
+    @EnvironmentObject var picksService: UserPicksService
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Search distance picker — at the top for easy access
+                    SearchRadiusPicker()
+                        .environmentObject(picksService)
+                        .padding(.horizontal)
+
+                    Divider().padding(.horizontal)
+
                     Text("These venue types are searched on Apple Maps for each of your picks.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

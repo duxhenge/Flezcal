@@ -228,11 +228,11 @@ struct RatingFlowView: View {
 
     private func ratingColor(_ level: RatingLevel) -> Color {
         switch level {
-        case .youDecide:  return .secondary
-        case .popIn:      return .blue
-        case .bookIt:     return .green
-        case .roadTrip:   return .orange
-        case .pilgrimage: return .red
+        case .confirmedSpot:      return .secondary
+        case .neighborhoodOption: return .blue
+        case .bestLocalChoice:    return .green
+        case .bestInRegion:       return .orange
+        case .worldClass:         return .red
         }
     }
 }

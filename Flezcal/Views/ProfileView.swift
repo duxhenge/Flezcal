@@ -5,6 +5,7 @@ import FirebaseAuth
 struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
     var onShowWhatsNew: (() -> Void)? = nil
+    var onShowTutorials: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -12,9 +13,11 @@ struct ProfileView: View {
                 if authService.isLoading {
                     ProgressView("Loading...")
                 } else if authService.isSignedIn {
-                    SignedInProfileView(onShowWhatsNew: onShowWhatsNew)
+                    SignedInProfileView(onShowWhatsNew: onShowWhatsNew,
+                                       onShowTutorials: onShowTutorials)
                 } else {
-                    SignedOutProfileView(onShowWhatsNew: onShowWhatsNew)
+                    SignedOutProfileView(onShowWhatsNew: onShowWhatsNew,
+                                        onShowTutorials: onShowTutorials)
                 }
             }
             .navigationTitle("Profile")
@@ -28,6 +31,7 @@ struct ProfileView: View {
 struct SignedOutProfileView: View {
     @EnvironmentObject var authService: AuthService
     var onShowWhatsNew: (() -> Void)? = nil
+    var onShowTutorials: (() -> Void)? = nil
     @State private var showEmailAuth = false
 
     var body: some View {
@@ -99,12 +103,22 @@ struct SignedOutProfileView: View {
                     .padding(.horizontal, 40)
             }
 
-            Button {
-                onShowWhatsNew?()
-            } label: {
-                Label("What's New ✨", systemImage: "sparkles")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 24) {
+                Button {
+                    onShowTutorials?()
+                } label: {
+                    Label("Tutorials", systemImage: "book.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    onShowWhatsNew?()
+                } label: {
+                    Label("What's New ✨", systemImage: "sparkles")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -124,6 +138,7 @@ struct SignedInProfileView: View {
     @StateObject private var reviewService = ReviewService()
     @StateObject private var verificationService = VerificationService()
     var onShowWhatsNew: (() -> Void)? = nil
+    var onShowTutorials: (() -> Void)? = nil
     @State private var showSignOutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeletingAccount = false
@@ -211,6 +226,27 @@ struct SignedInProfileView: View {
                     if stats.brandsLogged > 0 {
                         brandCollectorRow(stats: stats)
                     }
+
+                    // Group 5: See Details — verification & rating history
+                    if !userVerifications.isEmpty {
+                        NavigationLink {
+                            VerificationHistoryView(
+                                verifications: userVerifications,
+                                spotService: spotService
+                            )
+                        } label: {
+                            HStack {
+                                Image(systemName: "list.clipboard")
+                                    .foregroundStyle(.orange)
+                                Text("See Details")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text("\(userVerifications.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             } else {
                 // Zero-state while loading or no activity
@@ -233,79 +269,15 @@ struct SignedInProfileView: View {
                 }
             }
 
-            // Verification & Rating history
-            if !userVerifications.isEmpty {
-                Section("Your Verifications & Ratings") {
-                    ForEach(userVerifications.prefix(20)) { verification in
-                        if let cat = SpotCategory(rawValue: verification.category) {
-                            let spotName = spotService.spots.first(where: { $0.id == verification.spotID })?.name ?? "Unknown Spot"
-                            NavigationLink {
-                                if let spot = spotService.spots.first(where: { $0.id == verification.spotID }) {
-                                    SpotDetailView(spot: spot)
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Text(cat.emoji)
-                                        .font(.title3)
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(cat.displayName)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-
-                                        Text(spotName)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    if verification.vote {
-                                        // Rated or confirmed (legacy)
-                                        if let rating = verification.rating {
-                                            HStack(spacing: 1) {
-                                                Text("🍮")
-                                                    .font(.caption2)
-                                                    .accessibilityHidden(true)
-                                                Text("\(rating)")
-                                                    .font(.caption)
-                                                    .fontWeight(.medium)
-                                            }
-                                            .accessibilityElement(children: .ignore)
-                                            .accessibilityLabel("Rated \(rating) out of 5")
-                                        } else {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(.green)
-                                                .font(.caption)
-                                                .accessibilityLabel("Confirmed")
-                                        }
-                                    } else {
-                                        // Marked as unavailable
-                                        HStack(spacing: 2) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.orange)
-                                                .font(.caption)
-                                            Text("Unavailable")
-                                                .font(.caption2)
-                                                .foregroundStyle(.orange)
-                                        }
-                                        .accessibilityElement(children: .ignore)
-                                        .accessibilityLabel("Reported as unavailable")
-                                    }
-
-                                    // Date
-                                    Text(verification.date, style: .date)
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
             // About section
             Section("About") {
+                Button {
+                    onShowTutorials?()
+                } label: {
+                    Label("Tutorials", systemImage: "book.fill")
+                }
+                .foregroundStyle(.primary)
+
                 Button {
                     onShowWhatsNew?()
                 } label: {
@@ -440,7 +412,7 @@ struct SignedInProfileView: View {
         let fetchedVerifications = await verificationService.fetchUserVerifications(userID: userID)
         userVerifications = fetchedVerifications
 
-        myStats = ContributorStatsBuilder.buildForUser(
+        var userStats = ContributorStatsBuilder.buildForUser(
             userID: userID,
             spots: spotService.spots,
             reviews: reviewService.allReviews,
@@ -448,7 +420,7 @@ struct SignedInProfileView: View {
             displayName: authService.displayName
         )
 
-        // Fetch all verifications for leaderboard ranking
+        // Fetch all verifications for leaderboard ranking + percentile calculation
         await verificationService.fetchAllVerifications()
 
         let allStats = ContributorStatsBuilder.buildAll(
@@ -457,20 +429,61 @@ struct SignedInProfileView: View {
             verifications: verificationService.allVerifications
         )
         myRank = ContributorStatsBuilder.rankPosition(userID: userID, allStats: allStats)
+
+        // Assign percentile from the full leaderboard
+        ContributorStatsBuilder.assignPercentile(to: &userStats, using: allStats)
+        myStats = userStats
     }
 
     // MARK: - Your Impact Groups
 
-    /// Group 1: Progress bar toward the next rank
+    /// Group 1: Rank display with percentile position
     @ViewBuilder
     private func rankProgressRow(stats: ContributorStats) -> some View {
-        let current = RankConfig.currentLevel(for: stats.score)
-
-        if let next = RankConfig.nextLevel(for: stats.score) {
-            // Show progress toward next rank
-            let progressValue = Double(stats.score - current.minScore)
-            let progressTotal = Double(next.minScore - current.minScore)
-            let remaining = next.minScore - stats.score
+        if stats.score == 0 {
+            // Zero-score: encourage first contribution
+            VStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: stats.rankIcon)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Text(stats.rankTitle)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                Text("Add a spot or rate a find to get started!")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        } else if !RankConfig.isPercentileActive {
+            // Community too small — show "New" rank with encouragement
+            HStack {
+                Image(systemName: stats.rankIcon)
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stats.rankTitle)
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                    Text("\(stats.score) pts \u{2022} Pepper ranks unlock as the community grows!")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(stats.score) pts")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.orange)
+            }
+            .padding(.vertical, 4)
+        } else if let next = RankConfig.nextLevel(forPercentile: stats.percentile, score: stats.score) {
+            // Percentile active, show progress toward next tier
+            let current = RankConfig.currentLevel(forPercentile: stats.percentile, score: stats.score)
+            let tierTop = next.cumulativePct
+            let tierBottom = current.cumulativePct
+            let progressValue = tierBottom - stats.percentile
+            let progressTotal = tierBottom - tierTop
 
             VStack(spacing: 8) {
                 HStack {
@@ -494,31 +507,27 @@ struct SignedInProfileView: View {
                     }
                 }
 
-                ProgressView(value: progressValue, total: progressTotal)
-                    .tint(.orange)
-
-                if stats.score == 0 {
-                    Text("Add a spot or rate a find to get started!")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("\(stats.score) / \(next.minScore) pts \u{2022} \(remaining) pts to \(next.title)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if progressTotal > 0 {
+                    ProgressView(value: progressValue, total: progressTotal)
+                        .tint(.orange)
                 }
+
+                Text("Top \(max(1, Int(stats.percentile * 100)))% \u{2022} \(stats.score) pts")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 4)
         } else {
-            // Max rank achieved
+            // Top rank achieved (Ghost Pepper)
             HStack {
-                Image(systemName: current.icon)
+                Image(systemName: stats.rankIcon)
                     .font(.title3)
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(current.title)
+                    Text(stats.rankTitle)
                         .font(.headline)
                         .foregroundStyle(.orange)
-                    Text("Maximum rank achieved")
+                    Text("Top \(max(1, Int(stats.percentile * 100)))% \u{2022} \(stats.score) pts")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -600,8 +609,7 @@ struct SignedInProfileView: View {
                     ForEach(topCats, id: \.id) { entry in
                         if let cat = SpotCategory(rawValue: entry.id) {
                             HStack(spacing: 4) {
-                                Text(cat.emoji)
-                                    .font(.callout)
+                                CategoryIcon(category: cat, size: 21)
                                 Text(cat.displayName)
                                     .font(.caption)
                                     .fontWeight(.medium)
@@ -699,6 +707,81 @@ private struct ImpactStat: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(value) \(label), \(points)")
+    }
+}
+
+// MARK: - Verification History Detail View
+
+struct VerificationHistoryView: View {
+    let verifications: [Verification]
+    let spotService: SpotService
+
+    var body: some View {
+        List {
+            ForEach(verifications) { verification in
+                if let cat = SpotCategory(rawValue: verification.category) {
+                    let spotName = spotService.spots.first(where: { $0.id == verification.spotID })?.name ?? "Unknown Spot"
+                    NavigationLink {
+                        if let spot = spotService.spots.first(where: { $0.id == verification.spotID }) {
+                            SpotDetailView(spot: spot)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            CategoryIcon(category: cat, size: 26)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(cat.displayName)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+
+                                Text(spotName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if verification.vote {
+                                if let rating = verification.rating {
+                                    HStack(spacing: 1) {
+                                        Text("🍮")
+                                            .font(.caption2)
+                                            .accessibilityHidden(true)
+                                        Text("\(rating)")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                    }
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel("Rated \(rating) out of 5")
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.caption)
+                                        .accessibilityLabel("Confirmed")
+                                }
+                            } else {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.orange)
+                                        .font(.caption)
+                                    Text("Unavailable")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                }
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("Reported as unavailable")
+                            }
+
+                            Text(verification.date, style: .date)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Verifications & Ratings")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

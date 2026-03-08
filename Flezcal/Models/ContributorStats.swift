@@ -18,12 +18,16 @@ struct ContributorStats: Identifiable {
         (spotsAdded * 10) + (ratingsGiven * 5) + (categoriesIdentified * 3) + (brandsLogged * 1) + (verificationsGiven * 1)
     }
 
-    /// Contributor rank title based on score.
-    /// Edit RankConfig below to rename levels without touching this logic.
-    var rankTitle: String { RankConfig.title(for: score) }
+    /// The user's percentile within the community (0.0 = top, 1.0 = bottom).
+    /// Set by `ContributorStatsBuilder.assignPercentiles()` after building all stats.
+    var percentile: Double = 1.0
+
+    /// Contributor rank title based on percentile within the community.
+    /// Shows "New" when the community is too small for percentile ranking.
+    var rankTitle: String { RankConfig.title(forPercentile: percentile, score: score) }
 
     /// SF Symbol icon for the rank
-    var rankIcon: String { RankConfig.icon(for: score) }
+    var rankIcon: String { RankConfig.icon(forPercentile: percentile, score: score) }
 
     /// Whether the user has earned the Brand Collector badge (10+ unique brands logged)
     var isBrandCollector: Bool { brandsLogged >= RankConfig.brandCollectorThreshold }
@@ -44,41 +48,104 @@ struct ContributorStats: Identifiable {
 }
 
 // MARK: - Rank Configuration
-// Edit the titles and icons here to change leaderboard rank names app-wide.
+// Percentile-based ranking — ranks are determined by where a user falls
+// relative to all contributors, not by fixed point thresholds.
+//
+// Pepper heat scale (top → bottom):
+//   Ghost Pepper   — Top 10%
+//   Habanero       — Next 20%  (top 10–30%)
+//   Serrano        — Next 20%  (top 30–50%)
+//   Jalapeño       — Next 20%  (top 50–70%)
+//   Poblano        — Next 20%  (top 70–90%)
+//   Bell Pepper    — Bottom 10%
 
 enum RankConfig {
-    // Score thresholds: (minScore, title, sfSymbol)
-    static let levels: [(minScore: Int, title: String, icon: String)] = [
-        (0,   "Turista",       "figure.walk"),
-        (1,   "Chilango",      "binoculars"),
-        (20,  "Flanático",     "fork.knife"),
-        (50,  "Mezcalero",     "flame"),
-        (100, "Conocedor",     "star.circle"),
-        (200, "Leyenda CDMX",  "star.circle.fill"),
-        (500, "Inmortal",      "crown.fill"),
+
+    /// Minimum contributors needed before percentile ranking kicks in.
+    /// Below this threshold, everyone with score > 0 is ranked "New".
+    static let minimumForPercentiles = 20
+
+    /// The "New" rank shown when the community is too small for percentile ranking.
+    static let newRank: (title: String, icon: String, cumulativePct: Double) =
+        ("New", "sparkles", 1.0)
+
+    /// Rank levels ordered from highest to lowest.
+    /// `cumulativePct` = the cumulative % from the top that this tier covers.
+    /// e.g. Ghost Pepper covers the top 10%, Habanero the next 20% (top 10–30%).
+    static let levels: [(title: String, icon: String, cumulativePct: Double)] = [
+        ("Ghost Pepper",  "flame.fill",          0.10),  // Top 10%
+        ("Habanero",      "flame",               0.30),  // Next 20%
+        ("Serrano",       "bolt.fill",           0.50),  // Next 20%
+        ("Jalapeño",      "leaf.fill",           0.70),  // Next 20%
+        ("Poblano",       "leaf",                0.90),  // Next 20%
+        ("Bell Pepper",   "carrot.fill",         1.00),  // Bottom 10%
     ]
 
     // Brand Collector badge threshold — edit here to change the requirement
     static let brandCollectorThreshold = 10
 
-    static func title(for score: Int) -> String {
-        levels.last(where: { score >= $0.minScore })?.title ?? levels[0].title
+    /// Whether the community is large enough for percentile ranking.
+    static var isPercentileActive: Bool { _communitySize >= minimumForPercentiles }
+
+    /// Stored community size — set by `assignPercentiles()`.
+    /// Used by UI to decide whether to show percentile info or "New" badge.
+    nonisolated(unsafe) private(set) static var _communitySize: Int = 0
+
+    /// Update the stored community size. Called by ContributorStatsBuilder.
+    static func setCommunitySize(_ count: Int) {
+        _communitySize = count
     }
 
-    static func icon(for score: Int) -> String {
-        levels.last(where: { score >= $0.minScore })?.icon ?? levels[0].icon
+    /// Determine rank level index from a percentile (0.0 = top, 1.0 = bottom).
+    static func levelIndex(forPercentile pct: Double) -> Int {
+        for (i, level) in levels.enumerated() {
+            if pct <= level.cumulativePct { return i }
+        }
+        return levels.count - 1
     }
 
-    /// Returns the current rank level tuple for a given score.
-    static func currentLevel(for score: Int) -> (minScore: Int, title: String, icon: String) {
-        levels.last(where: { score >= $0.minScore }) ?? levels[0]
+    /// Returns rank title for a given percentile.
+    /// When community is too small, returns "New" for anyone with score > 0.
+    static func title(forPercentile pct: Double, score: Int = 1) -> String {
+        guard score > 0 else { return levels.last!.title }
+        guard isPercentileActive else { return newRank.title }
+        return levels[levelIndex(forPercentile: pct)].title
     }
 
-    /// Returns the next rank level tuple, or nil if already at max rank.
-    static func nextLevel(for score: Int) -> (minScore: Int, title: String, icon: String)? {
-        guard let currentIndex = levels.lastIndex(where: { score >= $0.minScore }),
-              currentIndex + 1 < levels.count else { return nil }
-        return levels[currentIndex + 1]
+    /// Returns rank icon for a given percentile.
+    static func icon(forPercentile pct: Double, score: Int = 1) -> String {
+        guard score > 0 else { return levels.last!.icon }
+        guard isPercentileActive else { return newRank.icon }
+        return levels[levelIndex(forPercentile: pct)].icon
+    }
+
+    /// Returns the current rank level tuple for a given percentile.
+    static func currentLevel(forPercentile pct: Double, score: Int = 1) -> (title: String, icon: String, cumulativePct: Double) {
+        guard score > 0 else { return levels.last! }
+        guard isPercentileActive else { return newRank }
+        return levels[levelIndex(forPercentile: pct)]
+    }
+
+    /// Returns the next rank level tuple (one tier higher), or nil if already at top.
+    /// Returns nil when community is too small (can't progress through percentile tiers yet).
+    static func nextLevel(forPercentile pct: Double, score: Int = 1) -> (title: String, icon: String, cumulativePct: Double)? {
+        guard score > 0, isPercentileActive else { return nil }
+        let idx = levelIndex(forPercentile: pct)
+        guard idx > 0 else { return nil }
+        return levels[idx - 1]
+    }
+
+    /// Compute the percentile for a specific user within a sorted (descending) list of all scores.
+    /// Returns a value from 0.0 (best) to 1.0 (worst).
+    /// Users with score == 0 always return 1.0 (bottom tier).
+    static func percentile(forUserScore score: Int, allScoresSorted: [Int]) -> Double {
+        guard score > 0 else { return 1.0 }
+        let total = allScoresSorted.count
+        guard total > 0 else { return 1.0 }
+        // Position: how many users are ranked above this user (0-based from top)
+        // For tied scores, use the first occurrence (best possible rank)
+        let position = allScoresSorted.firstIndex(where: { $0 <= score }) ?? total
+        return Double(position) / Double(total)
     }
 }
 
@@ -164,9 +231,30 @@ enum ContributorStatsBuilder {
         }
 
         // Filter out zero-score entries and orphaned UIDs (no resolved name AND no user-added spots)
-        return allStats
+        var filtered = allStats
             .filter { $0.score > 0 && !($0.displayName == "Contributor" && $0.spotsAdded == 0) }
             .sorted { $0.score > $1.score }
+
+        // Assign percentiles based on position in the sorted list
+        assignPercentiles(&filtered)
+
+        return filtered
+    }
+
+    /// Assigns percentile values to each contributor based on their position.
+    /// Also updates `RankConfig._communitySize` so the UI knows whether
+    /// percentile ranking is active or everyone should show "New".
+    static func assignPercentiles(_ stats: inout [ContributorStats]) {
+        let total = stats.count
+        RankConfig.setCommunitySize(total)
+        guard total > 0 else { return }
+        let allScores = stats.map(\.score)
+        for i in stats.indices {
+            stats[i].percentile = RankConfig.percentile(
+                forUserScore: stats[i].score,
+                allScoresSorted: allScores
+            )
+        }
     }
 
     /// Build stats for a specific user.
@@ -234,5 +322,14 @@ enum ContributorStatsBuilder {
     static func rankPosition(userID: String, allStats: [ContributorStats]) -> Int? {
         guard let index = allStats.firstIndex(where: { $0.id == userID }) else { return nil }
         return index + 1
+    }
+
+    /// Assigns the correct percentile to a single-user stat using the full leaderboard.
+    static func assignPercentile(to stats: inout ContributorStats, using allStats: [ContributorStats]) {
+        let allScores = allStats.map(\.score)
+        stats.percentile = RankConfig.percentile(
+            forUserScore: stats.score,
+            allScoresSorted: allScores
+        )
     }
 }

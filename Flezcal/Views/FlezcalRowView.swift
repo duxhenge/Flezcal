@@ -72,8 +72,7 @@ struct FlezcalRowView: View {
         VStack(spacing: 8) {
             // ── Row 1: Category name, centered (with optional remove) ─
             HStack(spacing: 6) {
-                Text(category.emoji)
-                    .font(.title3)
+                CategoryIcon(category: category, size: 26)
                     .accessibilityHidden(true)
                 Text(category.displayName)
                     .font(.subheadline)

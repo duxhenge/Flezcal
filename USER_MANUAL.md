@@ -106,6 +106,8 @@ Every category has a set of search terms that the app uses when scanning venue w
 
 Tap **"Save Changes"** when done. Future website scans will use your updated terms.
 
+You can also access search term editing and the **Search Radius** picker from the **"Customize spot search"** button on the Spots tab.
+
 **Tips for effective search terms:**
 - Use words that appear on actual restaurant menus and websites
 - Include common alternate spellings (e.g., "pierogi" and "pierogies")
@@ -124,15 +126,19 @@ A standard blue dot shows where you are.
 
 ### Confirmed Spots (Solid Pins)
 
-These are venues that community members have added to Flezcal. They have solid, colored pins with the category emoji. Tap one to see full details, ratings, and offerings.
+These are **Verified** spots — venues that community members have added to Flezcal. They have solid, colored pins with the category emoji. Tap one to see full details, ratings, and offerings.
 
 ### Ghost Pins (Suggested Spots)
 
 Ghost pins are unconfirmed suggestions pulled from Apple Maps. They represent places that *might* have what you're looking for but haven't been verified yet.
 
-**Yellow ghost pins** (dashed border with "?" icon) are untested suggestions. The app hasn't checked their website yet.
+**Likely** pins (green, solid border with checkmark icon, gently pulsing) are strong matches. During a batch pre-screen, the app did a quick homepage scan and found keywords related to one of your picks. These are worth checking first.
 
-**Green ghost pins** (solid border with checkmark icon, gently pulsing) are likely matches. During a batch pre-screen, the app did a quick homepage scan and found keywords related to one of your picks. These are worth checking first.
+**Nearby** pins (yellow, dashed border with "?" icon) are untested suggestions. The app hasn't checked their website yet — they might have what you're looking for.
+
+### Pin Type Toggles
+
+Three toggle pills — **Verified**, **Likely**, and **Nearby** — control which pins are visible on the map. Each shows a count so you can see how many spots of that type are nearby. Toggle them on or off to focus on the pin types you care about.
 
 ### Using the Map
 
@@ -175,11 +181,11 @@ There are two ways to add a spot to Flezcal:
 
 Tap a ghost pin on the map, then tap **"Yes, add it to Flezcal!"** This pre-fills the venue information and any categories the web check confirmed.
 
-### From Explore Search
+### From the Spots Tab
 
-1. Go to the **Spots** tab and switch to **Explore** mode
-2. Search for a venue by name
-3. Tap any search result to open the detail sheet
+1. Go to the **Spots** tab
+2. Browse the Likely or Nearby results, or search for a venue by name
+3. Tap any result to open the detail sheet
 4. Tap **"Yes, add it to Flezcal!"** to add it
 
 ### The Confirm Spot Screen
@@ -244,11 +250,11 @@ Flezcal uses a flan-based rating scale instead of stars:
 
 | Rating | Label | Meaning |
 |--------|-------|---------|
-| 1 flan | Meh | Wouldn't order it again |
-| 2 flans | Decent | Fine, nothing special |
-| 3 flans | Legit | Solid, the real deal |
-| 4 flans | Fire | One of the best I've had |
-| 5 flans | Obsessed | Best I've ever had, I'm obsessed |
+| 1 flan | Confirmed Spot | They have it |
+| 2 flans | Neighborhood Option | Satisfies the craving |
+| 3 flans | Best Local Choice | Best of the nearby choices |
+| 4 flans | Best in Region | Worthy of a road trip |
+| 5 flans | World Class | Worthy of a pilgrimage |
 
 To rate a spot:
 1. Open the spot detail page
@@ -263,28 +269,47 @@ Only rate items you've personally tried at that location.
 
 ## The Spots Tab (List View)
 
-The **Spots** tab (list icon) has two modes, toggled by a segmented control at the top:
+The **Spots** tab (list icon) is a unified page that combines community-verified spots with live search results. When you open the tab, the app automatically searches nearby venues based on your active Flezcal picks.
 
-### Community Mode
+### Flezcal Category Filters
 
-Shows all confirmed Flezcal spots from the database. Use the filter pills to narrow by category. Each row shows:
-- Category icons
-- Spot name
-- Status (rating bar, verification status, or "New")
-- Distance from your location in miles
+At the very top of the page, category filter pills (e.g., "All", "Mezcal", "Flan", "Tortillas") let you narrow results to a specific pick. Tap one to filter; tap it again to show all.
 
-### Explore Mode
+### Search Bar
 
-A live search powered by Apple Maps. Type a venue name to find any restaurant, bar, or store -- even ones not yet on Flezcal.
+Below the category filters, a search bar lets you search for venues by name. You can search for any restaurant, bar, or store -- even ones not yet on Flezcal, and in any location.
 
-Results show:
-- An icon indicating the venue type (fork/knife for restaurants, wineglass for bars, mug for breweries, etc.)
-- Green highlight if the homepage pre-screen found a keyword match
-- Venue name, address, and distance
+### Result Type Toggles
 
-Tap any result to open the same ghost pin detail sheet, complete with an automated website check. From there you can add it to Flezcal or tap **"Show on Map"** to see it on the map.
+Three filter pill toggles control which types of results appear in the list:
 
-**Searching other cities:** You can search for venues in any location, not just near you.
+- **Verified** (green, solid dot) — Community-confirmed spots from the Flezcal database.
+- **Likely** (green, ring dot) — Search results where the app found a keyword match on the venue's website. These are strong candidates worth checking.
+- **Nearby** (yellow dot) — Search results that match your category but haven't had their website checked yet.
+
+Each toggle shows a count. Toggle them on or off to focus on the result types you care about.
+
+### The List
+
+Verified and Likely results are interleaved by distance in the main list. Nearby (unchecked) results appear below in a separate "Other Nearby" section. Each row shows category icons, venue name, status info, and distance from your location.
+
+Tap any result to open the detail sheet with an automated website check. From there you can add it to Flezcal or view it on the map.
+
+### Search Wider Area
+
+After the initial search completes, a **"Search Wider Area?"** floating button may appear. Tapping it scans additional venues beyond the initial closest results, potentially promoting new Likely matches into the list.
+
+### Activity Indicator
+
+A spinning progress indicator appears next to the filter pills while a search or pre-screen is in progress.
+
+### Refresh
+
+The toolbar refresh button (↻) triggers both a database refresh and a new search. The button is disabled while a search is active.
+
+### Customize Spot Search
+
+Tap **"Customize spot search"** to open a sheet where you can adjust your search terms and search radius for each pick.
 
 ---
 
@@ -304,19 +329,20 @@ The **Leaderboard** tab (trophy icon) tracks community contributions.
 
 ### Contributor Ranks
 
-As you earn points, you climb through the ranks:
+Ranks are based on where you fall relative to all contributors -- the more you contribute compared to others, the higher your heat level:
 
-| Rank | Points Needed |
-|------|--------------|
-| Turista | 0 |
-| Chilango | 1 |
-| Flanático | 20 |
-| Mezcalero | 50 |
-| Conocedor | 100 |
-| Leyenda CDMX | 200 |
-| Inmortal | 500 |
+| Rank | Percentile |
+|------|-----------|
+| Ghost Pepper | Top 10% |
+| Habanero | Top 10–30% |
+| Serrano | Top 30–50% |
+| Jalapeño | Top 50–70% |
+| Poblano | Top 70–90% |
+| Bell Pepper | Bottom 10% |
 
-**Brand Collector badge:** Log 10+ mezcal brands to earn this special badge.
+When the community is still small (fewer than 20 contributors), everyone is ranked as **New** until there are enough users for percentile ranking to kick in.
+
+**Brand Collector badge:** Log 10+ brands or offerings to earn this special badge.
 
 Your rank card at the top shows your current rank, total points, and a breakdown of your contributions.
 
@@ -352,9 +378,10 @@ If you own or manage a spot that's on Flezcal, you can update your listing just 
 ## Tips and Tricks
 
 - **Shake your phone** for a surprise.
-- **Green ghost pins are your best bet** -- the app already found keyword matches on their website. Tap those first.
+- **Likely spots are your best bet** -- these green-highlighted results already have keyword matches on their website. Tap those first.
+- **The Spots tab searches automatically** when you open it, showing Verified, Likely, and Nearby results alongside each other.
 - **Edit your search terms** if you're not getting good results. Adding terms that restaurants actually use on their menus makes the web check more accurate.
 - **The web check scans menu subpages too**, not just the homepage. It follows links to pages like "/menu" or "/food" to find your items.
 - **Your picks shape everything.** Change your picks and the map, ghost pins, and filters all update to match.
-- **You can search other cities** in the Explore tab -- useful for trip planning.
+- **You can search other cities** on the Spots tab -- useful for trip planning.
 - **Rate only what you've tried in person.** The rating scale is about the specific item at that specific place, not the restaurant overall.

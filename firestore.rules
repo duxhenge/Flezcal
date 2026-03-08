@@ -242,5 +242,23 @@ service cloud.firestore {
       allow write: if request.auth != null
                    && request.auth.uid == "FFrKO5dcaNNlTzM6msCXcLha1d33";
     }
+
+    // App config — feature flags, welcome content, etc.
+    // Readable by any authenticated user (clients need to read flags).
+    // Writable only by admin.
+    match /app_config/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == "FFrKO5dcaNNlTzM6msCXcLha1d33";
+    }
+
+    // Beta feedback — submitted by any authenticated user, readable by admin only.
+    match /beta_feedback/{feedbackId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == "FFrKO5dcaNNlTzM6msCXcLha1d33";
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
   }
 }

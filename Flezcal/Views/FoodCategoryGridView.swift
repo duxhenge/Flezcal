@@ -21,6 +21,7 @@ struct FoodCategoryGridView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var showCreateCustom = false
+    @State private var showSignInPrompt = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -43,6 +44,11 @@ struct FoodCategoryGridView: View {
                     CreateCustomCategoryView()
                         .environmentObject(picksService)
                         .environmentObject(authService)
+                }
+                .alert("Sign In Required", isPresented: $showSignInPrompt) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text("Sign in from the Profile tab to create custom Flezcals.")
                 }
         }
     }
@@ -107,7 +113,8 @@ struct FoodCategoryGridView: View {
                             .padding(.horizontal)
                     }
 
-                    if authService.isSignedIn && picksService.canCreateCustom {
+                    // Always show create button — prompts sign-in if needed
+                    if picksService.canCreateCustom {
                         createCustomButton
                             .padding(.horizontal)
                     }
@@ -128,7 +135,7 @@ struct FoodCategoryGridView: View {
             if FeatureFlags.broadSearchEnabled {
                 Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
             } else {
-                Text("Select up to \(UserPicksService.maxPicks) categories. You can also add your own pick below!")
+                Text("Select up to \(UserPicksService.maxPicks) categories, or create your own custom Flezcal!")
             }
         }
         .font(.subheadline)
@@ -214,8 +221,7 @@ struct FoodCategoryGridView: View {
 
             ForEach(customPicks) { pick in
                 HStack(spacing: 12) {
-                    Text(pick.emoji)
-                        .font(.title3)
+                    FoodCategoryIcon(category: pick, size: 26)
                     Text(pick.displayName)
                         .font(.subheadline)
                         .fontWeight(.medium)
@@ -250,7 +256,11 @@ struct FoodCategoryGridView: View {
 
     private var createCustomButton: some View {
         Button {
-            showCreateCustom = true
+            if authService.isSignedIn {
+                showCreateCustom = true
+            } else {
+                showSignInPrompt = true
+            }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "plus.circle.fill")

@@ -114,6 +114,13 @@ actor WebsiteCheckService {
     /// Brave Search cache: venue name+city+state query → discovered website URL.
     private var braveCache: [String: URL] = [:]
 
+    /// Clears the HTML scan cache. Call when user picks change so pages are
+    /// re-scanned for the new category keywords on next fetch.
+    func clearHTMLCache() {
+        htmlCache.removeAll()
+        jsHeavyCache.removeAll()
+    }
+
     /// Maximum number of subpages to crawl per venue (homepage doesn't count).
     /// 5 is enough for lunch/dinner/drinks/dessert/location-specific menus
     /// while staying under ~6 seconds total even on slow hosts.
@@ -171,13 +178,12 @@ actor WebsiteCheckService {
     }
 
     /// Homepage-only scan for batch pre-screening ghost pins.
-    /// Fetches homepages concurrently, scans for all category keywords, and
-    /// returns matched category IDs per suggestion ID.
+    /// Fetches homepages concurrently, scans for the user's active picks only,
+    /// and returns matched category IDs per suggestion ID.
     /// NO Brave API calls. NO subpage crawling. Homepage only for speed.
     ///
-    /// Results are filtered to the user's active picks so that only relevant
-    /// categories appear as "likely" on the map. The underlying htmlCache still
-    /// stores all 20 categories so a later full check gets a free cache hit.
+    /// Only the user's active picks are scanned (~3 categories instead of 50+),
+    /// reducing regex operations by ~94%. Cache is invalidated when picks change.
     func batchPreScreen(
         suggestions: [SuggestedSpot],
         picks: [FoodCategory]
@@ -221,7 +227,7 @@ actor WebsiteCheckService {
         // restaurant servers cause network timeouts to pile up, stalling
         // the URLSession and making the app feel frozen.
         if !toFetch.isEmpty {
-            let fetched = await fetchAndScanHomepages(toFetch)
+            let fetched = await fetchAndScanHomepages(toFetch, categories: picks)
 
             // Cache results and filter to picks.
             // Only confirmed matches drive pre-screen ranking (not related).
@@ -294,7 +300,7 @@ actor WebsiteCheckService {
         // Fetch uncached homepages concurrently (max 6 at a time).
         // Keeps connection count manageable to avoid timeout pile-ups.
         if !toFetch.isEmpty {
-            let fetched = await fetchAndScanHomepages(toFetch)
+            let fetched = await fetchAndScanHomepages(toFetch, categories: picks)
 
             for (index, url, scanResult) in fetched {
                 htmlCache[url.absoluteString] = scanResult
@@ -347,6 +353,7 @@ actor WebsiteCheckService {
     /// picks, avoiding a duplicate URL resolution that could diverge from the primary.
     private func checkWithBraveSearchReturningURL(
         _ mapItem: MKMapItem, for pick: FoodCategory,
+        allPicks: [FoodCategory] = [],
         knownURL: String? = nil
     ) async -> (WebsiteCheckResult, URL?) {
         let venueName = mapItem.name ?? ""
@@ -359,7 +366,7 @@ actor WebsiteCheckService {
         print("[WebCheck]   url=\(url?.absoluteString ?? "nil")")
         #endif
 
-        // Pass 1: homepage HTML scan — scans ALL categories at once, caches results.
+        // Pass 1: homepage HTML scan — scans user's active picks, caches results.
         // Then checks if the requested pick was matched.
         var jsHeavy = false
         var pass1FoundOtherCategories = false
@@ -380,8 +387,9 @@ actor WebsiteCheckService {
                 let otherConfirmed = cached.confirmed.subtracting([pick.id])
                 pass1FoundOtherCategories = !otherConfirmed.isEmpty
             } else {
-                // Not cached — fetch and scan all categories
-                let (scanned, isJSHeavy, hasPDFMenus) = await fetchAndScanAllCategories(url)
+                // Not cached — fetch and scan user's picks
+                let categories = allPicks.isEmpty ? [pick] : allPicks
+                let (scanned, isJSHeavy, hasPDFMenus) = await fetchAndScanAllCategories(url, categories: categories)
                 jsHeavy = isJSHeavy
                 // Treat PDF-menu sites as "HTML worked" — the site has menu content,
                 // it's just in PDFs we can't scan. This prevents Pass 2 from running
@@ -497,11 +505,11 @@ actor WebsiteCheckService {
                        primaryPick: FoodCategory,
                        knownURL: String? = nil) async -> MultiCategoryCheckResult {
         // Run the full 3-pass check for the primary pick.
-        // This populates htmlCache with ALL category matches from Pass 1.
+        // This populates htmlCache with the user's active picks from Pass 1.
         // Also returns the resolved URL so we can look up the cache for
         // secondary picks without re-resolving (which could diverge).
         let (primaryResult, url) = await checkWithBraveSearchReturningURL(
-            mapItem, for: primaryPick, knownURL: knownURL
+            mapItem, for: primaryPick, allPicks: picks, knownURL: knownURL
         )
 
         // Build the combined set of picks to check: user's active picks + primaryPick.
@@ -586,7 +594,7 @@ actor WebsiteCheckService {
         return await websiteURL(for: mapItem)
     }
 
-    /// Fetches homepage HTML, scans for ALL FoodCategory keywords, then follows
+    /// Fetches homepage HTML, scans for the user's active pick keywords, then follows
     /// menu-related subpage links — including **depth-2 links** found on
     /// subpages themselves (critical for multi-location sites like Lolita where
     /// homepage → /fort-point/ → /fort-point-menu/).
@@ -600,9 +608,8 @@ actor WebsiteCheckService {
     /// (e.g. menu-lunch.pdf, menu-dessert.pdf). These can't be HTML-scanned,
     /// so the caller should treat the site as "readable but pick not found"
     /// rather than "empty / JS-heavy", preventing false-positive Brave searches.
-    private func fetchAndScanAllCategories(_ url: URL) async -> (HTMLScanResult, Bool, Bool) {
+    private func fetchAndScanAllCategories(_ url: URL, categories: [FoodCategory]) async -> (HTMLScanResult, Bool, Bool) {
         let key = url.absoluteString
-        let categories = await MainActor.run { FoodCategory.allScannable }
 
         // Step 1: fetch and scan the homepage
         guard let (homeHTML, isValid) = await fetchPage(url), isValid else {
@@ -800,14 +807,14 @@ actor WebsiteCheckService {
         }
     }
 
-    /// Fetches homepages concurrently (max 6 at a time) and scans each for all
-    /// category keywords. Returns the ID, URL, and scan result for each successful fetch.
+    /// Fetches homepages concurrently (max 6 at a time) and scans each for the
+    /// user's active picks only. Returns the ID, URL, and scan result for each successful fetch.
     /// Shared by batchPreScreen and batchPreScreenMapItems to avoid duplicating
     /// the throttled task-group loop.
     private func fetchAndScanHomepages<ID: Sendable>(
-        _ items: [(id: ID, url: URL)]
+        _ items: [(id: ID, url: URL)],
+        categories: [FoodCategory]
     ) async -> [(ID, URL, HTMLScanResult)] {
-        let categories = await MainActor.run { FoodCategory.allScannable }
         return await withTaskGroup(
             of: (ID, URL, HTMLScanResult)?.self,
             returning: [(ID, URL, HTMLScanResult)].self
@@ -840,13 +847,13 @@ actor WebsiteCheckService {
         }
     }
 
-    /// Scans raw HTML for all FoodCategory keywords and returns an `HTMLScanResult`
+    /// Scans raw HTML for the provided categories' keywords and returns an `HTMLScanResult`
     /// with both confirmed (websiteKeywords) and related (relatedKeywords) matches.
     ///
     /// Uses word-boundary matching (`\b`) so that short keywords like "flan" don't
     /// false-positive on "flank steak", "flannel", CSS class names, etc.
-    /// Scans `allScannable` (built-in 20 + user's custom picks) so custom food
-    /// categories are detected during Pass 1 HTML scanning.
+    /// Only scans the user's active picks (not all 50+ built-in categories)
+    /// for a ~94% reduction in regex operations per page.
     ///
     /// For each category:
     ///   1. First scan `websiteKeywords` — if any match → confirmed (skip relatedKeywords).

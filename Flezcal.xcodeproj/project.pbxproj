@@ -89,6 +89,17 @@
 		UT0000010000000000000003 /* RatingLevelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UT0000020000000000000003 /* RatingLevelTests.swift */; };
 		UT0000010000000000000004 /* ClosureReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UT0000020000000000000004 /* ClosureReportTests.swift */; };
 		UT0000010000000000000005 /* SpotCategoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UT0000020000000000000005 /* SpotCategoryTests.swift */; };
+		FF0000010000000000000001 /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000020000000000000001 /* FeatureFlagService.swift */; };
+		FB0000010000000000000001 /* BetaFeedbackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000001 /* BetaFeedbackModel.swift */; };
+		FB0000010000000000000002 /* BetaFeedbackService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000002 /* BetaFeedbackService.swift */; };
+		FB0000010000000000000003 /* BetaFeedbackFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000003 /* BetaFeedbackFormView.swift */; };
+		FB0000010000000000000004 /* BetaFeedbackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000004 /* BetaFeedbackButton.swift */; };
+		AF0000010000000000000001 /* AdminFeatureFlagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000020000000000000001 /* AdminFeatureFlagsView.swift */; };
+		AF0000010000000000000002 /* AdminFeedbackListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000020000000000000002 /* AdminFeedbackListView.swift */; };
+		TU0000010000000000000001 /* TutorialContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000001 /* TutorialContent.swift */; };
+		TU0000010000000000000002 /* TutorialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000002 /* TutorialService.swift */; };
+		TU0000010000000000000003 /* TutorialOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000003 /* TutorialOverlay.swift */; };
+		TU0000010000000000000004 /* TutorialCurriculumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000004 /* TutorialCurriculumView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -193,6 +204,17 @@
 		UT0000020000000000000004 /* ClosureReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureReportTests.swift; sourceTree = "<group>"; };
 		UT0000020000000000000005 /* SpotCategoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotCategoryTests.swift; sourceTree = "<group>"; };
 		UT0000030000000000000001 /* FlezcalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlezcalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF0000020000000000000001 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
+		FB0000020000000000000001 /* BetaFeedbackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackModel.swift; sourceTree = "<group>"; };
+		FB0000020000000000000002 /* BetaFeedbackService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackService.swift; sourceTree = "<group>"; };
+		FB0000020000000000000003 /* BetaFeedbackFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackFormView.swift; sourceTree = "<group>"; };
+		FB0000020000000000000004 /* BetaFeedbackButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackButton.swift; sourceTree = "<group>"; };
+		AF0000020000000000000001 /* AdminFeatureFlagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminFeatureFlagsView.swift; sourceTree = "<group>"; };
+		AF0000020000000000000002 /* AdminFeedbackListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminFeedbackListView.swift; sourceTree = "<group>"; };
+		TU0000020000000000000001 /* TutorialContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialContent.swift; sourceTree = "<group>"; };
+		TU0000020000000000000002 /* TutorialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialService.swift; sourceTree = "<group>"; };
+		TU0000020000000000000003 /* TutorialOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlay.swift; sourceTree = "<group>"; };
+		TU0000020000000000000004 /* TutorialCurriculumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialCurriculumView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -247,6 +269,8 @@
 				AD0000020000000000000009 /* AdminNotesView.swift */,
 				VF0000020000000000000006 /* AdminClosureReportsView.swift */,
 				CP0000020000000000000001 /* AdminCustomPicksView.swift */,
+				AF0000020000000000000001 /* AdminFeatureFlagsView.swift */,
+				AF0000020000000000000002 /* AdminFeedbackListView.swift */,
 			);
 			path = Admin;
 			sourceTree = "<group>";
@@ -274,6 +298,8 @@
 				B50000010000000000000004 /* Views */,
 				B50000010000000000000005 /* Services */,
 				AD0000030000000000000001 /* Admin */,
+				FB0000030000000000000001 /* BetaFeedback */,
+				TU0000030000000000000001 /* Tutorial */,
 				B20000010000000000000003 /* Assets.xcassets */,
 				B2000001000000000000000C /* Info.plist */,
 				B2000001000000000000000D /* GoogleService-Info.plist */,
@@ -353,6 +379,7 @@
 				LC0000020000000000000001 /* LocationCompleterService.swift */,
 				GH0000020000000000000001 /* Geohash.swift */,
 				RL0000020000000000000001 /* RateLimiter.swift */,
+				FF0000020000000000000001 /* FeatureFlagService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -393,6 +420,28 @@
 				UT0000020000000000000005 /* SpotCategoryTests.swift */,
 			);
 			path = FlezcalTests;
+			sourceTree = "<group>";
+		};
+		FB0000030000000000000001 /* BetaFeedback */ = {
+			isa = PBXGroup;
+			children = (
+				FB0000020000000000000001 /* BetaFeedbackModel.swift */,
+				FB0000020000000000000002 /* BetaFeedbackService.swift */,
+				FB0000020000000000000003 /* BetaFeedbackFormView.swift */,
+				FB0000020000000000000004 /* BetaFeedbackButton.swift */,
+			);
+			path = BetaFeedback;
+			sourceTree = "<group>";
+		};
+		TU0000030000000000000001 /* Tutorial */ = {
+			isa = PBXGroup;
+			children = (
+				TU0000020000000000000001 /* TutorialContent.swift */,
+				TU0000020000000000000002 /* TutorialService.swift */,
+				TU0000020000000000000003 /* TutorialOverlay.swift */,
+				TU0000020000000000000004 /* TutorialCurriculumView.swift */,
+			);
+			path = Tutorial;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -654,6 +703,17 @@
 				RL0000010000000000000001 /* RateLimiter.swift in Sources */,
 				FR0000010000000000000001 /* FlezcalRowView.swift in Sources */,
 				FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */,
+				FF0000010000000000000001 /* FeatureFlagService.swift in Sources */,
+				FB0000010000000000000001 /* BetaFeedbackModel.swift in Sources */,
+				FB0000010000000000000002 /* BetaFeedbackService.swift in Sources */,
+				FB0000010000000000000003 /* BetaFeedbackFormView.swift in Sources */,
+				FB0000010000000000000004 /* BetaFeedbackButton.swift in Sources */,
+				AF0000010000000000000001 /* AdminFeatureFlagsView.swift in Sources */,
+				AF0000010000000000000002 /* AdminFeedbackListView.swift in Sources */,
+				TU0000010000000000000001 /* TutorialContent.swift in Sources */,
+				TU0000010000000000000002 /* TutorialService.swift in Sources */,
+				TU0000010000000000000003 /* TutorialOverlay.swift in Sources */,
+				TU0000010000000000000004 /* TutorialCurriculumView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

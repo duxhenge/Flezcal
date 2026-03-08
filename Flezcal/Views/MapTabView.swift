@@ -9,13 +9,13 @@ struct MapTabView: View {
     /// Set by ContentView when a .showAreaOnMap notification arrives from the List tab.
     /// MapTabView centers the camera on this coordinate and runs fetchAndPreScreen.
     @Binding var pendingMapCenter: CLLocationCoordinate2D?
+    /// Shared Flezcal filter state — synced with Spots tab via ContentView.
+    @Binding var activePickIDs: Set<String>
 
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
     @StateObject private var suggestionService = SuggestionService()
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
-    /// nil = "All picks"; non-nil = single pick filter active
-    @State private var selectedPickFilter: FoodCategory? = nil
     @State private var selectedSpot: Spot?
     @State private var selectedSuggestion: SuggestedSpot?
     @State private var showListView = false
@@ -43,6 +43,16 @@ struct MapTabView: View {
     @State private var showVerifiedPins = true
     @State private var showPossiblePins = true
     @State private var showUncheckedPins = true
+    @State private var showNoPinsAlert = false
+    /// Set true when picks change while the map tab is off-screen.
+    /// Triggers an auto-fetch when the user returns to the map.
+    @State private var picksChangedWhileAway = false
+
+    /// Deeper scan state — Wave 2 is deferred until the user taps "Do a Deeper Scan?"
+    @State private var showDeeperScanButton = false
+    @State private var deeperScanPool: [SuggestedSpot] = []
+    @State private var deeperScanPicks: [FoodCategory] = []
+    @State private var wave1Results: [String: Set<String>] = [:]
 
     // On-demand website check — runs when the user taps a ghost pin
     @State private var multiCheckResult: MultiCategoryCheckResult? = nil
@@ -112,11 +122,17 @@ struct MapTabView: View {
 
     // MARK: - Helpers
 
+    /// Shows alert when all pin toggles are turned off.
+    private func checkAllPinsOff() {
+        if !showVerifiedPins && !showPossiblePins && !showUncheckedPins {
+            showNoPinsAlert = true
+        }
+    }
+
     /// The picks currently active for fetching / filtering.
-    /// nil selectedPickFilter = use all picks.
+    /// Only includes picks whose IDs are in activePickIDs.
     private var activePicks: [FoodCategory] {
-        if let pick = selectedPickFilter { return [pick] }
-        return picksService.picks
+        picksService.picks.filter { activePickIDs.contains($0.id) }
     }
 
     private typealias RegionBounds = (minLat: Double, maxLat: Double,
@@ -237,6 +253,8 @@ struct MapTabView: View {
         // race with the previous one and overwrite green pin results.
         fetchAndPreScreenTask?.cancel()
         preScreenTask?.cancel()
+        showDeeperScanButton = false
+        deeperScanPool = []
 
         fetchAndPreScreenTask = Task {
             #if DEBUG
@@ -269,9 +287,9 @@ struct MapTabView: View {
                 #endif
             }
 
-            // Kick off batch homepage pre-screen after pins appear.
-            // Pre-screen the FULL pool (not just displayed 25) so that
-            // venues beyond the 25th closest can be promoted if they match.
+            // Kick off Wave 1: scan the closest 25 venues (the displayed set)
+            // so green pins appear fast. Wave 2 (remaining pool) is deferred
+            // until the user taps "Do a Deeper Scan?".
             preScreenBannerMessage = nil
             suggestionService.preScreenComplete = false
             isPreScreening = true
@@ -283,15 +301,12 @@ struct MapTabView: View {
                 poolToScan.append(pinned)
             }
             preScreenTask = Task {
-                // Two-wave pre-screen: scan the closest 25 venues first (the
-                // displayed set) so green pins appear fast, then scan the
-                // remaining pool in a second wave for promotion.
                 let wave1Count = min(25, poolToScan.count)
                 let wave1 = Array(poolToScan.prefix(wave1Count))
                 let wave2 = Array(poolToScan.dropFirst(wave1Count))
 
                 // ── Wave 1: closest venues (fast results) ──
-                let wave1Results = await websiteChecker.batchPreScreen(
+                let w1Results = await websiteChecker.batchPreScreen(
                     suggestions: wave1,
                     picks: picks
                 )
@@ -299,69 +314,114 @@ struct MapTabView: View {
                     isPreScreening = false
                     return
                 }
-                // Apply immediately so green pins light up while wave 2 runs.
-                suggestionService.applyPreScreenResults(wave1Results)
+                suggestionService.applyPreScreenResults(w1Results)
                 if let pinned = showOnMapPin,
-                   let matched = wave1Results[pinned.id] {
+                   let matched = w1Results[pinned.id] {
                     showOnMapPin?.preScreenMatches = matched
                 }
                 #if DEBUG
-                let w1Green = wave1Results.values.filter { !$0.isEmpty }.count
+                let w1Green = w1Results.values.filter { !$0.isEmpty }.count
                 print("[PreScreen] Wave 1 done: \(w1Green) green out of \(wave1.count) closest venues")
                 #endif
 
-                // ── Wave 2: remaining venues (promotion candidates) ──
-                var allResults = wave1Results
-                if !wave2.isEmpty {
-                    let wave2Results = await websiteChecker.batchPreScreen(
-                        suggestions: wave2,
-                        picks: picks
-                    )
-                    guard !Task.isCancelled else {
-                        isPreScreening = false
-                        return
-                    }
-                    // Merge wave 2 into combined results and re-apply.
-                    for (key, value) in wave2Results {
-                        allResults[key] = value
-                    }
-                    suggestionService.applyPreScreenResults(allResults)
-                    if let pinned = showOnMapPin,
-                       let matched = wave2Results[pinned.id] {
-                        showOnMapPin?.preScreenMatches = matched
-                    }
-                    #if DEBUG
-                    let w2Green = wave2Results.values.filter { !$0.isEmpty }.count
-                    print("[PreScreen] Wave 2 done: \(w2Green) green out of \(wave2.count) remaining venues")
-                    #endif
-                }
-
                 isPreScreening = false
 
-                // Zoom to fit the final pin set (after promotion) so
-                // the user sees all results without scrolling.
+                // Zoom to fit the Wave 1 pin set so the user sees results.
                 if zoomToFit {
                     zoomToFitPins()
                 }
 
-                // Show result banner
+                // Show Wave 1 result banner
                 let likelyCount = suggestionService.suggestions.filter {
                     $0.preScreenMatches?.isEmpty == false
                 }.count
                 let totalCount = suggestionService.suggestions.count
                 #if DEBUG
-                print("[PreScreen] Done. \(likelyCount) likely out of \(totalCount) suggestions.")
+                print("[PreScreen] Wave 1 complete. \(likelyCount) likely out of \(totalCount) suggestions. \(wave2.count) venues deferred.")
                 #endif
                 if totalCount > 0 {
                     if likelyCount == 0 {
-                        preScreenBannerMessage = "No quick matches — tap any pin to search deeper"
+                        preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
                     } else {
-                        preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s") — tap green pins to review"
+                        preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
                     }
                     Task {
                         try? await Task.sleep(for: .seconds(8))
                         preScreenBannerMessage = nil
                     }
+                }
+
+                // Store Wave 2 pool for the "Do a Deeper Scan?" button.
+                if !wave2.isEmpty {
+                    wave1Results = w1Results
+                    deeperScanPool = wave2
+                    deeperScanPicks = picks
+                    showDeeperScanButton = true
+                }
+            }
+        }
+    }
+
+    /// Wave 2: runs only when the user taps "Do a Deeper Scan?".
+    /// Scans the remaining pool beyond the closest 25 and promotes
+    /// any green matches into the displayed set.
+    private func runDeeperScan() {
+        showDeeperScanButton = false
+        preScreenTask?.cancel()
+        preScreenBannerMessage = nil
+        isPreScreening = true
+
+        let pool = deeperScanPool
+        let picks = deeperScanPicks
+        let w1 = wave1Results
+
+        preScreenTask = Task {
+            let w2Results = await websiteChecker.batchPreScreen(
+                suggestions: pool,
+                picks: picks
+            )
+            guard !Task.isCancelled else {
+                isPreScreening = false
+                return
+            }
+            // Merge Wave 2 into Wave 1 results and re-apply for promotion.
+            var allResults = w1
+            for (key, value) in w2Results {
+                allResults[key] = value
+            }
+            suggestionService.applyPreScreenResults(allResults)
+            if let pinned = showOnMapPin,
+               let matched = w2Results[pinned.id] {
+                showOnMapPin?.preScreenMatches = matched
+            }
+            #if DEBUG
+            let w2Green = w2Results.values.filter { !$0.isEmpty }.count
+            print("[PreScreen] Wave 2 done: \(w2Green) green out of \(pool.count) remaining venues")
+            #endif
+
+            isPreScreening = false
+            deeperScanPool = []
+
+            // Zoom to fit the wider pin set (including promoted pins).
+            zoomToFitPins()
+
+            // Show final result banner
+            let likelyCount = suggestionService.suggestions.filter {
+                $0.preScreenMatches?.isEmpty == false
+            }.count
+            let totalCount = suggestionService.suggestions.count
+            #if DEBUG
+            print("[PreScreen] Deeper scan complete. \(likelyCount) likely out of \(totalCount) suggestions.")
+            #endif
+            if totalCount > 0 {
+                if likelyCount == 0 {
+                    preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
+                } else {
+                    preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
+                }
+                Task {
+                    try? await Task.sleep(for: .seconds(8))
+                    preScreenBannerMessage = nil
                 }
             }
         }
@@ -376,13 +436,18 @@ struct MapTabView: View {
         )
     }
 
-    /// Confirmed spots filtered by the active pick filter.
-    /// Bridges FoodCategory → SpotFilter so SpotService.filteredSpots(for:) can be reused.
-    /// For picks whose id doesn't match a SpotCategory (e.g. "ramen"), shows all spots.
+    /// Confirmed spots filtered by the active pick IDs (multi-toggle).
+    /// Always filters to only show spots whose categories overlap with the user's
+    /// active picks — a pizza spot should never appear when only mezcal/flan/tacos are on.
+    /// - No picks active → empty (all toggled off).
     private var filteredSpots: [Spot] {
-        let spotCat: SpotCategory? = selectedPickFilter.flatMap { SpotCategory(rawValue: $0.id) }
-        let filter = SpotFilter(category: spotCat)
-        let base = spotService.filteredSpots(for: filter)
+        // When no picks are toggled on, show nothing
+        guard !activePickIDs.isEmpty else { return [] }
+
+        let all = spotService.filteredSpots(for: SpotFilter(category: nil))
+        let base = all.filter { spot in
+            spot.categories.contains { cat in activePickIDs.contains(cat.rawValue) }
+        }
         guard !searchText.isEmpty else { return base }
         return base.filter { spot in
             spot.name.localizedCaseInsensitiveContains(searchText) ||
@@ -406,13 +471,7 @@ struct MapTabView: View {
     private var filteredSuggestions: [SuggestedSpot] {
         let spotNames = Set(spotService.spots.filter { !$0.isHidden && !$0.isClosed }.map { $0.name.lowercased() })
         return suggestionService.suggestions.filter { suggestion in
-            let dominated = spotNames.contains(suggestion.name.lowercased())
-            #if DEBUG
-            if dominated {
-                print("[FilteredSuggestions] Hiding ghost pin \"\(suggestion.name)\" — matches confirmed spot name")
-            }
-            #endif
-            return !dominated
+            !spotNames.contains(suggestion.name.lowercased())
         }
     }
 
@@ -435,10 +494,13 @@ struct MapTabView: View {
         filteredSuggestions.filter { $0.preScreenMatches?.isEmpty != false }
     }
 
-    /// Ghost pins filtered by pin-type toggles — used directly in the Map content.
+    /// Ghost pins filtered by pin-type toggles AND active pick IDs.
+    /// When all Flezcal pills are off, no ghost pins show.
     /// Pre-filtered to avoid conditional `if` inside MapContentBuilder's ForEach.
     private var visibleGhostPins: [SuggestedSpot] {
-        filteredSuggestions.filter { suggestion in
+        // If all Flezcal pills are toggled off, hide all ghost pins too
+        guard !activePickIDs.isEmpty else { return [] }
+        return filteredSuggestions.filter { suggestion in
             let isGreen = suggestion.preScreenMatches?.isEmpty == false
             return isGreen ? showPossiblePins : showUncheckedPins
         }
@@ -453,6 +515,7 @@ struct MapTabView: View {
                     listContent
                 } else {
                     mapContent
+                        .tutorialTarget("mapView")
                 }
             }
             .navigationTitle(AppConstants.appName)
@@ -507,10 +570,22 @@ struct MapTabView: View {
             .task {
                 await spotService.fetchSpots()
             }
+            .onAppear {
+                if picksChangedWhileAway {
+                    picksChangedWhileAway = false
+                    // Picks were modified while the map was off-screen — fetch now
+                    guard let region = visibleRegion else { return }
+                    lastFetchedCenter = region.center
+                    fetchAndPreScreen(in: region, picks: picksService.picks, zoomToFit: true)
+                }
+            }
             .onDisappear {
                 websiteCheckTask?.cancel()
                 websiteCheckTask = nil
                 multiCheckResult = nil
+            }
+            .alert("No Flezcals selected", isPresented: $showNoPinsAlert) {
+                Button("OK", role: .cancel) { }
             }
         }
     }
@@ -602,6 +677,18 @@ struct MapTabView: View {
                 // results.  The second settle (after location resolves) re-
                 // fetches for the correct area so ghost pins appear on launch.
                 if bootFetchesRemaining > 0 {
+                    // Skip the fallback/default region — MapKit's first .onEnd
+                    // often fires with a continent-scale span (e.g. 80°) centered
+                    // far from the user. Burning 12+ MKLocalSearch queries against
+                    // the wrong location wastes rate limit and returns junk results.
+                    // Don't decrement bootFetchesRemaining so the real location
+                    // still gets its auto-fetch.
+                    if context.region.span.latitudeDelta > 5.0 {
+                        #if DEBUG
+                        print("[MapTab] Skipping boot fetch — fallback region span \(String(format: "%.1f", context.region.span.latitudeDelta))° is too wide")
+                        #endif
+                        return
+                    }
                     bootFetchesRemaining -= 1
                     lastFetchedCenter = context.region.center
                     // Boot auto-fetch: ghost pins + pre-screen so green pins
@@ -612,13 +699,18 @@ struct MapTabView: View {
                     fetchAndPreScreen(in: context.region, picks: activePicks, zoomToFit: shouldZoom)
                 } else {
                     showSearchHereButton = true
+                    showDeeperScanButton = false
                 }
             }
             .onMapCameraChange { context in
                 guard !initialRegionSeen else { return }
                 visibleRegion = context.region
             }
-            .onChange(of: selectedPickFilter) { _, _ in
+            .onChange(of: activePickIDs) { _, newIDs in
+                if newIDs.isEmpty {
+                    showNoPinsAlert = true
+                    return  // No picks active — skip fetch, pins are hidden
+                }
                 emptyStateDismissed = false
                 showSearchHereButton = false
                 bootFetchesRemaining = 0  // prevent boot auto-fetch from racing
@@ -626,12 +718,22 @@ struct MapTabView: View {
                 lastFetchedCenter = region.center
                 fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
             }
+            .onChange(of: showVerifiedPins) { _, _ in checkAllPinsOff() }
+            .onChange(of: showPossiblePins) { _, _ in checkAllPinsOff() }
+            .onChange(of: showUncheckedPins) { _, _ in checkAllPinsOff() }
             .onChange(of: picksService.picks) { _, _ in
-                // User changed their picks in My Flezcals tab — re-fetch with new picks
-                selectedPickFilter = nil   // reset to "All" when picks change
+                // User changed their picks in My Flezcals tab — clear cache and re-fetch.
+                // Cache must be cleared because it only contains scan results for the
+                // previous picks, not the new ones.
+                Task { await websiteChecker.clearHTMLCache() }
+                // activePickIDs is reset by ContentView's onChange(of: picksService.picks)
                 showSearchHereButton = false
                 bootFetchesRemaining = 0  // prevent boot auto-fetch from racing
-                guard let region = visibleRegion else { return }
+                guard let region = visibleRegion else {
+                    // Map tab is off-screen — defer the fetch until the user returns
+                    picksChangedWhileAway = true
+                    return
+                }
                 lastFetchedCenter = region.center
                 fetchAndPreScreen(in: region, picks: picksService.picks, zoomToFit: true)
             }
@@ -679,10 +781,11 @@ struct MapTabView: View {
                 fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
             }
 
-            // Filter pills — "All" + one pill per pick
+            // Filter pills — one toggleable pill per pick
             VStack(spacing: 8) {
                 PicksFilterBar(picks: picksService.picks,
-                               selectedPick: $selectedPickFilter)
+                               activeIDs: $activePickIDs)
+                    .tutorialTarget("filterPills")
 
                 // Pin-type toggle buttons — tap to show/hide each category
                 if !spotService.isLoading {
@@ -697,7 +800,7 @@ struct MapTabView: View {
                         if !possibleSuggestions.isEmpty {
                             PinToggleButton(
                                 count: possibleSuggestions.count,
-                                label: "Possible",
+                                label: "Likely",
                                 color: .green,
                                 filled: false,
                                 isOn: $showPossiblePins
@@ -707,12 +810,13 @@ struct MapTabView: View {
                         if !uncheckedSuggestions.isEmpty {
                             PinToggleButton(
                                 count: uncheckedSuggestions.count,
-                                label: "Unchecked",
+                                label: "Nearby",
                                 color: .yellow,
                                 isOn: $showUncheckedPins
                             )
                         }
                     }
+                    .tutorialTarget("pinToggles")
                 }
             }
             .padding(.top, 8)
@@ -758,24 +862,41 @@ struct MapTabView: View {
                 .animation(.easeInOut(duration: 0.25), value: showSearchHereButton)
             }
 
-            // Pre-screen results banner — appears after batch scan completes.
-            // Positioned at bottom (same area as the spinner) so it's a natural
-            // visual transition: spinner disappears → banner appears.
-            if let message = preScreenBannerMessage {
-                VStack {
+            // "Do a Deeper Scan?" + result banner — stacked at the bottom.
+            // The banner sits above the button so they don't overlap.
+            if showDeeperScanButton && !showSearchHereButton || preScreenBannerMessage != nil {
+                VStack(spacing: 8) {
                     Spacer()
-                    Text(message)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                        .onTapGesture { preScreenBannerMessage = nil }
+                    if let message = preScreenBannerMessage {
+                        Text(message)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                            .onTapGesture { preScreenBannerMessage = nil }
+                            .transition(.opacity)
+                    }
+                    if showDeeperScanButton && !showSearchHereButton {
+                        Button {
+                            runDeeperScan()
+                        } label: {
+                            Label("Search Wider Area?", systemImage: "magnifyingglass")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
                 .padding(.bottom, 24)
-                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: showDeeperScanButton)
                 .animation(.easeInOut(duration: 0.3), value: preScreenBannerMessage)
             }
 
@@ -875,7 +996,7 @@ struct MapTabView: View {
                 && visibleSpots.isEmpty && visibleSuggestions.isEmpty
                 && showOnMapPin == nil && !emptyStateDismissed {
                 MapEmptyBanner(
-                    category: selectedPickFilter ?? picksService.picks.first ?? .mezcal,
+                    category: activePicks.first ?? picksService.picks.first ?? .mezcal,
                     onSearch: {
                         NotificationCenter.default.post(name: .switchToSpots, object: nil)
                     },
@@ -913,7 +1034,7 @@ struct MapTabView: View {
             .padding(.top, 8)
 
             PicksFilterBar(picks: picksService.picks,
-                           selectedPick: $selectedPickFilter)
+                           activeIDs: $activePickIDs)
                 .padding(.top, 8)
 
             Text("\(filteredSpots.count) spot\(filteredSpots.count == 1 ? "" : "s") found")
@@ -928,7 +1049,7 @@ struct MapTabView: View {
             } else if filteredSpots.isEmpty {
                 Spacer()
                 MapEmptyListState(
-                    categoryName: selectedPickFilter?.displayName.lowercased() ?? "spot",
+                    categoryName: activePicks.first?.displayName.lowercased() ?? "spot",
                     isSearchActive: !searchText.isEmpty
                 )
                 Spacer()
@@ -949,12 +1070,12 @@ struct MapTabView: View {
 
 /// Compact capsule button that toggles visibility of a pin type on the map.
 /// Shows a colored dot, count, and label. Dimmed when toggled off.
-private struct PinToggleButton: View {
+struct PinToggleButton: View {
     let count: Int
     let label: String
     let color: Color
     /// When true the dot is a solid fill; when false it's a stroke ring
-    /// (matching the ghost pin style for "Possible").
+    /// (matching the ghost pin style for "Likely").
     var filled: Bool = true
     @Binding var isOn: Bool
 
@@ -964,22 +1085,30 @@ private struct PinToggleButton: View {
                 isOn.toggle()
             }
         } label: {
-            HStack(spacing: 4) {
-                if filled {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 12, height: 12)
-                } else {
-                    Circle()
-                        .strokeBorder(color, lineWidth: 2)
-                        .frame(width: 12, height: 12)
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    if filled {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Circle()
+                            .strokeBorder(color, lineWidth: 2)
+                            .frame(width: 12, height: 12)
+                    }
+                    Text("\(count)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                    Text(label)
+                        .font(.caption2)
+                        .fontWeight(.medium)
                 }
-                Text("\(count)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                Text(label)
-                    .font(.caption2)
-                    .fontWeight(.medium)
+                if !isOn {
+                    Text("Filter off")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.red)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -988,7 +1117,7 @@ private struct PinToggleButton: View {
             .opacity(isOn ? 1.0 : 0.45)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(count) \(label) pins")
+        .accessibilityLabel("\(count) \(label) pins, filter \(isOn ? "on" : "off")")
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .accessibilityHint(isOn ? "Tap to hide" : "Tap to show")
     }
@@ -996,26 +1125,25 @@ private struct PinToggleButton: View {
 
 // MARK: - Picks-based filter bar
 
-/// Replaces the old SpotCategory-based CategoryFilterBar.
-/// Shows "All" + one pill per user pick.
+/// Multi-toggle filter pill bar — each pill independently toggles visibility.
+/// Used on both Map and Spots tabs with a shared `activeIDs` binding.
 struct PicksFilterBar: View {
     let picks: [FoodCategory]
-    @Binding var selectedPick: FoodCategory?
+    @Binding var activeIDs: Set<String>
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                // "All" pill
-                filterPill(label: "All", category: nil, color: .orange, isSelected: selectedPick == nil) {
-                    withAnimation(.easeInOut(duration: 0.2)) { selectedPick = nil }
-                }
-
-                // One pill per pick
                 ForEach(picks) { pick in
+                    let isOn = activeIDs.contains(pick.id)
                     filterPill(label: pick.displayName, category: pick,
-                                color: pick.color, isSelected: selectedPick == pick) {
+                               color: pick.color, isSelected: isOn) {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedPick = (selectedPick == pick) ? nil : pick
+                            if isOn {
+                                activeIDs.remove(pick.id)
+                            } else {
+                                activeIDs.insert(pick.id)
+                            }
                         }
                     }
                 }
@@ -1028,18 +1156,27 @@ struct PicksFilterBar: View {
     private func filterPill(label: String, category: FoodCategory?, color: Color,
                              isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                if let category { FoodCategoryIcon(category: category, size: 18) }
-                Text(label)
-                    .font(.subheadline)
-                    .fontWeight(isSelected ? .semibold : .regular)
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    if let category { FoodCategoryIcon(category: category, size: 18) }
+                    Text(label)
+                        .font(.subheadline)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                }
+                if !isSelected {
+                    Text("Filter off")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.red)
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
             .background(Capsule().fill(isSelected ? color : Color(.systemBackground)))
             .foregroundStyle(isSelected ? .white : .primary)
             .overlay(Capsule().stroke(Color.secondary.opacity(0.3),
                                       lineWidth: isSelected ? 0 : 1))
+            .opacity(isSelected ? 1.0 : 0.45)
         }
     }
 }
@@ -1146,51 +1283,10 @@ struct SpotListRowView: View {
     }
 }
 
-// MARK: - Legacy SpotFilter (kept for compatibility with ListTabView)
-// SpotFilter is still used by ListTabView's confirmed-spot filtering.
-// New FoodCategory-based filtering uses PicksFilterBar above.
+// MARK: - SpotFilter (used by SpotService.filteredSpots)
 
 struct SpotFilter: Equatable {
     let category: SpotCategory?
-    static let all = SpotFilter(category: nil)
-    static var allFilters: [SpotFilter] {
-        [.all] + SpotCategory.allCases.map { SpotFilter(category: $0) }
-    }
-    var displayName: String { category?.displayName ?? "All" }
-    var color: Color { category?.color ?? .orange }
-}
-
-struct CategoryFilterBar: View {
-    @Binding var selectedFilter: SpotFilter
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(SpotFilter.allFilters, id: \.displayName) { filter in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { selectedFilter = filter }
-                    } label: {
-                        HStack(spacing: 4) {
-                            if let cat = filter.category {
-                                CategoryIcon(category: cat, size: 16)
-                            }
-                            Text(filter.displayName)
-                                .font(.subheadline)
-                                .fontWeight(selectedFilter == filter ? .semibold : .regular)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(selectedFilter == filter
-                                                   ? filter.color : Color(.systemBackground)))
-                        .foregroundStyle(selectedFilter == filter ? .white : .primary)
-                        .overlay(Capsule().stroke(Color.secondary.opacity(0.3),
-                                                   lineWidth: selectedFilter == filter ? 0 : 1))
-                    }
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
 }
 
 // MARK: - Map Empty States
@@ -1271,6 +1367,7 @@ private struct MapEmptyListState: View {
 #Preview {
     MapTabView(pendingMapSuggestion: .constant(nil),
                pendingMapCenter: .constant(nil),
+               activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])),
                websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())

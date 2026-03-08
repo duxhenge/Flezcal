@@ -13,7 +13,9 @@ struct ContentView: View {
     @EnvironmentObject var authService: AuthService
     @StateObject private var welcomeService = WelcomeService()
     @StateObject private var picksService = UserPicksService()
+    @StateObject private var tutorialService = TutorialService()
     @State private var showWelcome = false
+    @State private var showTutorialCurriculum = false
     @State private var selectedTab: Int = AppTab.explore
     /// Set by the .showOnMap notification — MapTabView picks this up,
     /// centers the camera, and shows the ghost pin sheet.
@@ -21,6 +23,11 @@ struct ContentView: View {
     /// Set by the .showAreaOnMap notification — MapTabView picks this up,
     /// centers the camera on the area, and runs fetchAndPreScreen.
     @State private var pendingMapCenter: CLLocationCoordinate2D? = nil
+    /// Shared Flezcal filter state — which pick pills are active.
+    /// Synced between Map and Spots tabs so toggling a pill on one tab
+    /// carries over when switching to the other.
+    @State private var activePickIDs: Set<String> = []
+    @State private var activePickIDsInitialized = false
     @State private var showDisplayNamePrompt = false
     @State private var promptedName = ""
 
@@ -36,17 +43,21 @@ struct ContentView: View {
     /// Explore pre-screen results carry over to Map ghost pins instantly.
     private let websiteChecker = WebsiteCheckService()
 
+    /// Feature flags (singleton) — drives beta feedback button visibility.
+    @ObservedObject private var featureFlags = FeatureFlagService.shared
+
     var body: some View {
         ZStack(alignment: .top) {
             TabView(selection: $selectedTab) {
                 MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
                           pendingMapCenter: $pendingMapCenter,
+                          activePickIDs: $activePickIDs,
                           websiteChecker: websiteChecker)
                     .environmentObject(picksService)
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
-                ListTabView(locationManager: locationManager, picksService: picksService, websiteChecker: websiteChecker)
+                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, websiteChecker: websiteChecker)
                     .tabItem { Label("Spots", systemImage: "list.bullet") }
                     .tag(AppTab.spots)
 
@@ -59,7 +70,10 @@ struct ContentView: View {
                     .tabItem { Label("Leaderboard", systemImage: "trophy") }
                     .tag(AppTab.leaderboard)
 
-                ProfileView(onShowWhatsNew: { showWelcome = true })
+                ProfileView(
+                    onShowWhatsNew: { showWelcome = true },
+                    onShowTutorials: { showTutorialCurriculum = true }
+                )
                     .tabItem { Label("Profile", systemImage: "person.circle") }
                     .tag(AppTab.profile)
             }
@@ -82,6 +96,53 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.3), value: networkMonitor.isConnected)
                 .accessibilityLabel("You are offline. Changes will sync when you reconnect.")
             }
+
+            // Beta feedback floating button — controlled by FeatureFlagService.
+            // Not shown on admin dashboard (it's a fullScreenCover above this).
+            BetaFeedbackButton(
+                featureFlags: featureFlags,
+                userPickNames: picksService.picks.map(\.displayName)
+            )
+
+            // Tutorial spotlight overlay — renders above everything when active
+            TutorialOverlay(tutorialService: tutorialService)
+        }
+        .onAppear {
+            featureFlags.startListening()
+            tutorialService.switchTab = { tab in selectedTab = tab }
+            // Initialize shared filter state with all picks active
+            if !activePickIDsInitialized {
+                activePickIDs = Set(picksService.picks.map(\.id))
+                activePickIDsInitialized = true
+            }
+        }
+        .onDisappear { featureFlags.stopListening() }
+        .onChange(of: picksService.picks) { _, newPicks in
+            // When picks change (added/removed/swapped), reset all to active
+            activePickIDs = Set(newPicks.map(\.id))
+        }
+        .overlayPreferenceValue(TutorialTargetKey.self) { anchors in
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: anchors.count) { _, _ in
+                        updateTargetFrames(anchors: anchors, geo: geo)
+                    }
+                    .onChange(of: selectedTab) { _, _ in
+                        // Re-resolve anchors when tab changes — different targets become visible
+                        updateTargetFrames(anchors: anchors, geo: geo)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            updateTargetFrames(anchors: anchors, geo: geo)
+                        }
+                    }
+                    .onChange(of: tutorialService.currentStepIndex) { _, _ in
+                        // Re-resolve when the tutorial advances — target may have just appeared
+                        updateTargetFrames(anchors: anchors, geo: geo)
+                    }
+                    .onAppear {
+                        updateTargetFrames(anchors: anchors, geo: geo)
+                    }
+            }
+            .allowsHitTesting(false)
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToSpots)) { _ in
             selectedTab = AppTab.spots
@@ -108,12 +169,38 @@ struct ContentView: View {
             }
             .presentationDetents([.large])
         }
+        .sheet(isPresented: $showTutorialCurriculum) {
+            TutorialCurriculumView(tutorialService: tutorialService)
+                .presentationDetents([.large])
+        }
+        .onChange(of: tutorialService.shouldShowCurriculum) { _, show in
+            if show {
+                tutorialService.shouldShowCurriculum = false
+                showTutorialCurriculum = true
+            }
+        }
+        .onChange(of: showWelcome) { _, isShowing in
+            // After the welcome sheet is dismissed for the first time, show the tutorial curriculum
+            if !isShowing && !tutorialService.hasShownCurriculum {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showTutorialCurriculum = true
+                    tutorialService.markCurriculumShown()
+                }
+            }
+        }
         .task {
             // Fetch welcome content version — WelcomeService is a @StateObject so it
             // persists for the lifetime of ContentView and won't be re-created on re-renders.
             await welcomeService.fetchWelcomeContent()
             if let version = welcomeService.content?.version, version != lastSeenWelcomeVersion {
                 showWelcome = true
+            } else if !tutorialService.hasShownCurriculum {
+                // Welcome didn't trigger (already seen or network error) but curriculum
+                // hasn't been shown yet — show it directly on first launch.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showTutorialCurriculum = true
+                    tutorialService.markCurriculumShown()
+                }
             }
         }
         .onChange(of: authService.isSignedIn) { _, signedIn in
@@ -140,6 +227,20 @@ struct ContentView: View {
         } message: {
             Text("This name appears on the leaderboard. You can change it later in Profile.")
         }
+    }
+
+    /// Resolves anchor preferences from tutorial target views into CGRect frames.
+    /// Merges into existing frames so that a re-render of one tab doesn't wipe
+    /// out frames reported by another tab.
+    private func updateTargetFrames(anchors: [String: Anchor<CGRect>], geo: GeometryProxy) {
+        var frames = tutorialService.targetFrames
+        for (id, anchor) in anchors {
+            let rect = geo[anchor]
+            if rect.width > 0 && rect.height > 0 {
+                frames[id] = rect
+            }
+        }
+        tutorialService.targetFrames = frames
     }
 }
 

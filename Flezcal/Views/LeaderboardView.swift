@@ -254,8 +254,7 @@ struct MyRankCard: View {
                     Spacer()
                     if let cat = SpotCategory(rawValue: entry.id) {
                         StatPill(value: "\(entry.count)", label: cat.displayName) {
-                            Text(cat.emoji)
-                                .font(.caption2)
+                            CategoryIcon(category: cat, size: 16)
                         }
                     }
                 }

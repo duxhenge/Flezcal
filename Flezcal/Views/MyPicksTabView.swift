@@ -10,6 +10,7 @@ struct MyPicksTabView: View {
     @EnvironmentObject var authService: AuthService
     @State private var showGrid = false
     @State private var editingCategory: FoodCategory? = nil
+    @State private var showMinPickAlert = false
 
     var body: some View {
         NavigationStack {
@@ -17,6 +18,7 @@ struct MyPicksTabView: View {
                 VStack(spacing: 24) {
                     // Subtitle
                     subtitleText
+                        .tutorialTarget("pickSubtitle")
                         .padding(.horizontal, 32)
                         .padding(.top, 8)
 
@@ -31,6 +33,10 @@ struct MyPicksTabView: View {
                                 canRemove: canRemove,
                                 onEdit: { editingCategory = category },
                                 onRemove: {
+                                    if !canRemove {
+                                        showMinPickAlert = true
+                                        return
+                                    }
                                     withAnimation(.spring()) {
                                         if isCustom {
                                             _ = picksService.removeCustomPick(category)
@@ -40,6 +46,7 @@ struct MyPicksTabView: View {
                                     }
                                 }
                             )
+                            .tutorialTarget("pickCard_\(category.id)")
                         }
 
                         // Empty slots — tappable to open the selection grid
@@ -73,11 +80,6 @@ struct MyPicksTabView: View {
                         .padding(.horizontal)
                     }
 
-                    // Search distance picker
-                    SearchRadiusPicker()
-                        .environmentObject(picksService)
-                        .padding(.horizontal)
-
                     // Button
                     Button {
                         showGrid = true
@@ -92,6 +94,7 @@ struct MyPicksTabView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
+                    .tutorialTarget("customizeButton")
                     .padding(.horizontal)
                 }
                 .padding(.bottom, 32)
@@ -108,6 +111,9 @@ struct MyPicksTabView: View {
                 EditCustomCategoryView(category: category)
                     .environmentObject(picksService)
                     .presentationDetents([.large])
+            }
+            .alert("Minimum 1 Flezcal", isPresented: $showMinPickAlert) {
+                Button("OK", role: .cancel) { }
             }
         }
     }
@@ -170,10 +176,11 @@ private struct PickCard: View {
                         .foregroundStyle(category.color)
                 }
                 .buttonStyle(.plain)
+                .tutorialTarget("editButton_\(category.id)")
                 .accessibilityLabel("Edit search terms for \(category.displayName)")
             }
 
-            // Remove button — available for all picks when more than 1 remains
+            // Remove button — always tappable; onRemove handles the minimum-pick guard
             Button {
                 onRemove()
             } label: {
@@ -182,7 +189,6 @@ private struct PickCard: View {
                     .foregroundStyle(canRemove ? .secondary : .quaternary)
             }
             .buttonStyle(.plain)
-            .disabled(!canRemove)
             .accessibilityLabel("Remove \(category.displayName)")
         }
         .padding(16)

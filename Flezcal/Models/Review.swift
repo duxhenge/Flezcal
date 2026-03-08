@@ -25,44 +25,44 @@ struct Review: Identifiable, Codable {
 /// Rates the specific food/drink item at the venue, not the venue itself.
 /// Uses flan icons (🍮) as the visual scale.
 enum RatingLevel: Int, CaseIterable {
-    case youDecide = 1
-    case popIn = 2
-    case bookIt = 3
-    case roadTrip = 4
-    case pilgrimage = 5
+    case confirmedSpot = 1
+    case neighborhoodOption = 2
+    case bestLocalChoice = 3
+    case bestInRegion = 4
+    case worldClass = 5
 
     var label: String {
         switch self {
-        case .youDecide:  return "You Decide"
-        case .popIn:      return "Pop In"
-        case .bookIt:     return "Book It"
-        case .roadTrip:   return "Road Trip"
-        case .pilgrimage: return "Pilgrimage"
+        case .confirmedSpot:      return "Confirmed Spot"
+        case .neighborhoodOption: return "Neighborhood Option"
+        case .bestLocalChoice:    return "Best Local Choice"
+        case .bestInRegion:       return "Best in Region"
+        case .worldClass:         return "World Class"
         }
     }
 
     /// Flan-count emoji scale: 1-5 flans (used in landscape / detail views)
     var emoji: String {
         switch self {
-        case .youDecide:  return "🍮"
-        case .popIn:      return "🍮🍮"
-        case .bookIt:     return "🍮🍮🍮"
-        case .roadTrip:   return "🍮🍮🍮🍮"
-        case .pilgrimage: return "🍮🍮🍮🍮🍮"
+        case .confirmedSpot:      return "🍮"
+        case .neighborhoodOption: return "🍮🍮"
+        case .bestLocalChoice:    return "🍮🍮🍮"
+        case .bestInRegion:       return "🍮🍮🍮🍮"
+        case .worldClass:         return "🍮🍮🍮🍮🍮"
         }
     }
 
     /// Compact format for tight layouts: "3🍮" instead of "🍮🍮🍮"
     var compactEmoji: String { "\(rawValue)🍮" }
 
-    /// "How far would you go?" descriptions for each level
+    /// Descriptions for each level
     var description: String {
         switch self {
-        case .youDecide:  return "It's here, your call"
-        case .popIn:      return "Glad it's on the menu"
-        case .bookIt:     return "Satisfies the craving"
-        case .roadTrip:   return "Worth going out of your way"
-        case .pilgrimage: return "Worth booking a flight"
+        case .confirmedSpot:      return "They have it"
+        case .neighborhoodOption: return "Satisfies the craving"
+        case .bestLocalChoice:    return "Best of the nearby choices"
+        case .bestInRegion:       return "Worthy of a road trip"
+        case .worldClass:         return "Worthy of a pilgrimage"
         }
     }
 
@@ -71,11 +71,11 @@ enum RatingLevel: Int, CaseIterable {
     func confirmationQuestion(for category: String) -> String {
         let name = category.lowercased()
         switch self {
-        case .pilgrimage: return "Is the \(name) here worth booking a flight?"
-        case .roadTrip:   return "Is the \(name) here worth going out of your way?"
-        case .bookIt:     return "Does the \(name) here satisfy the craving?"
-        case .popIn:      return "Are you glad the \(name) is on the menu here?"
-        case .youDecide:  return "You can't recommend the \(name) here?"
+        case .worldClass:         return "Is the \(name) here worth booking a flight?"
+        case .bestInRegion:       return "Is the \(name) here worth going out of your way?"
+        case .bestLocalChoice:    return "Is this the go-to place in this area for \(name)?"
+        case .neighborhoodOption: return "Does the \(name) here satisfy your craving?"
+        case .confirmedSpot:      return "Your choice to try the \(name) here"
         }
     }
 
