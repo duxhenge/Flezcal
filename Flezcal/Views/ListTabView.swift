@@ -346,10 +346,10 @@ private struct ExplorePanel: View {
     /// Whether unchecked (yellow) rows should be visible — controlled by the
     /// parent's Unchecked toggle pill. Search still runs (for counts) but rows hide.
     let showUnchecked: Bool
-    /// Whether the "Search Wider Area?" button should show — exposed to parent
+    /// Whether the "Do a Deeper Scan?" button should show — exposed to parent
     /// so it can float over the ScrollView instead of scrolling with content.
     @Binding var showDeeperScanPrompt: Bool
-    /// Set to true by the parent when user taps "Search Wider Area?".
+    /// Set to true by the parent when user taps "Do a Deeper Scan?".
     /// ExplorePanel watches this and runs the deeper scan.
     @Binding var triggerDeeperScan: Bool
     /// Whether the search engine or pre-screen is actively working.
@@ -400,7 +400,7 @@ private struct ExplorePanel: View {
         let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
         let matchedIndices = preScreenMatchedIndices ?? []
         // Only show results from the pre-screened pool. Starts at 25 (Wave 1),
-        // expands after "Search Wider Area" runs Wave 2.
+        // expands after "Do a Deeper Scan" runs Wave 2.
 
         var top: [MKMapItem] = []
         var rest: [MKMapItem] = []
@@ -689,7 +689,7 @@ private struct ExplorePanel: View {
 
             isPreScreening = false
 
-            // Store Wave 2 for the "Search Wider Area?" button.
+            // Store Wave 2 for the "Do a Deeper Scan?" button.
             if !wave2.isEmpty {
                 wave1MatchedIndices = matched
                 deeperScanURLs = wave2
@@ -780,7 +780,7 @@ private struct ExplorePanel: View {
         }
         // Only count results from the pre-screened pool as unchecked.
         // Results beyond this haven't been scanned yet — they appear
-        // after "Search Wider Area" expands the pool.
+        // after "Do a Deeper Scan" expands the pool.
         let poolSize = min(results.count, preScreenedPoolSize)
         uncheckedCount = poolSize - matchedMapItems.count
     }
@@ -897,6 +897,8 @@ struct ListTabView: View {
     }
     @State private var selectedSpot: Spot?
     @State private var searchText = ""
+    /// Worm easter egg — tapping the worm shows a prompt to enable Community Map.
+    @State private var showCommunityEasterEgg = false
     /// Result type filters — all on by default, matching Map tab's three-way toggles.
     @State private var showVerified = true
     @State private var showPossible = true
@@ -906,7 +908,7 @@ struct ListTabView: View {
     @State private var matchedMapItems: [MKMapItem] = []
     // Unmatched (yellow) result count from ExplorePanel (for Unchecked filter pill)
     @State private var uncheckedCount: Int = 0
-    // "Search Wider Area?" button state — driven by ExplorePanel, displayed by parent
+    // "Do a Deeper Scan?" button state — driven by ExplorePanel, displayed by parent
     @State private var showDeeperScanPrompt = false
     @State private var triggerDeeperScan = false
     // Search activity state — true while searching or pre-screening
@@ -1101,8 +1103,7 @@ struct ListTabView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Category filter — matching Map tab's PicksFilterBar (top position)
-                PicksFilterBar(picks: picksService.picks, activeIDs: $activePickIDs,
-                               showCommunityMap: $showCommunityMap)
+                PicksFilterBar(picks: picksService.picks, activeIDs: $activePickIDs)
                     .padding(.top, 8)
 
                 // ── Search bar ────────────────────────────────────────────────
@@ -1238,12 +1239,12 @@ struct ListTabView: View {
                             }
                         }
 
-                        // "Search Wider Area?" floating button — floats over the scroll content
+                        // "Do a Deeper Scan?" floating button — floats over the scroll content
                         if showDeeperScanPrompt {
                             Button {
                                 triggerDeeperScan = true
                             } label: {
-                                Label("Search Wider Area?", systemImage: "magnifyingglass")
+                                Label("Do a Deeper Scan?", systemImage: "magnifyingglass")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                     .padding(.horizontal, 20)
@@ -1331,6 +1332,16 @@ struct ListTabView: View {
                 websiteCheckTask = nil
                 multiCheckResult = nil
             }
+            .alert("Easter Egg! 🐛", isPresented: $showCommunityEasterEgg) {
+                Button("Yes") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showCommunityMap = true
+                    }
+                }
+                Button("No", role: .cancel) { }
+            } message: {
+                Text("Do you want to see all user verified spots for all 50 Flezcals in your search area?")
+            }
         }
     }
 
@@ -1350,6 +1361,12 @@ struct ListTabView: View {
     @ViewBuilder
     private var resultTypeFilters: some View {
         HStack(spacing: 6) {
+            // Worm easter egg — hidden Community Map trigger
+            CommunityWormButton(
+                showCommunityMap: $showCommunityMap,
+                showEasterEgg: $showCommunityEasterEgg
+            )
+
             PinToggleButton(
                 count: filteredAndSortedSpots.count,
                 label: "Verified",
@@ -1482,82 +1499,97 @@ struct ListTabView: View {
     private var locationBar: some View {
         VStack(spacing: 2) {
             HStack(spacing: 8) {
-                Image(systemName: customLocation != nil ? "location.circle.fill" : "location.circle")
-                    .foregroundStyle(customLocation != nil ? .blue : .secondary)
-                    .font(.subheadline)
-
-                if isEditingLocation {
-                    TextField("City name (e.g. Mammoth Lakes)", text: $locationInputText)
-                        .textFieldStyle(.plain)
+                HStack(spacing: 8) {
+                    Image(systemName: customLocation != nil ? "location.circle.fill" : "location.circle")
+                        .foregroundStyle(customLocation != nil ? .blue : .secondary)
                         .font(.subheadline)
-                        .autocorrectionDisabled()
-                        .focused($isLocationFieldFocused)
-                        .submitLabel(.search)
-                        .onSubmit {
-                            // If there's exactly one suggestion, select it on Return
-                            if let first = locationCompleter.suggestions.first {
-                                resolveAndSelect(first)
-                            }
-                        }
-                        .onChange(of: locationInputText) { _, newValue in
-                            locationCompleter.updateQuery(newValue)
-                        }
-                        .onAppear {
-                            // Auto-focus so the keyboard opens immediately — no second tap needed
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                isLocationFieldFocused = true
-                            }
-                        }
 
-                    if isResolvingLocation {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    Button {
-                        isEditingLocation = false
-                        isLocationFieldFocused = false
-                        locationInputText = ""
-                        locationCompleter.cancel()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                } else if let custom = customLocation {
-                    Text("Near: \(custom.name)")
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    // Clear custom location — return to GPS
-                    Button {
-                        customLocation = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                    if isEditingLocation {
+                        TextField("City name (e.g. Mammoth Lakes)", text: $locationInputText)
+                            .textFieldStyle(.plain)
                             .font(.subheadline)
-                    }
-                    .accessibilityLabel("Clear location, use current location")
-                } else {
-                    Button {
-                        isEditingLocation = true
-                    } label: {
-                        Text("Near: Current Location")
+                            .autocorrectionDisabled()
+                            .focused($isLocationFieldFocused)
+                            .submitLabel(.search)
+                            .onSubmit {
+                                // If there's exactly one suggestion, select it on Return
+                                if let first = locationCompleter.suggestions.first {
+                                    resolveAndSelect(first)
+                                }
+                            }
+                            .onChange(of: locationInputText) { _, newValue in
+                                locationCompleter.updateQuery(newValue)
+                            }
+                            .onAppear {
+                                // Auto-focus so the keyboard opens immediately — no second tap needed
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    isLocationFieldFocused = true
+                                }
+                            }
+
+                        if isResolvingLocation {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+
+                        Button {
+                            isEditingLocation = false
+                            isLocationFieldFocused = false
+                            locationInputText = ""
+                            locationCompleter.cancel()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let custom = customLocation {
+                        Text("Near: \(custom.name)")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        // Clear custom location — return to GPS
+                        Button {
+                            customLocation = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        }
+                        .accessibilityLabel("Clear location, use current location")
+                    } else {
+                        Button {
+                            isEditingLocation = true
+                        } label: {
+                            Text("Near: Current Location")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Go button — triggers a new search for the current location
+                if showExploreSearch && !isEditingLocation {
+                    Button {
+                        refreshVersion += 1
+                    } label: {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.orange)
+                    }
+                    .accessibilityLabel("Search this location")
+                    .disabled(isSearchActive)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
             .padding(.horizontal)
             .padding(.top, 6)
 

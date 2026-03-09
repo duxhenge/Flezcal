@@ -118,7 +118,7 @@ extension FoodCategory {
         displayName: "Mezcal",
         emoji: "🥃",
         color: .green,
-        mapSearchTerms: ["mezcal", "bar", "liquor store", "wine spirits", "restaurante", "restaurant"],
+        mapSearchTerms: ["mezcal", "mezcal bar", "cocktail bar", "mexican restaurant", "tequila bar", "liquor store", "wine spirits"],
         websiteKeywords: ["mezcal", "mezcalería", "mezcales",
                           "mezcal list", "mezcal menu", "mezcal selection",
                           "agave spirits"],
@@ -591,7 +591,7 @@ extension FoodCategory {
         displayName: "Flan",
         emoji: "🍮",
         color: .orange,
-        mapSearchTerms: ["flan", "bakery", "restaurant"],
+        mapSearchTerms: ["flan", "mexican bakery", "cuban restaurant", "mexican restaurant", "colombian restaurant", "bakery"],
         websiteKeywords: ["flan", "flan casero"],
         relatedKeywords: ["custard", "caramel custard", "postre"],
         addSpotPrompt: "Search for a restaurant or bakery to add it as a flan spot."

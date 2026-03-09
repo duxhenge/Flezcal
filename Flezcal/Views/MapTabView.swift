@@ -46,6 +46,8 @@ struct MapTabView: View {
     @State private var showPossiblePins = true
     @State private var showUncheckedPins = true
     @State private var showNoPinsAlert = false
+    /// Worm easter egg — tapping the worm shows a prompt to enable Community Map.
+    @State private var showCommunityEasterEgg = false
     /// Set true when picks change while the map tab is off-screen.
     /// Triggers an auto-fetch when the user returns to the map.
     @State private var picksChangedWhileAway = false
@@ -103,7 +105,7 @@ struct MapTabView: View {
             multiCheckResult = nil
             selectedSuggestion = suggestion
             let primaryPick = bestPrimaryPick(for: suggestion)
-            let allPicks = picksService.picks
+            let allPicks = activePicks
             websiteCheckTask = Task {
                 let result = await websiteChecker.checkAllPicks(
                     suggestion.mapItem,
@@ -604,6 +606,16 @@ struct MapTabView: View {
             .alert("No Flezcals selected", isPresented: $showNoPinsAlert) {
                 Button("OK", role: .cancel) { }
             }
+            .alert("Easter Egg! 🐛", isPresented: $showCommunityEasterEgg) {
+                Button("Yes") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showCommunityMap = true
+                    }
+                }
+                Button("No", role: .cancel) { }
+            } message: {
+                Text("Do you want to see all user verified spots for all 50 Flezcals in your search area?")
+            }
         }
     }
 
@@ -716,7 +728,6 @@ struct MapTabView: View {
                     fetchAndPreScreen(in: context.region, picks: activePicks, zoomToFit: shouldZoom)
                 } else {
                     showSearchHereButton = true
-                    showDeeperScanButton = false
                 }
             }
             .onMapCameraChange { context in
@@ -801,13 +812,18 @@ struct MapTabView: View {
             // Filter pills — one toggleable pill per pick
             VStack(spacing: 8) {
                 PicksFilterBar(picks: picksService.picks,
-                               activeIDs: $activePickIDs,
-                               showCommunityMap: $showCommunityMap)
+                               activeIDs: $activePickIDs)
                     .tutorialTarget("filterPills")
 
                 // Pin-type toggle buttons — tap to show/hide each category
                 if !spotService.isLoading {
                     HStack(spacing: 6) {
+                        // Worm easter egg — hidden Community Map trigger
+                        CommunityWormButton(
+                            showCommunityMap: $showCommunityMap,
+                            showEasterEgg: $showCommunityEasterEgg
+                        )
+
                         PinToggleButton(
                             count: visibleSpots.count,
                             label: "Verified",
@@ -904,7 +920,7 @@ struct MapTabView: View {
                         Button {
                             runDeeperScan()
                         } label: {
-                            Label("Search Wider Area?", systemImage: "magnifyingglass")
+                            Label("Do a Deeper Scan?", systemImage: "magnifyingglass")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 20)
@@ -1055,8 +1071,7 @@ struct MapTabView: View {
             .padding(.top, 8)
 
             PicksFilterBar(picks: picksService.picks,
-                           activeIDs: $activePickIDs,
-                           showCommunityMap: $showCommunityMap)
+                           activeIDs: $activePickIDs)
                 .padding(.top, 8)
 
             Text("\(filteredSpots.count) spot\(filteredSpots.count == 1 ? "" : "s") found")
@@ -1083,6 +1098,55 @@ struct MapTabView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
                 .listStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Community Worm Button
+
+/// Easter-egg worm button that toggles Community Map mode.
+/// When active, shows a green circle background with a pulsing glow ring.
+struct CommunityWormButton: View {
+    @Binding var showCommunityMap: Bool
+    @Binding var showEasterEgg: Bool
+    @State private var isPulsing = false
+
+    var body: some View {
+        Button {
+            if showCommunityMap {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showCommunityMap = false
+                }
+            } else {
+                showEasterEgg = true
+            }
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+        } label: {
+            Text("🐛")
+                .font(.system(size: 16))
+                .padding(6)
+                .background(
+                    Circle()
+                        .fill(showCommunityMap ? Color.green.opacity(0.3) : .clear)
+                )
+                .background(
+                    Circle()
+                        .fill(Color.green.opacity(isPulsing ? 0.15 : 0))
+                        .scaleEffect(isPulsing ? 1.6 : 1.0)
+                )
+        }
+        .buttonStyle(.plain)
+        .onChange(of: showCommunityMap) { _, active in
+            if active {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isPulsing = false
+                }
             }
         }
     }
@@ -1149,21 +1213,13 @@ struct PinToggleButton: View {
 
 /// Multi-toggle filter pill bar — each pill independently toggles visibility.
 /// Used on both Map and Spots tabs with a shared `activeIDs` binding.
-/// Includes a "Community" pill to show all verified spots across all categories.
 struct PicksFilterBar: View {
     let picks: [FoodCategory]
     @Binding var activeIDs: Set<String>
-    @Binding var showCommunityMap: Bool
-    @State private var showCommunityIntro = false
-    @AppStorage("hasSeenCommunityMapIntro") private var hasSeenIntro = false
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                // Community Map pill — leading position
-                communityPill
-
-                // Pick pills — dimmed and non-interactive when Community Map is on
                 ForEach(picks) { pick in
                     let isOn = activeIDs.contains(pick.id)
                     filterPill(label: pick.displayName, category: pick,
@@ -1176,89 +1232,10 @@ struct PicksFilterBar: View {
                             }
                         }
                     }
-                    .opacity(showCommunityMap ? 0.4 : 1.0)
-                    .allowsHitTesting(!showCommunityMap)
                 }
             }
             .padding(.horizontal)
         }
-        .sheet(isPresented: $showCommunityIntro) {
-            communityIntroSheet
-        }
-    }
-
-    // MARK: - Community pill
-
-    @ViewBuilder
-    private var communityPill: some View {
-        Button {
-            if !hasSeenIntro {
-                showCommunityIntro = true
-            } else {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showCommunityMap.toggle()
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: showCommunityMap
-                      ? "globe.americas.fill" : "globe.americas")
-                    .font(.system(size: 14))
-                Text("Community")
-                    .font(.subheadline)
-                    .fontWeight(showCommunityMap ? .semibold : .regular)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(showCommunityMap ? .blue : Color(.systemBackground)))
-            .foregroundStyle(showCommunityMap ? .white : .primary)
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.3),
-                                      lineWidth: showCommunityMap ? 0 : 1))
-        }
-    }
-
-    // MARK: - First-tap explainer sheet
-
-    @ViewBuilder
-    private var communityIntroSheet: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "globe.americas.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.blue)
-                .padding(.top, 24)
-
-            Text("Community Map")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("See all verified spots from the Flezcal community "
-                 + "across all 50 categories. Ghost pins are hidden "
-                 + "— only confirmed spots appear.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-
-            Button {
-                hasSeenIntro = true
-                showCommunityIntro = false
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showCommunityMap = true
-                }
-            } label: {
-                Text("Got it")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
-        }
-        .presentationDetents([.height(280)])
-        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Filter pill
@@ -1274,7 +1251,7 @@ struct PicksFilterBar: View {
                         .font(.subheadline)
                         .fontWeight(isSelected ? .semibold : .regular)
                 }
-                if !isSelected && !showCommunityMap {
+                if !isSelected {
                     Text("Filter off")
                         .font(.caption2)
                         .fontWeight(.medium)
