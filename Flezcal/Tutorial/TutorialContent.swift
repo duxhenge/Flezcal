@@ -192,7 +192,8 @@ extension Tutorial {
             .screenshot(
                 "tutorial_spots_overview",
                 title: "Create a List of Spots to Consider",
-                body: "Search where you are or anywhere in the world. Search for spots the search terms don't find and add them. Our spot list is better than a web search.",
+                body: "Search where you are or anywhere in the world. Search for spots the search terms "
+                    + "don't find and add them. Our spot list is better than a web search.",
                 requiredTab: AppTab.spots,
                 cropRegion: CGRect(x: 0, y: 0.03, width: 1, height: 0.5)
             ),
@@ -211,7 +212,8 @@ extension Tutorial {
             .screenshot(
                 "tutorial_spots_search",
                 title: "Search Any City",
-                body: "Tap the location bar to search a different city. Type a name, pick from the suggestions, and the app scans that area for your Flezcals. Great for planning trips.",
+                body: "Tap the location bar to search a different city. Type a name, pick from the suggestions, "
+                    + "and the app scans that area for your Flezcals. Great for planning trips.",
                 cropRegion: CGRect(x: 0, y: 0.0, width: 1, height: 0.35)
             ),
             .screenshot(
@@ -270,7 +272,9 @@ extension Tutorial {
             .spotlight(
                 "pinToggles",
                 title: "Control What You See",
-                body: "Three toggles: Verified, Likely, and Nearby.\n\nTurn them on or off to focus on what matters.\n\nThe counts tell you how many of each are around you.",
+                body: "Three toggles: Verified, Likely, and Nearby."
+                    + "\n\nTurn them on or off to focus on what matters."
+                    + "\n\nThe counts tell you how many of each are around you.",
                 arrowEdge: .top,
                 shape: .rect(cornerRadius: 12)
             ),
@@ -314,7 +318,9 @@ extension Tutorial {
             .screenshot(
                 "tutorial_category_chips",
                 title: "Read the Chips",
-                body: "Solid color is already verified by the community.\n\nGreen ✓ = your search term found something.\n\nYellow ? = Still a possibility. If the name looks promising check it out.",
+                body: "Solid color is already verified by the community."
+                    + "\n\nGreen ✓ = your search term found something."
+                    + "\n\nYellow ? = Still a possibility. If the name looks promising check it out.",
                 cropRegion: CGRect(x: 0, y: 0.25, width: 1, height: 0.2)
             ),
             .screenshot(
@@ -338,7 +344,9 @@ extension Tutorial {
             .screenshot(
                 "tutorial_rate_spot",
                 title: "Rate It",
-                body: "We have high standards to identify the best!\n\nYour rating helps the best spots rise to the top.\n\nOnly rate what you've actually tried.",
+                body: "We have high standards to identify the best!"
+                    + "\n\nYour rating helps the best spots rise to the top."
+                    + "\n\nOnly rate what you've actually tried.",
                 cropRegion: CGRect(x: 0, y: 0.28, width: 1, height: 0.65)
             ),
         ],

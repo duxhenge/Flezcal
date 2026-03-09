@@ -55,7 +55,9 @@ struct WelcomeContent: Codable {
             WelcomePage(
                 icon: "map.fill",
                 headline: "The Map Works for You",
-                description: "Pick your Flezcals and the map highlights matches nearby. Verified pins are community-confirmed. Likely pins (green ghost pins) are menu-scanned matches. Nearby pins (yellow) haven't been checked yet. Use the toggle pills to control which pins you see.",
+                description: "Pick your Flezcals and the map highlights matches nearby. Verified pins are community-confirmed. "
+                    + "Likely pins (green ghost pins) are menu-scanned matches. Nearby pins (yellow) haven't been checked yet. "
+                    + "Use the toggle pills to control which pins you see.",
                 color: "blue"
             ),
             WelcomePage(

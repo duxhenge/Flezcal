@@ -96,10 +96,13 @@ enum RankConfig {
         _communitySize = count
     }
 
+    /// The lowest rank level (Bell Pepper). Used as fallback for score == 0.
+    private static let bottomLevel = levels[levels.count - 1]
+
     /// Determine rank level index from a percentile (0.0 = top, 1.0 = bottom).
     static func levelIndex(forPercentile pct: Double) -> Int {
-        for (i, level) in levels.enumerated() {
-            if pct <= level.cumulativePct { return i }
+        for (i, level) in levels.enumerated() where pct <= level.cumulativePct {
+            return i
         }
         return levels.count - 1
     }
@@ -107,21 +110,21 @@ enum RankConfig {
     /// Returns rank title for a given percentile.
     /// When community is too small, returns "New" for anyone with score > 0.
     static func title(forPercentile pct: Double, score: Int = 1) -> String {
-        guard score > 0 else { return levels.last!.title }
+        guard score > 0 else { return bottomLevel.title }
         guard isPercentileActive else { return newRank.title }
         return levels[levelIndex(forPercentile: pct)].title
     }
 
     /// Returns rank icon for a given percentile.
     static func icon(forPercentile pct: Double, score: Int = 1) -> String {
-        guard score > 0 else { return levels.last!.icon }
+        guard score > 0 else { return bottomLevel.icon }
         guard isPercentileActive else { return newRank.icon }
         return levels[levelIndex(forPercentile: pct)].icon
     }
 
     /// Returns the current rank level tuple for a given percentile.
     static func currentLevel(forPercentile pct: Double, score: Int = 1) -> (title: String, icon: String, cumulativePct: Double) {
-        guard score > 0 else { return levels.last! }
+        guard score > 0 else { return bottomLevel }
         guard isPercentileActive else { return newRank }
         return levels[levelIndex(forPercentile: pct)]
     }

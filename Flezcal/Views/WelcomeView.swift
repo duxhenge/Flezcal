@@ -108,7 +108,8 @@ struct WelcomeView: View {
                             icon: "storefront",
                             tint: .orange,
                             headline: "Own a Spot?",
-                            message: "If you own or manage a place that serves great food or drinks, add your spot and update your offerings just like any other user, for free. Want a verified badge, locked menu details, and a reservation link? Contact us about Owner Verification.",
+                            message: "If you own or manage a place that serves great food or drinks, add your spot and update your offerings just like any other user, for free. "
+                                + "Want a verified badge, locked menu details, and a reservation link? Contact us about Owner Verification.",
                             linkText: "Contact us at contact@flezcal.app",
                             linkURL: "mailto:contact@flezcal.app"
                         )

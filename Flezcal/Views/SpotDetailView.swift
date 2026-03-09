@@ -1065,7 +1065,8 @@ private struct AddFlezcalFlow: View {
         .alert("Custom Flezcal Added!", isPresented: $showCustomPickInfo) {
             Button("Got It") { dismiss() }
         } message: {
-            Text("Your custom Flezcal has been tagged on this spot. Custom Flezcals don't include ratings, verifications, or offerings yet. Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
+            Text("Your custom Flezcal has been tagged on this spot. Custom Flezcals don't include ratings, verifications, or offerings yet. "
+                + "Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
         }
         .overlay {
             if isSaving {

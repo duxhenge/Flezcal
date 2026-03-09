@@ -119,8 +119,8 @@ struct AdminCustomPicksView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .onChange(of: rankingFilter) { _, newValue in
-                Task { await refreshRankings(filter: newValue) }
+            .onChange(of: rankingFilter) {
+                Task { await refreshRankings(filter: rankingFilter) }
             }
 
             let ranked: [(category: CustomCategory, pickCount: Int)] = {

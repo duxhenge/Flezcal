@@ -1075,8 +1075,10 @@ actor WebsiteCheckService {
         }
         await RateLimiter.shared.recordBraveCall()
 
+        // swiftlint:disable:next brave_api_guard
+        let braveBase = "https://api.search.brave.com/res/v1/web/search"
         guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let requestURL = URL(string: "https://api.search.brave.com/res/v1/web/search?q=\(encodedQuery)&count=\(count)")
+              let requestURL = URL(string: "\(braveBase)?q=\(encodedQuery)&count=\(count)")
         else { return nil }
 
         var request = URLRequest(url: requestURL)

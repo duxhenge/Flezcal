@@ -86,17 +86,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Select Xcode version matching local development
-      - name: Select Xcode
+      # Log Xcode environment for debugging
+      - name: Xcode Info
         run: |
-          # List available Xcode versions for debugging
-          ls /Applications/ | grep Xcode || true
-          # Use Xcode 16.2 if available, otherwise fall back to default
-          if [ -d "/Applications/Xcode_16.2.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.2.app
-          elif [ -d "/Applications/Xcode_16.4.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.4.app
-          fi
           xcodebuild -version
           xcrun simctl list devices available | head -20
 
@@ -171,7 +163,12 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | xcpretty --color
+            2>&1 | tee build.log | xcpretty --color || {
+              echo "::group::Full build log (last 100 lines)"
+              tail -100 build.log
+              echo "::endgroup::"
+              exit 1
+            }
 
       # Run unit tests only (skip UI tests)
       - name: Unit Tests
