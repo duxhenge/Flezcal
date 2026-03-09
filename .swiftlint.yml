@@ -115,6 +115,7 @@ identifier_name:
     - i
     - x
     - y
+    - _communitySize  # Private backing store in RankConfig, leading underscore is intentional
 
 # Type name length
 type_name:

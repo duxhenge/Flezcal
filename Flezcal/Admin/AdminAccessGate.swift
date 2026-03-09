@@ -1,7 +1,7 @@
 import Foundation
 
 enum AdminAccess {
-    // Replace with your Firebase Auth UID
+    // swiftlint:disable:next hardcoded_uid
     static let adminUID = "FFrKO5dcaNNlTzM6msCXcLha1d33"
 
     static func isAdmin(uid: String?) -> Bool {

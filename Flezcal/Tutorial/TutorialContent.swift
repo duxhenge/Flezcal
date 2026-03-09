@@ -141,12 +141,16 @@ extension Tutorial {
         steps: [
             .textOnly(
                 title: "Sign In",
-                body: "Join our passionate community. Share your best food and drink experiences and where you found them. Signing in lets you add spots, rate them, verify what others have found, and climb the leaderboard. Sign in with Apple is the fastest way. You're free to browse without an account, but the real fun starts when you contribute."
+                body: "Join our passionate community. Share your best food and drink experiences and where you found them. "
+                    + "Signing in lets you add spots, rate them, verify what others have found, and climb the leaderboard. "
+                    + "Sign in with Apple is the fastest way. You're free to browse without an account, but the real fun starts when you contribute."
             ),
             .spotlight(
                 "pickSubtitle",
                 title: "This Is Your Home Base",
-                body: "Flezcals are your cravings. Share your very best experiences. Let the community help you find them. Web searches are available but its community input that helps the most.",
+                body: "Flezcals are your cravings. Share your very best experiences. "
+                    + "Let the community help you find them. Web searches are available "
+                    + "but its community input that helps the most.",
                 arrowEdge: .bottom,
                 requiredTab: AppTab.myPicks,
                 shape: .rect(cornerRadius: 12)
@@ -161,13 +165,16 @@ extension Tutorial {
             .spotlight(
                 "customizeButton",
                 title: "Make It Yours",
-                body: "There are 50+ trending categories to choose from, and you can have up to 3 active at once. Your picks shape everything: the map, the search results, the ghost pins.",
+                body: "There are 50+ trending categories to choose from, and you can have up to 3 active at once. "
+                    + "Your picks shape everything: the map, the search results, the ghost pins.",
                 arrowEdge: .bottom,
                 shape: .rect(cornerRadius: 16)
             ),
             .textOnly(
                 title: "Or Create Something New",
-                body: "Don't see your thing? Tap \"Create Your Own\" Flezcal category. Name it, pick an emoji, and refine your search terms. We track them and when enough people search for the same thing, it can become an official category."
+                body: "Don't see your thing? Tap \"Create Your Own\" Flezcal category. "
+                    + "Name it, pick an emoji, and refine your search terms. We track them "
+                    + "and when enough people search for the same thing, it can become an official category."
             ),
         ],
         estimatedMinutes: 1
@@ -235,7 +242,10 @@ extension Tutorial {
             .spotlight(
                 "mapView",
                 title: "Your Discovery Map",
-                body: "This is where the magic of community input will grow your experience. The best information comes from spots with Flezcals verified by people like you.\n\nThe app can also search for your Flezcals among unverified spots when limited community input is available. Search anywhere in the world.",
+                body: "This is where the magic of community input will grow your experience. "
+                    + "The best information comes from spots with Flezcals verified by people like you."
+                    + "\n\nThe app can also search for your Flezcals among unverified spots "
+                    + "when limited community input is available. Search anywhere in the world.",
                 arrowEdge: .top,
                 requiredTab: AppTab.explore,
                 shape: .rect(cornerRadius: 0)
@@ -243,7 +253,11 @@ extension Tutorial {
             .screenshot(
                 "tutorial_pin_colors",
                 title: "What the Colors Mean",
-                body: "Solid pins are Verified spots, the most valuable information we have.\n\nGreen pins with checkmarks are Likely web search matches that are found with your keywords on websites.\n\nYellow ghost pins are Nearby spots that may need a deeper website search. Click on one if it seems like a likely spot for your Flezcal.",
+                body: "Solid pins are Verified spots, the most valuable information we have."
+                    + "\n\nGreen pins with checkmarks are Likely web search matches "
+                    + "that are found with your keywords on websites."
+                    + "\n\nYellow ghost pins are Nearby spots that may need a deeper website search. "
+                    + "Click on one if it seems like a likely spot for your Flezcal.",
                 cropRegion: CGRect(x: 0, y: 0.05, width: 1, height: 0.6)
             ),
             .spotlight(

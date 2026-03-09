@@ -27,11 +27,13 @@ enum AppConstants {
 
     // Both URLs must be publicly accessible or Apple will reject the app.
     // privacyPolicyURL is shown in Profile → About and required by App Store guidelines.
+    // swiftlint:disable force_unwrapping
     static let privacyPolicyURL = URL(string: "https://flezcal.app/privacy")!
     static let termsURL = URL(string: "https://flezcal.app/terms")!
     static let supportURL = URL(string: "https://flezcal.app/support")!
     static let supportEmail = "support@flezcal.app"
     static let supportMailURL = URL(string: "mailto:support@flezcal.app")!
+    // swiftlint:enable force_unwrapping
 
     // ✏️ Add, remove, or edit taglines here — one is picked at random each launch.
     static let taglines: [String] = [

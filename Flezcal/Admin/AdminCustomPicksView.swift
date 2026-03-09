@@ -203,7 +203,7 @@ struct AdminCustomPicksView: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 200)
             }
-            .onChange(of: trendWindow) { _, _ in
+            .onChange(of: trendWindow) {
                 Task { await refreshTrending() }
             }
 

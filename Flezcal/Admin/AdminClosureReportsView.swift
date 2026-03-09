@@ -58,8 +58,8 @@ struct AdminClosureReportsView: View {
             groups[report.spotID, default: []].append(report)
         }
 
-        return groups.map { spotID, reports in
-            let first = reports.first!
+        return groups.compactMap { spotID, reports in
+            guard let first = reports.first else { return nil }
             return (spotID: spotID, spotName: first.spotName, spotCity: first.spotCity, reports: reports)
         }
         .sorted { $0.reports.count > $1.reports.count } // Most reported first
