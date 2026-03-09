@@ -600,7 +600,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"";
+			shellScript = "SCRIPT=\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\nif [ -f \"$SCRIPT\" ]; then\n  \"$SCRIPT\" || echo \"warning: Crashlytics dSYM upload failed (non-fatal)\"\nelse\n  echo \"warning: Crashlytics run script not found at $SCRIPT — skipping dSYM upload\"\nfi\n";
 		};
 		DS0000010000000000000001 /* Deploy Firestore Rules */ = {
 			isa = PBXShellScriptBuildPhase;
