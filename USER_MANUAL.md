@@ -82,7 +82,7 @@ Flezcal includes 50 curated categories across three groups:
 
 **Food:** Mezcal, Handmade Tortillas, Tacos, Birria, Pozole, Ceviche, Mole, Pupusas, Ramen, Sushi, Omakase, Dim Sum, Pho, Bibimbap, Korean BBQ, Dumplings, Poke, Tapas, Paella, Iberico Ham, Wood-Fired Pizza, Oysters, Lobster Rolls, Tartare, Caviar
 
-**Drinks:** Whiskey, Amaro, New England IPA, Craft Beer, Natural Wine, Sake, Craft Cocktails, Specialty Coffee, Boba, Negroni, Matcha, Kombucha, Cider
+**Drinks:** Whiskey, Amaro, New England IPA, Craft Beer, Natural Wine, Sake, Craft Cocktails, Specialty Coffee, Boba, Tea, Matcha, Kombucha, Cider
 
 **Sweets & Specialty:** Flan, Artisan Chocolate, Khachapuri, Baklava, Churros, Gelato, Mochi, Empanadas, Crepes, Creme Brulee, Croissants, Tres Leches
 

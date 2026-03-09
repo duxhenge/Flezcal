@@ -533,16 +533,17 @@ extension FoodCategory {
         addSpotPrompt: "Search for a boba or bubble tea shop."
     )
 
-    static let negroni = FoodCategory(
-        id: "negroni",
-        displayName: "Negroni",
-        emoji: "🍹",
-        color: Color(red: 0.7, green: 0.15, blue: 0.1),
-        mapSearchTerms: ["negroni", "cocktail bar", "italian bar", "bar"],
-        websiteKeywords: ["negroni", "sbagliato", "boulevardier",
-                          "negroni menu", "negroni variations"],
-        relatedKeywords: ["campari", "aperol", "italian cocktail"],
-        addSpotPrompt: "Search for a bar known for its negroni."
+    static let tea = FoodCategory(
+        id: "tea",
+        displayName: "Tea",
+        emoji: "🍵",
+        color: Color(red: 0.4, green: 0.55, blue: 0.3),
+        mapSearchTerms: ["tea house", "tea room", "tea shop", "afternoon tea", "chai"],
+        websiteKeywords: ["loose leaf tea", "tea service", "afternoon tea",
+                          "high tea", "tea house", "tea room", "tea menu",
+                          "chai", "oolong", "pu-erh"],
+        relatedKeywords: ["tea", "herbal tea", "tea ceremony", "tea tasting"],
+        addSpotPrompt: "Search for a tea house, tea room, or cafe with a tea program."
     )
 
     static let matcha = FoodCategory(
@@ -734,6 +735,15 @@ extension FoodCategory {
     // These are NOT in allCategories but ARE in allKnownCategories
     // so existing spots tagged with these IDs still decode.
 
+    static let negroni = FoodCategory(
+        id: "negroni", displayName: "Negroni", emoji: "🍹",
+        color: Color(red: 0.7, green: 0.15, blue: 0.1),
+        mapSearchTerms: ["negroni", "cocktail bar", "italian bar", "bar"],
+        websiteKeywords: ["negroni", "sbagliato", "boulevardier",
+                          "negroni menu", "negroni variations"],
+        relatedKeywords: ["campari", "aperol", "italian cocktail"],
+        addSpotPrompt: "Search for a bar known for its negroni."
+    )
     static let bourbon = FoodCategory(
         id: "bourbon", displayName: "Bourbon", emoji: "🥃",
         color: Color(red: 0.72, green: 0.45, blue: 0.1),
@@ -819,7 +829,7 @@ extension FoodCategory {
         oysters, lobsterRolls, tartare, caviar,
         // ── 🍹 Drinks (14) ──
         mezcal, whiskey, amaro, newEnglandIPA, craftBeer, naturalWine,
-        sake, cocktails, specialtyCoffee, boba, negroni, matcha, kombucha, cider,
+        sake, cocktails, specialtyCoffee, boba, tea, matcha, kombucha, cider,
         // ── 🍰 Sweets & Specialty (12) ──
         flan, artisanChocolate, khachapuri, baklava, churros, gelato,
         mochi, empanadas, crepes, cremeBrulee, croissants, tresLeches,
@@ -828,7 +838,7 @@ extension FoodCategory {
     /// All categories including legacy/demoted ones that may still exist in Firestore.
     /// Use `allCategories` for the picker grid; use this for decoding/lookup.
     static let allKnownCategories: [FoodCategory] = allCategories + [
-        bourbon, singleMaltScotch, fernetBranca,
+        negroni, bourbon, singleMaltScotch, fernetBranca,
         peamealBacon, mapleSyrup, fugu, pierogi, smashburgers, pizza,
     ]
 
@@ -839,6 +849,7 @@ extension FoodCategory {
         "liquor store", "wine shop", "grocery store", "market", "butcher", "cheese shop",
         "taqueria", "trattoria", "brasserie", "izakaya", "cantina",
         "food hall", "food truck", "hotel", "fine dining", "steakhouse",
+        "tea house", "tea room", "roastery",
     ]
 
     /// SF Symbol icon for a venue type string. Used by EditSpotSearchView grid.
@@ -873,6 +884,9 @@ extension FoodCategory {
         case "hotel":           return "bed.double"
         case "fine dining":     return "star"
         case "steakhouse":      return "flame.fill"
+        case "tea house":       return "cup.and.saucer.fill"
+        case "tea room":        return "cup.and.saucer.fill"
+        case "roastery":        return "mug.fill"
         default:                return "mappin"
         }
     }

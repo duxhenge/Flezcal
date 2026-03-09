@@ -63,7 +63,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     case cocktails
     case specialtyCoffee = "specialty_coffee"
     case boba
-    case negroni
+    case tea
     case matcha
     case kombucha
     case cider
@@ -84,6 +84,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
 
     // ── Legacy (demoted — kept for Firestore backward compat) ─
 
+    case negroni
     case bourbon
     case singleMaltScotch = "single_malt_scotch"
     case fernetBranca   = "fernet_branca"
@@ -99,7 +100,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     /// Whether this is a legacy category no longer shown in the picker grid.
     var isLegacy: Bool {
         switch self {
-        case .bourbon, .singleMaltScotch, .fernetBranca,
+        case .negroni, .bourbon, .singleMaltScotch, .fernetBranca,
              .peamealBacon, .mapleSyrup, .fugu, .pierogi, .smashburgers, .pizza:
             return true
         default:
@@ -147,7 +148,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return "Craft Cocktails"
         case .specialtyCoffee:   return "Specialty Coffee"
         case .boba:              return "Boba"
-        case .negroni:           return "Negroni"
+        case .tea:               return "Tea"
         case .matcha:            return "Matcha"
         case .kombucha:          return "Kombucha"
         case .cider:             return "Cider"
@@ -164,6 +165,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return "Croissants"
         case .tresLeches:        return "Tres Leches"
         // ── Legacy ──
+        case .negroni:           return "Negroni"
         case .bourbon:           return "Bourbon"
         case .singleMaltScotch:  return "Single Malt Scotch"
         case .fernetBranca:      return "Fernet Branca"
@@ -216,7 +218,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return "🍸"
         case .specialtyCoffee:   return "☕"
         case .boba:              return "🧋"
-        case .negroni:           return "🍹"
+        case .tea:               return "🫖"
         case .matcha:            return "🍵"
         case .kombucha:          return "🫙"
         case .cider:             return "🍎"
@@ -233,6 +235,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return "🥐"
         case .tresLeches:        return "🍰"
         // ── Legacy ──
+        case .negroni:           return "🍹"
         case .bourbon:           return "🥃"
         case .singleMaltScotch:  return "🥃"
         case .fernetBranca:      return "🌿"
@@ -249,7 +252,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         // Spirit drinks
-        case .mezcal, .whiskey, .amaro, .negroni, .cider:
+        case .mezcal, .whiskey, .amaro, .cider:
             return "cup.and.saucer"
         // Beer
         case .newEnglandIPA, .craftBeer:
@@ -258,13 +261,13 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .naturalWine, .sake, .cocktails:
             return "wineglass"
         // Coffee / tea
-        case .specialtyCoffee, .matcha:
+        case .specialtyCoffee, .tea, .matcha:
             return "cup.and.saucer.fill"
         // Boba / kombucha
         case .boba, .kombucha:
             return "takeoutbag.and.cup.and.straw"
         // Legacy spirits
-        case .bourbon, .singleMaltScotch, .fernetBranca:
+        case .negroni, .bourbon, .singleMaltScotch, .fernetBranca:
             return "cup.and.saucer"
         // Everything else (food + sweets)
         default:
@@ -312,7 +315,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return Color(red: 0.2, green: 0.3, blue: 0.7)
         case .specialtyCoffee:   return Color(red: 0.4, green: 0.25, blue: 0.1)
         case .boba:              return Color(red: 0.7, green: 0.45, blue: 0.2)
-        case .negroni:           return Color(red: 0.7, green: 0.15, blue: 0.1)
+        case .tea:               return Color(red: 0.4, green: 0.55, blue: 0.3)
         case .matcha:            return Color(red: 0.3, green: 0.6, blue: 0.2)
         case .kombucha:          return Color(red: 0.5, green: 0.7, blue: 0.3)
         case .cider:             return Color(red: 0.7, green: 0.3, blue: 0.15)
@@ -329,6 +332,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return Color(red: 0.85, green: 0.7, blue: 0.3)
         case .tresLeches:        return Color(red: 0.95, green: 0.85, blue: 0.65)
         // ── Legacy ──
+        case .negroni:           return Color(red: 0.7, green: 0.15, blue: 0.1)
         case .bourbon:           return Color(red: 0.72, green: 0.45, blue: 0.1)
         case .singleMaltScotch:  return Color(red: 0.55, green: 0.3, blue: 0.05)
         case .fernetBranca:      return Color(red: 0.1, green: 0.35, blue: 0.15)
@@ -449,9 +453,10 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .boba:
             return ["boba", "bubble tea", "tapioca", "milk tea",
                     "taro", "boba shop"]
-        case .negroni:
-            return ["negroni", "sbagliato", "boulevardier",
-                    "negroni menu", "negroni variations"]
+        case .tea:
+            return ["loose leaf tea", "tea service", "afternoon tea",
+                    "high tea", "tea house", "tea room", "tea menu",
+                    "chai", "oolong", "pu-erh"]
         case .matcha:
             return ["matcha", "matcha latte", "ceremonial matcha",
                     "matcha menu", "koicha", "usucha"]
@@ -496,6 +501,9 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
             return ["tres leches", "three milk cake", "pastel tres leches",
                     "tres leches cake"]
         // ── Legacy ──
+        case .negroni:
+            return ["negroni", "sbagliato", "boulevardier",
+                    "negroni menu", "negroni variations"]
         case .bourbon:
             return ["bourbon", "kentucky bourbon", "small batch bourbon",
                     "single barrel bourbon", "bourbon selection"]
@@ -564,7 +572,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return "Search for a craft cocktail bar."
         case .specialtyCoffee:   return "Search for a specialty coffee shop or roastery."
         case .boba:              return "Search for a boba or bubble tea shop."
-        case .negroni:           return "Search for a bar known for its negroni."
+        case .tea:               return "Search for a tea house, tea room, or cafe with a tea program."
         case .matcha:            return "Search for a matcha cafe or tea house."
         case .kombucha:          return "Search for a kombucha bar or shop."
         case .cider:             return "Search for a cidery or cider bar."
@@ -581,6 +589,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return "Search for a bakery known for its croissants."
         case .tresLeches:        return "Search for a bakery or restaurant that serves tres leches."
         // ── Legacy ──
+        case .negroni:           return "Search for a bar known for its negroni."
         case .bourbon:           return "Search for a bar or restaurant with a bourbon selection."
         case .singleMaltScotch:  return "Search for a bar with a single malt scotch selection."
         case .fernetBranca:      return "Search for a bar that serves Fernet Branca."
@@ -636,7 +645,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return "Cocktail Styles"
         case .specialtyCoffee:   return "Coffee Methods"
         case .boba:              return "Drink Flavors"
-        case .negroni:           return "Negroni Variations"
+        case .tea:               return "Tea Varieties"
         case .matcha:            return "Matcha Types"
         case .kombucha:          return "Kombucha Flavors"
         case .cider:             return "Cider Styles"
@@ -653,6 +662,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return "Croissant Types"
         case .tresLeches:        return "Tres Leches Styles"
         // ── Legacy ──
+        case .negroni:           return "Negroni Variations"
         case .bourbon:           return "Bourbon Brands"
         case .singleMaltScotch:  return "Scotch Brands"
         case .fernetBranca:      return "Serving Styles"
@@ -705,7 +715,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return "style"
         case .specialtyCoffee:   return "method"
         case .boba:              return "flavor"
-        case .negroni:           return "variation"
+        case .tea:               return "variety"
         case .matcha:            return "type"
         case .kombucha:          return "flavor"
         case .cider:             return "style"
@@ -722,6 +732,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return "type"
         case .tresLeches:        return "style"
         // ── Legacy ──
+        case .negroni:           return "variation"
         case .bourbon:           return "brand"
         case .singleMaltScotch:  return "brand"
         case .fernetBranca:      return "style"
@@ -774,7 +785,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .cocktails:         return "e.g. Negroni, Old Fashioned, Mezcal Mule"
         case .specialtyCoffee:   return "e.g. Pour Over, Espresso, Cold Brew"
         case .boba:              return "e.g. Taro, Brown Sugar, Matcha"
-        case .negroni:           return "e.g. Classic, Sbagliato, White, Mezcal"
+        case .tea:               return "e.g. Earl Grey, Oolong, Pu-erh, Chai"
         case .matcha:            return "e.g. Ceremonial, Latte, Iced, Koicha"
         case .kombucha:          return "e.g. Ginger, Lavender, Hibiscus"
         case .cider:             return "e.g. Dry, Semi-Sweet, Rosé, Perry"
@@ -791,6 +802,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .croissants:        return "e.g. Butter, Almond, Pain au Chocolat"
         case .tresLeches:        return "e.g. Classic, Chocolate, Strawberry"
         // ── Legacy ──
+        case .negroni:           return "e.g. Classic, Sbagliato, White, Mezcal"
         case .bourbon:           return "e.g. Maker's Mark, Woodford Reserve, Buffalo Trace"
         case .singleMaltScotch:  return "e.g. Lagavulin, Macallan, Glenfiddich"
         case .fernetBranca:      return "e.g. Neat, with Cola, Cocktail"

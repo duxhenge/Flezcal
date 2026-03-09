@@ -97,8 +97,8 @@ enum CommunityOfferings {
 
     /// Returns a deduplicated, frequency-ranked list of known offerings
     /// for the given category, drawn from all saved spots.
-    /// For mezcal, the static MezcalBrands list is used as a base,
-    /// supplemented by any community-added brands not on the list.
+    /// For mezcal and tea, static lists are used as a base,
+    /// supplemented by any community-added entries not on the list.
     static func suggestions(for category: SpotCategory, from spots: [Spot]) -> [String] {
         // Count how many spots list each offering
         var frequency: [String: Int] = [:]
@@ -110,17 +110,22 @@ enum CommunityOfferings {
             }
         }
 
-        if category == .mezcal {
-            // Start with the full static brand list, then append any
-            // community-added brands not already in the static list.
-            let staticSet = Set(MezcalBrands.all.map { $0.lowercased() })
+        // Categories with static suggestion lists
+        let staticList: [String]? = switch category {
+        case .mezcal: MezcalBrands.all
+        case .tea:    TeaVarieties.all
+        default:      nil
+        }
+
+        if let staticList {
+            let staticSet = Set(staticList.map { $0.lowercased() })
             let communityExtras = frequency.keys
                 .filter { !staticSet.contains($0.lowercased()) }
                 .sorted { (frequency[$0] ?? 0) > (frequency[$1] ?? 0) }
-            return MezcalBrands.all + communityExtras
+            return staticList + communityExtras
         }
 
-        // Non-mezcal: sort by frequency (most popular first), then alphabetically
+        // Other categories: sort by frequency (most popular first), then alphabetically
         return frequency.keys.sorted { a, b in
             let fa = frequency[a] ?? 0
             let fb = frequency[b] ?? 0

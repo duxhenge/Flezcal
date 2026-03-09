@@ -50,6 +50,7 @@
 		B10000010000000000000017 /* StarRatingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000016 /* StarRatingView.swift */; };
 
 		B10000010000000000000019 /* MezcalBrands.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000018 /* MezcalBrands.swift */; };
+		B100000100000000000000C1 /* TeaVarieties.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000C1 /* TeaVarieties.swift */; };
 		B1000001000000000000001A /* MezcalInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000019 /* MezcalInputField.swift */; };
 		B1000001000000000000001B /* ContributorStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001A /* ContributorStats.swift */; };
 		B1000001000000000000001C /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001B /* LeaderboardView.swift */; };
@@ -158,6 +159,7 @@
 		B20000010000000000000016 /* StarRatingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRatingView.swift; sourceTree = "<group>"; };
 
 		B20000010000000000000018 /* MezcalBrands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalBrands.swift; sourceTree = "<group>"; };
+		B200000100000000000000C1 /* TeaVarieties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeaVarieties.swift; sourceTree = "<group>"; };
 		B20000010000000000000019 /* MezcalInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalInputField.swift; sourceTree = "<group>"; };
 		B2000001000000000000001A /* ContributorStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContributorStats.swift; sourceTree = "<group>"; };
 		B2000001000000000000001B /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
@@ -315,6 +317,7 @@
 				B20000010000000000000005 /* Review.swift */,
 				B20000010000000000000006 /* AppUser.swift */,
 				B20000010000000000000018 /* MezcalBrands.swift */,
+				B200000100000000000000C1 /* TeaVarieties.swift */,
 				B2000001000000000000001A /* ContributorStats.swift */,
 				B2000001000000000000001F /* WelcomeContent.swift */,
 				B200000100000000000000B1 /* FoodCategory.swift */,
@@ -653,6 +656,7 @@
 				B10000010000000000000017 /* StarRatingView.swift in Sources */,
 
 				B10000010000000000000019 /* MezcalBrands.swift in Sources */,
+				B100000100000000000000C1 /* TeaVarieties.swift in Sources */,
 				B1000001000000000000001A /* MezcalInputField.swift in Sources */,
 				B1000001000000000000001B /* ContributorStats.swift in Sources */,
 				B1000001000000000000001C /* LeaderboardView.swift in Sources */,
@@ -893,7 +897,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -930,7 +934,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
