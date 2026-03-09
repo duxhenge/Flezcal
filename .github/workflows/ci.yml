@@ -101,20 +101,25 @@ jobs:
           BRAVE_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
           SECRETS_FILE: ${{ secrets.SECRETS_XCCONFIG }}
         run: |
+          echo "BRAVE_KEY length: ${#BRAVE_KEY}"
+          echo "SECRETS_FILE length: ${#SECRETS_FILE}"
           if [ -n "$BRAVE_KEY" ]; then
-            printf 'BRAVE_SEARCH_API_KEY = %s\n' "$BRAVE_KEY" > Secrets.xcconfig
+            echo "BRAVE_SEARCH_API_KEY = $BRAVE_KEY" > Secrets.xcconfig
             echo "✓ Secrets.xcconfig injected from BRAVE_SEARCH_API_KEY"
           elif [ -n "$SECRETS_FILE" ]; then
-            printf '%s\n' "$SECRETS_FILE" > Secrets.xcconfig
+            echo "$SECRETS_FILE" > Secrets.xcconfig
             echo "✓ Secrets.xcconfig injected from SECRETS_XCCONFIG"
           else
             echo "::error::Set BRAVE_SEARCH_API_KEY (or SECRETS_XCCONFIG) in repo secrets"
             exit 1
           fi
-          # Validate it parses as xcconfig (has at least one KEY = VALUE line)
-          if ! grep -qE '^[A-Z_]+ *= *.' Secrets.xcconfig; then
+          echo "--- Secrets.xcconfig debug ---"
+          wc -l Secrets.xcconfig
+          cat -A Secrets.xcconfig | head -5
+          echo "---"
+          # Validate: at least one line with KEY = VALUE
+          if ! grep -qE '[A-Z_]+ *= *.' Secrets.xcconfig; then
             echo "::error::Secrets.xcconfig doesn't contain valid KEY = VALUE lines"
-            head -3 Secrets.xcconfig
             exit 1
           fi
 
