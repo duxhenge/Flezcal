@@ -94,34 +94,15 @@ jobs:
           xcrun simctl list runtimes
           xcrun simctl list devices available | head -30
 
-      # Inject Secrets.xcconfig — writes the key=value line directly.
-      # Requires BRAVE_SEARCH_API_KEY to be set in GitHub repo secrets.
+      # Inject Secrets.xcconfig for Brave Search API key.
+      # For CI, we just need a placeholder — the key is only used at runtime.
       - name: Inject Secrets.xcconfig
+        run: |
+          echo "BRAVE_SEARCH_API_KEY = ${BRAVE_KEY:-CI_PLACEHOLDER}" > Secrets.xcconfig
+          echo "✓ Secrets.xcconfig created"
+          cat Secrets.xcconfig
         env:
           BRAVE_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
-          SECRETS_FILE: ${{ secrets.SECRETS_XCCONFIG }}
-        run: |
-          echo "BRAVE_KEY length: ${#BRAVE_KEY}"
-          echo "SECRETS_FILE length: ${#SECRETS_FILE}"
-          if [ -n "$BRAVE_KEY" ]; then
-            echo "BRAVE_SEARCH_API_KEY = $BRAVE_KEY" > Secrets.xcconfig
-            echo "✓ Secrets.xcconfig injected from BRAVE_SEARCH_API_KEY"
-          elif [ -n "$SECRETS_FILE" ]; then
-            echo "$SECRETS_FILE" > Secrets.xcconfig
-            echo "✓ Secrets.xcconfig injected from SECRETS_XCCONFIG"
-          else
-            echo "::error::Set BRAVE_SEARCH_API_KEY (or SECRETS_XCCONFIG) in repo secrets"
-            exit 1
-          fi
-          echo "--- Secrets.xcconfig debug ---"
-          wc -l Secrets.xcconfig
-          cat -A Secrets.xcconfig | head -5
-          echo "---"
-          # Validate: at least one line with KEY = VALUE
-          if ! grep -qE '[A-Z_]+ *= *.' Secrets.xcconfig; then
-            echo "::error::Secrets.xcconfig doesn't contain valid KEY = VALUE lines"
-            exit 1
-          fi
 
       # Inject GoogleService-Info.plist from base64-encoded GitHub Secret
       - name: Inject GoogleService-Info.plist
