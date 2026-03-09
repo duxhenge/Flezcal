@@ -214,6 +214,37 @@ service cloud.firestore {
       }
     }
 
+    // Category picks collection — tracks which built-in and custom
+    // categories users have picked, with per-user dedup via pickers subcollection.
+    match /categoryPicks/{categoryId} {
+      // Admin and authenticated users can read pick counts
+      allow read: if request.auth != null;
+
+      // Authenticated users can create a new category pick document
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['categoryID', 'displayName', 'pickCount'])
+                    && request.resource.data.pickCount is int
+                    && request.resource.data.pickCount >= 0
+                    && request.resource.data.pickCount <= 1;
+
+      // Only allow pickCount increment/decrement updates (authenticated users)
+      allow update: if request.auth != null
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['pickCount']);
+
+      // No deleting category picks
+      allow delete: if false;
+
+      // Pickers subcollection — deduplicates pickCount per user
+      match /pickers/{userId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == userId;
+        allow delete: if request.auth != null
+                      && request.auth.uid == userId;
+      }
+    }
+
     // Custom search events — trend tracking for custom categories
     match /customSearchEvents/{eventId} {
       allow read: if request.auth != null;
