@@ -207,10 +207,9 @@ struct ContentView: View {
                 }
             }
         }
-        .onChange(of: authService.isSignedIn) { _, signedIn in
-            if signedIn {
-                picksService.ensurePicksSynced()
-            }
+        .onChange(of: authService.isSignedIn) { _, _ in
+            // Pick tracking now fires only on deliberate user actions
+            // (toggle/add), not on sign-in. No sync needed here.
         }
         .onChange(of: authService.needsDisplayNamePrompt) { _, needsPrompt in
             if needsPrompt {

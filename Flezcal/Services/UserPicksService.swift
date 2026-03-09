@@ -50,19 +50,8 @@ class UserPicksService: ObservableObject {
         customPickCount = loadCustomPickCount()
         searchRadiusDegrees = loadSearchRadius()
         FoodCategory.registerUserPicks(picks)
-        // Sync default picks to Firestore on launch. On first launch this
-        // ensures the 3 default categories get counted even if the user never
-        // changes their picks. The guard inside syncPicksToFirestore() bails
-        // if the user isn't signed in yet; that's fine because AuthService
-        // triggers a re-sync via ensurePicksSynced() once auth settles.
-        syncPicksToFirestore()
-    }
-
-    /// Called after sign-in to ensure picks are synced to Firestore.
-    /// On first launch, init() calls syncPicksToFirestore() but the user
-    /// isn't authenticated yet so the guard bails. This fills the gap.
-    func ensurePicksSynced() {
-        syncPicksToFirestore()
+        // No Firestore sync on launch — only deliberate user actions
+        // (toggle/addCustomPick) trigger pick tracking.
     }
 
     // MARK: - Public API
@@ -265,9 +254,11 @@ class UserPicksService: ObservableObject {
     private static let pickCollection = "categoryPicks"
     private let db = Firestore.firestore()
 
-    /// Track which categories the user has picked in the `categoryPicks`
+    /// Track which built-in categories the user has picked in the `categoryPicks`
     /// Firestore collection with per-user dedup via `pickers` subcollection.
-    /// Previous picks that were removed get decremented.
+    /// Only counts additions — picks are never decremented (permanent tally).
+    /// Custom picks (custom_*) are excluded — they're tracked separately
+    /// via CustomCategoryService → `customCategories` collection.
     /// Fire-and-forget — never blocks the UI.
     private func syncPicksToFirestore() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
@@ -276,15 +267,11 @@ class UserPicksService: ObservableObject {
         let previousIDs = Set(previousSyncedPicks)
 
         let added = currentIDs.subtracting(previousIDs)
-        let removed = previousIDs.subtracting(currentIDs)
+            .filter { !$0.hasPrefix("custom_") } // Custom picks tracked separately
 
         for catID in added {
             let displayName = picks.first(where: { $0.id == catID })?.displayName ?? catID
             incrementPick(categoryID: catID, displayName: displayName, uid: uid)
-        }
-
-        for catID in removed {
-            decrementPick(categoryID: catID, uid: uid)
         }
 
         previousSyncedPicks = Array(currentIDs)
@@ -329,41 +316,22 @@ class UserPicksService: ObservableObject {
         }
     }
 
-    private func decrementPick(categoryID: String, uid: String) {
-        let docRef = db.collection(Self.pickCollection).document(categoryID)
-        let pickerRef = docRef.collection("pickers").document(uid)
-
-        Task.detached { @Sendable in
-            do {
-                let pickerDoc = try await pickerRef.getDocument()
-                guard pickerDoc.exists else { return } // Wasn't counted
-
-                try await docRef.updateData(["pickCount": FieldValue.increment(Int64(-1))])
-                try await pickerRef.delete()
-                #if DEBUG
-                print("[PickTrack] Decremented '\(categoryID)' for user \(uid)")
-                #endif
-            } catch {
-                #if DEBUG
-                print("[PickTrack] Error decrementing '\(categoryID)': \(error.localizedDescription)")
-                #endif
-            }
-        }
-    }
-
     // MARK: - Admin: Fetch Global Pick Counts
 
-    /// Fetches all category pick counts from Firestore, ranked by popularity.
+    /// Fetches built-in category pick counts from Firestore, ranked by popularity.
+    /// Excludes custom picks (custom_*) — those are tracked in `customCategories`.
     /// Used by the admin dashboard to rank hardcoded categories.
     static func fetchPickCounts() async -> [(categoryID: String, displayName: String, pickCount: Int)] {
         let db = Firestore.firestore()
         do {
             let snapshot = try await db.collection(pickCollection)
                 .order(by: "pickCount", descending: true)
-                .limit(to: 20)
+                .limit(to: 60)
                 .getDocuments()
 
             return snapshot.documents.compactMap { doc in
+                // Exclude custom picks — they belong in the Custom Picks table
+                guard !doc.documentID.hasPrefix("custom_") else { return nil }
                 let data = doc.data()
                 guard let displayName = data["displayName"] as? String,
                       let pickCount = data["pickCount"] as? Int
@@ -378,8 +346,9 @@ class UserPicksService: ObservableObject {
         }
     }
 
-    /// Fetches pick counts filtered by time window. Counts only pickers whose
-    /// `pickedDate` falls on or after `since`. Returns results ranked by count.
+    /// Fetches built-in pick counts filtered by time window. Counts only pickers
+    /// whose `pickedDate` falls on or after `since`. Excludes custom picks (custom_*).
+    /// Returns results ranked by count.
     static func fetchPickCounts(since: Date) async -> [(categoryID: String, displayName: String, pickCount: Int)] {
         let db = Firestore.firestore()
         do {
@@ -387,6 +356,8 @@ class UserPicksService: ObservableObject {
             var results: [(categoryID: String, displayName: String, pickCount: Int)] = []
 
             for doc in catSnapshot.documents {
+                // Exclude custom picks — they belong in the Custom Picks table
+                guard !doc.documentID.hasPrefix("custom_") else { continue }
                 let data = doc.data()
                 guard let displayName = data["displayName"] as? String else { continue }
 
