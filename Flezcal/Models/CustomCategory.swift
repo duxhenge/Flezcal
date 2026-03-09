@@ -27,6 +27,60 @@ struct CustomCategory: Identifiable, Codable, Equatable, Hashable {
     var normalizedName: String { displayName.lowercased().trimmingCharacters(in: .whitespaces) }
     var color: Color { .purple }
 
+    // MARK: - Memberwise init (required because custom init(from:) suppresses it)
+
+    init(
+        displayName: String,
+        emoji: String,
+        createdBy: String,
+        createdDate: Date,
+        pickCount: Int = 0,
+        websiteKeywords: [String],
+        mapSearchTerms: [String]
+    ) {
+        self.displayName = displayName
+        self.emoji = emoji
+        self.createdBy = createdBy
+        self.createdDate = createdDate
+        self.pickCount = pickCount
+        self.websiteKeywords = websiteKeywords
+        self.mapSearchTerms = mapSearchTerms
+    }
+
+    // MARK: - Codable
+
+    /// Custom CodingKeys so `normalizedName` (a computed property) is included
+    /// in the Firestore document. Firestore rules require it to exist and
+    /// match the document ID on create.
+    enum CodingKeys: String, CodingKey {
+        case displayName, emoji, createdBy, createdDate, pickCount
+        case websiteKeywords, mapSearchTerms, normalizedName
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(displayName, forKey: .displayName)
+        try container.encode(emoji, forKey: .emoji)
+        try container.encode(createdBy, forKey: .createdBy)
+        try container.encode(createdDate, forKey: .createdDate)
+        try container.encode(pickCount, forKey: .pickCount)
+        try container.encode(websiteKeywords, forKey: .websiteKeywords)
+        try container.encode(mapSearchTerms, forKey: .mapSearchTerms)
+        try container.encode(normalizedName, forKey: .normalizedName)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        emoji = try container.decode(String.self, forKey: .emoji)
+        createdBy = try container.decode(String.self, forKey: .createdBy)
+        createdDate = try container.decodeIfPresent(Date.self, forKey: .createdDate) ?? Date()
+        pickCount = try container.decodeIfPresent(Int.self, forKey: .pickCount) ?? 0
+        websiteKeywords = try container.decodeIfPresent([String].self, forKey: .websiteKeywords) ?? []
+        mapSearchTerms = try container.decodeIfPresent([String].self, forKey: .mapSearchTerms) ?? []
+        // normalizedName is computed — ignore any stored value
+    }
+
     // MARK: - Equatable / Hashable by normalizedName
 
     static func == (lhs: CustomCategory, rhs: CustomCategory) -> Bool {

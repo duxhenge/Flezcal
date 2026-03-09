@@ -4,15 +4,17 @@ import SwiftUI
 // ============================================================
 // SpotCategory — the full set of confirmable food/drink types.
 //
-// Each case rawValue matches the corresponding FoodCategory.id
-// so SpotCategory(rawValue: foodCategory.id) always succeeds.
+// Built-in cases have rawValue == FoodCategory.id.
+// Custom Flezcals use `.custom("custom_pupusas")` — they behave
+// identically to built-ins, pulling display metadata from the
+// registered FoodCategory at runtime.
 //
 // Backward-compatible: existing Firestore documents decode
-// without any migration. Legacy cases are kept but won't
-// appear in the picker grid.
+// without any migration. Unknown category strings decode as
+// `.custom(id)` instead of being silently dropped.
 // ============================================================
 
-enum SpotCategory: String, Codable, CaseIterable, Identifiable {
+enum SpotCategory: Hashable, Identifiable {
 
     // ── 🍽️ FOOD ──────────────────────────────────────────────
 
@@ -33,22 +35,22 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     case ramen
     case sushi
     case omakase
-    case dimSum         = "dim_sum"
+    case dimSum
     case pho
     case bibimbap
-    case koreanBBQ      = "korean_bbq"
+    case koreanBBQ
     case dumplings
     case poke
 
     // European / Mediterranean
     case tapas
     case paella
-    case ibericoHam     = "iberico_ham"
-    case woodFiredPizza = "wood_fired_pizza"
+    case ibericoHam
+    case woodFiredPizza
 
     // Seafood / Raw
     case oysters
-    case lobsterRolls   = "lobster_rolls"
+    case lobsterRolls
     case tartare
     case caviar
 
@@ -56,12 +58,12 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
 
     case whiskey
     case amaro
-    case newEnglandIPA  = "new_england_ipa"
-    case craftBeer      = "craft_beer"
-    case naturalWine    = "natural_wine"
+    case newEnglandIPA
+    case craftBeer
+    case naturalWine
     case sake
     case cocktails
-    case specialtyCoffee = "specialty_coffee"
+    case specialtyCoffee
     case boba
     case tea
     case matcha
@@ -70,7 +72,7 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
 
     // ── 🍰 SWEETS & SPECIALTY ─────────────────────────────────
 
-    case artisanChocolate = "artisan_chocolate"
+    case artisanChocolate
     case khachapuri
     case baklava
     case churros
@@ -78,24 +80,195 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
     case mochi
     case empanadas
     case crepes
-    case cremeBrulee    = "creme_brulee"
+    case cremeBrulee
     case croissants
-    case tresLeches     = "tres_leches"
+    case tresLeches
 
     // ── Legacy (demoted — kept for Firestore backward compat) ─
 
     case negroni
     case bourbon
-    case singleMaltScotch = "single_malt_scotch"
-    case fernetBranca   = "fernet_branca"
-    case peamealBacon   = "peameal_bacon"
-    case mapleSyrup     = "maple_syrup"
+    case singleMaltScotch
+    case fernetBranca
+    case peamealBacon
+    case mapleSyrup
     case fugu
     case pierogi
     case smashburgers
     case pizza
 
+    // ── Custom Flezcals (user-created, same capabilities) ─────
+
+    /// A user-created category. The associated string is the category ID
+    /// (e.g. "custom_pupusas"). Display metadata is looked up from
+    /// the registered FoodCategory at runtime.
+    case custom(String)
+
+    // MARK: - ID & Raw Value
+
+    /// Stable string identifier. Matches FoodCategory.id and is used as
+    /// the Firestore key in categories, categoryRatings, offerings, etc.
     var id: String { rawValue }
+
+    /// String representation for Firestore storage and Codable encoding.
+    var rawValue: String {
+        switch self {
+        case .mezcal:            return "mezcal"
+        case .flan:              return "flan"
+        case .tortillas:         return "tortillas"
+        case .tacos:             return "tacos"
+        case .birria:            return "birria"
+        case .pozole:            return "pozole"
+        case .ceviche:           return "ceviche"
+        case .mole:              return "mole"
+        case .pupusas:           return "pupusas"
+        case .ramen:             return "ramen"
+        case .sushi:             return "sushi"
+        case .omakase:           return "omakase"
+        case .dimSum:            return "dim_sum"
+        case .pho:               return "pho"
+        case .bibimbap:          return "bibimbap"
+        case .koreanBBQ:         return "korean_bbq"
+        case .dumplings:         return "dumplings"
+        case .poke:              return "poke"
+        case .tapas:             return "tapas"
+        case .paella:            return "paella"
+        case .ibericoHam:        return "iberico_ham"
+        case .woodFiredPizza:    return "wood_fired_pizza"
+        case .oysters:           return "oysters"
+        case .lobsterRolls:      return "lobster_rolls"
+        case .tartare:           return "tartare"
+        case .caviar:            return "caviar"
+        case .whiskey:           return "whiskey"
+        case .amaro:             return "amaro"
+        case .newEnglandIPA:     return "new_england_ipa"
+        case .craftBeer:         return "craft_beer"
+        case .naturalWine:       return "natural_wine"
+        case .sake:              return "sake"
+        case .cocktails:         return "cocktails"
+        case .specialtyCoffee:   return "specialty_coffee"
+        case .boba:              return "boba"
+        case .tea:               return "tea"
+        case .matcha:            return "matcha"
+        case .kombucha:          return "kombucha"
+        case .cider:             return "cider"
+        case .artisanChocolate:  return "artisan_chocolate"
+        case .khachapuri:        return "khachapuri"
+        case .baklava:           return "baklava"
+        case .churros:           return "churros"
+        case .gelato:            return "gelato"
+        case .mochi:             return "mochi"
+        case .empanadas:         return "empanadas"
+        case .crepes:            return "crepes"
+        case .cremeBrulee:       return "creme_brulee"
+        case .croissants:        return "croissants"
+        case .tresLeches:        return "tres_leches"
+        case .negroni:           return "negroni"
+        case .bourbon:           return "bourbon"
+        case .singleMaltScotch:  return "single_malt_scotch"
+        case .fernetBranca:      return "fernet_branca"
+        case .peamealBacon:      return "peameal_bacon"
+        case .mapleSyrup:        return "maple_syrup"
+        case .fugu:              return "fugu"
+        case .pierogi:           return "pierogi"
+        case .smashburgers:      return "smashburgers"
+        case .pizza:             return "pizza"
+        case .custom(let id):    return id
+        }
+    }
+
+    /// Creates a SpotCategory from a raw string. Returns a built-in case
+    /// if one matches, otherwise `.custom(id)` — never returns nil.
+    init(rawValue: String) {
+        switch rawValue {
+        case "mezcal":            self = .mezcal
+        case "flan":              self = .flan
+        case "tortillas":        self = .tortillas
+        case "tacos":            self = .tacos
+        case "birria":           self = .birria
+        case "pozole":           self = .pozole
+        case "ceviche":          self = .ceviche
+        case "mole":             self = .mole
+        case "pupusas":          self = .pupusas
+        case "ramen":            self = .ramen
+        case "sushi":            self = .sushi
+        case "omakase":          self = .omakase
+        case "dim_sum":          self = .dimSum
+        case "pho":              self = .pho
+        case "bibimbap":         self = .bibimbap
+        case "korean_bbq":       self = .koreanBBQ
+        case "dumplings":        self = .dumplings
+        case "poke":             self = .poke
+        case "tapas":            self = .tapas
+        case "paella":           self = .paella
+        case "iberico_ham":      self = .ibericoHam
+        case "wood_fired_pizza": self = .woodFiredPizza
+        case "oysters":          self = .oysters
+        case "lobster_rolls":    self = .lobsterRolls
+        case "tartare":          self = .tartare
+        case "caviar":           self = .caviar
+        case "whiskey":          self = .whiskey
+        case "amaro":            self = .amaro
+        case "new_england_ipa":  self = .newEnglandIPA
+        case "craft_beer":       self = .craftBeer
+        case "natural_wine":     self = .naturalWine
+        case "sake":             self = .sake
+        case "cocktails":        self = .cocktails
+        case "specialty_coffee": self = .specialtyCoffee
+        case "boba":             self = .boba
+        case "tea":              self = .tea
+        case "matcha":           self = .matcha
+        case "kombucha":         self = .kombucha
+        case "cider":            self = .cider
+        case "artisan_chocolate": self = .artisanChocolate
+        case "khachapuri":       self = .khachapuri
+        case "baklava":          self = .baklava
+        case "churros":          self = .churros
+        case "gelato":           self = .gelato
+        case "mochi":            self = .mochi
+        case "empanadas":        self = .empanadas
+        case "crepes":           self = .crepes
+        case "creme_brulee":     self = .cremeBrulee
+        case "croissants":       self = .croissants
+        case "tres_leches":      self = .tresLeches
+        case "negroni":          self = .negroni
+        case "bourbon":          self = .bourbon
+        case "single_malt_scotch": self = .singleMaltScotch
+        case "fernet_branca":    self = .fernetBranca
+        case "peameal_bacon":    self = .peamealBacon
+        case "maple_syrup":      self = .mapleSyrup
+        case "fugu":             self = .fugu
+        case "pierogi":          self = .pierogi
+        case "smashburgers":     self = .smashburgers
+        case "pizza":            self = .pizza
+        default:                 self = .custom(rawValue)
+        }
+    }
+
+    /// All built-in cases (excludes `.custom`). Replaces CaseIterable.
+    static let allCases: [SpotCategory] = [
+        // Food
+        .mezcal, .flan, .tortillas,
+        .tacos, .birria, .pozole, .ceviche, .mole, .pupusas,
+        .ramen, .sushi, .omakase, .dimSum, .pho, .bibimbap, .koreanBBQ, .dumplings, .poke,
+        .tapas, .paella, .ibericoHam, .woodFiredPizza,
+        .oysters, .lobsterRolls, .tartare, .caviar,
+        // Drinks
+        .whiskey, .amaro, .newEnglandIPA, .craftBeer, .naturalWine,
+        .sake, .cocktails, .specialtyCoffee, .boba, .tea, .matcha, .kombucha, .cider,
+        // Sweets & Specialty
+        .artisanChocolate, .khachapuri, .baklava, .churros, .gelato,
+        .mochi, .empanadas, .crepes, .cremeBrulee, .croissants, .tresLeches,
+        // Legacy
+        .negroni, .bourbon, .singleMaltScotch, .fernetBranca,
+        .peamealBacon, .mapleSyrup, .fugu, .pierogi, .smashburgers, .pizza,
+    ]
+
+    /// Whether this is a custom (user-created) category.
+    var isCustom: Bool {
+        if case .custom = self { return true }
+        return false
+    }
 
     /// Whether this is a legacy category no longer shown in the picker grid.
     var isLegacy: Bool {
@@ -107,6 +280,18 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
             return false
         }
     }
+
+    // MARK: - FoodCategory Lookup (for custom categories)
+
+    /// Looks up the FoodCategory for this SpotCategory.
+    /// Built-in categories use FoodCategory.allKnownCategories.
+    /// Custom categories use FoodCategory.activeCustomPicks.
+    private var foodCategory: FoodCategory? {
+        FoodCategory.by(id: rawValue)
+            ?? FoodCategory.activeCustomPicks.first { $0.id == rawValue }
+    }
+
+    // MARK: - Display Properties
 
     /// Name shown in the UI
     var displayName: String {
@@ -175,6 +360,9 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return "Pierogi"
         case .smashburgers:      return "Smashburgers"
         case .pizza:             return "Neapolitan Pizza"
+        // ── Custom ──
+        case .custom:
+            return foodCategory?.displayName ?? rawValue.replacingOccurrences(of: "custom_", with: "").capitalized
         }
     }
 
@@ -245,6 +433,9 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return "🥟"
         case .smashburgers:      return "🍔"
         case .pizza:             return "🍕"
+        // ── Custom ──
+        case .custom:
+            return foodCategory?.emoji ?? "🍽️"
         }
     }
 
@@ -269,13 +460,14 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         // Legacy spirits
         case .negroni, .bourbon, .singleMaltScotch, .fernetBranca:
             return "cup.and.saucer"
-        // Everything else (food + sweets)
+        // Everything else (food + sweets + custom)
         default:
             return "fork.knife"
         }
     }
 
-    /// Accent color for badges, filter chips, and map pins
+    /// Accent color for badges, filter chips, and map pins.
+    /// Custom Flezcals use white — they get a permanent color when promoted.
     var color: Color {
         switch self {
         // ── Food ──
@@ -342,6 +534,8 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return Color(red: 0.8, green: 0.6, blue: 0.15)
         case .smashburgers:      return Color(red: 0.8, green: 0.15, blue: 0.1)
         case .pizza:             return Color(red: 0.8, green: 0.2, blue: 0.1)
+        // ── Custom — white pin until promoted ──
+        case .custom:            return .white
         }
     }
 
@@ -529,6 +723,9 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pizza:
             return ["neapolitan", "wood fired", "napoletana",
                     "pizza napoletana", "00 flour", "fior di latte"]
+        // ── Custom — pull from registered FoodCategory ──
+        case .custom:
+            return foodCategory?.websiteKeywords ?? []
         }
     }
 
@@ -599,6 +796,10 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return "Search for a restaurant that serves pierogi."
         case .smashburgers:      return "Search for a restaurant that serves smashburgers."
         case .pizza:             return "Search for a Neapolitan or wood-fired pizzeria."
+        // ── Custom ──
+        case .custom:
+            return foodCategory?.addSpotPrompt
+                ?? "Search for a restaurant or shop that serves \(displayName.lowercased())."
         }
     }
 
@@ -672,6 +873,8 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return "Pierogi Fillings"
         case .smashburgers:      return "Burger Styles"
         case .pizza:             return "Pizza Styles"
+        // ── Custom ──
+        case .custom:            return "\(displayName) Varieties"
         }
     }
 
@@ -742,6 +945,8 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return "filling"
         case .smashburgers:      return "style"
         case .pizza:             return "style"
+        // ── Custom ──
+        case .custom:            return "variety"
         }
     }
 
@@ -812,6 +1017,23 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         case .pierogi:           return "e.g. Potato & Cheese, Sauerkraut, Meat"
         case .smashburgers:      return "e.g. Single, Double, Cheese, Special Sauce"
         case .pizza:             return "e.g. Margherita, Marinara, Diavola"
+        // ── Custom ──
+        case .custom:            return "e.g. Add specific varieties or styles"
         }
+    }
+}
+
+// MARK: - Codable
+
+extension SpotCategory: Codable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self.init(rawValue: value)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
