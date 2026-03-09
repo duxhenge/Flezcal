@@ -252,10 +252,9 @@ struct MyRankCard: View {
                 }
                 ForEach(stats.topCategories(2), id: \.id) { entry in
                     Spacer()
-                    if let cat = SpotCategory(rawValue: entry.id) {
-                        StatPill(value: "\(entry.count)", label: cat.displayName) {
-                            CategoryIcon(category: cat, size: 16)
-                        }
+                    let cat = SpotCategory(rawValue: entry.id)
+                    StatPill(value: "\(entry.count)", label: cat.displayName) {
+                        CategoryIcon(category: cat, size: 16)
                     }
                 }
                 // Pad with spacers if fewer than 2 top categories

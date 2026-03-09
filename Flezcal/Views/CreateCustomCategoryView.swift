@@ -10,7 +10,6 @@ struct CreateCustomCategoryView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String = ""
-    @State private var selectedEmoji: String = "🍽️"
     @State private var validationError: String?
     @State private var isSaving = false
     @State private var showSuccess = false
@@ -27,11 +26,8 @@ struct CreateCustomCategoryView: View {
     /// stops updating the list so edits aren't overwritten.
     @State private var userEditedTerms = false
 
-    private let emojiChoices = [
-        "🍽️", "🥘", "🍛", "🥙", "🫔", "🥗", "🍝",
-        "🧆", "🥩", "🍗", "🦐", "🦑", "🫕", "🍖",
-        "🥐", "🧁", "🍰", "🥧", "🍩", "🧇", "🍪",
-    ]
+    /// All custom Flezcals use the worm emoji until promoted to a built-in category.
+    private let customEmoji = "🐛"
 
     var body: some View {
         NavigationStack {
@@ -55,8 +51,8 @@ struct CreateCustomCategoryView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(.purple)
 
-                        Text("Custom Flezcals let you search and tag spots, but don't include ratings, verifications, or offerings yet. "
-                            + "Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
+                        Text("Custom Flezcals work just like built-in categories — search for spots, add ratings, verify locations, and track offerings. "
+                            + "Popular custom Flezcals are tracked across the community and may be promoted to built-in categories with unique icons.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -150,36 +146,31 @@ struct CreateCustomCategoryView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
 
-                    // Emoji picker
+                    // Custom Flezcal icon notice
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Pick an Emoji")
+                        Text("Icon")
                             .font(.headline)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(emojiChoices, id: \.self) { emoji in
-                                    Button {
-                                        selectedEmoji = emoji
-                                    } label: {
-                                        Text(emoji)
-                                            .font(.system(size: 28))
-                                            .frame(width: 48, height: 48)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(selectedEmoji == emoji
-                                                          ? Color.purple.opacity(0.2)
-                                                          : Color(.systemGray6))
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(selectedEmoji == emoji
-                                                            ? Color.purple
-                                                            : Color.clear,
-                                                            lineWidth: 2)
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
+                        HStack(spacing: 10) {
+                            Text(customEmoji)
+                                .font(.system(size: 28))
+                                .frame(width: 48, height: 48)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.purple.opacity(0.2))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.purple, lineWidth: 2)
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("All custom Flezcals use the worm icon")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text("If your category becomes popular, it may be promoted to a built-in Flezcal with its own unique icon.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -196,7 +187,7 @@ struct CreateCustomCategoryView: View {
                                 .font(.headline)
 
                             HStack(spacing: 8) {
-                                Text(selectedEmoji)
+                                Text(customEmoji)
                                     .font(.title2)
                                 Text(name.trimmingCharacters(in: .whitespaces))
                                     .font(.subheadline)
@@ -420,7 +411,7 @@ struct CreateCustomCategoryView: View {
 
         let custom = CustomCategory.create(
             displayName: trimmed,
-            emoji: selectedEmoji,
+            emoji: customEmoji,
             createdBy: userID,
             websiteKeywords: searchTerms
         )

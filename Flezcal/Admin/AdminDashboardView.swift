@@ -32,6 +32,10 @@ struct AdminDashboardView: View {
                 AdminClosureReportsView(viewModel: viewModel)
                     .tabItem { Label("Closures", systemImage: "exclamationmark.triangle") }
                     .tag(5)
+
+                AdminCategoriesView()
+                    .tabItem { Label("Categories", systemImage: "tag") }
+                    .tag(6)
             }
             .tint(.orange)
             .navigationTitle("Admin")

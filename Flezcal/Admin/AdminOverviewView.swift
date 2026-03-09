@@ -231,7 +231,7 @@ struct AdminOverviewView: View {
     private func categoriesSection(metrics: SpotMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Flezcal Picks", systemImage: "square.grid.2x2")
+                Label("Flezcal Picks (\(categoryPickCounts.count))", systemImage: "square.grid.2x2")
                     .font(.headline)
                 Spacer()
             }
@@ -252,7 +252,7 @@ struct AdminOverviewView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             } else {
-                ForEach(Array(categoryPickCounts.enumerated()), id: \.element.categoryID) { index, item in
+                ForEach(Array(categoryPickCounts.prefix(20).enumerated()), id: \.element.categoryID) { index, item in
                     HStack(spacing: 8) {
                         Text("\(index + 1)")
                             .font(.caption)
@@ -405,12 +405,9 @@ struct AdminOverviewView: View {
     private func customPicksSection() -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Custom Picks", systemImage: "sparkles")
+                Label("Custom Picks (\(customService.customCategories.count))", systemImage: "sparkles")
                     .font(.headline)
                 Spacer()
-                Text("\(customService.customCategories.count) total")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Picker("Time", selection: $customPicksTimeFilter) {

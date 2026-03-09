@@ -326,6 +326,12 @@ struct Spot: Identifiable, Codable, Hashable {
         } else {
             categories = [.flan]
         }
+        #if DEBUG
+        let customCats = categories.filter(\.isCustom)
+        if !customCats.isEmpty {
+            print("[CustomFlezcal] Decoded spot with custom categories: \(customCats.map(\.rawValue))")
+        }
+        #endif
 
         addedByUserID = try container.decode(String.self, forKey: .addedByUserID)
         addedDate = try container.decode(Date.self, forKey: .addedDate)

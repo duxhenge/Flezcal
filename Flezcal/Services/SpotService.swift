@@ -163,9 +163,8 @@ class SpotService: ObservableObject {
 
             // Apply merged data to the kept entry
             for (catKey, items) in mergedOfferings where !items.isEmpty {
-                if let cat = SpotCategory(rawValue: catKey) {
-                    _ = await addOfferings(spotID: keeper.id, category: cat, newOfferings: items)
-                }
+                let cat = SpotCategory(rawValue: catKey)
+                _ = await addOfferings(spotID: keeper.id, category: cat, newOfferings: items)
             }
             if allCategories.count > keeper.categories.count {
                 _ = await addCategories(spotID: keeper.id, newCategories: allCategories)
@@ -556,14 +555,29 @@ class SpotService: ObservableObject {
     /// Removes a category from an existing spot. The spot must have at least 2 categories
     /// (cannot remove the last one). Also cleans up the `categoryAddedBy` attribution entry.
     func removeCategory(spotID: String, category: SpotCategory) async -> Bool {
-        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
-        guard spots[index].categories.count > 1 else { return false }
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else {
+            #if DEBUG
+            print("[SpotService] removeCategory: spot \(spotID) not found in local cache")
+            #endif
+            return false
+        }
+        guard spots[index].categories.count > 1 else {
+            #if DEBUG
+            print("[SpotService] removeCategory: spot has only 1 category, cannot remove")
+            #endif
+            return false
+        }
 
         var updated = spots[index].categories
         updated.removeAll { $0 == category }
 
         // Safety: don't leave an empty array
-        guard !updated.isEmpty else { return false }
+        guard !updated.isEmpty else {
+            #if DEBUG
+            print("[SpotService] removeCategory: removal would leave empty array")
+            #endif
+            return false
+        }
 
         do {
             let rawCategories = updated.map { $0.rawValue }
@@ -574,13 +588,149 @@ class SpotService: ObservableObject {
             attribution.removeValue(forKey: category.rawValue)
             data["categoryAddedBy"] = attribution.isEmpty ? FieldValue.delete() : attribution
 
+            #if DEBUG
+            print("[SpotService] removeCategory: writing to Firestore — removing \(category.rawValue) from \(spots[index].name)")
+            print("[SpotService]   categories before: \(spots[index].categories.map(\.rawValue))")
+            print("[SpotService]   categories after:  \(rawCategories)")
+            #endif
+
             try await db.collection(collectionName).document(spotID).updateData(data)
             spots[index].categories = updated
             spots[index].categoryAddedBy = attribution.isEmpty ? nil : attribution
+
+            #if DEBUG
+            print("[SpotService] removeCategory: ✅ Firestore + local cache updated")
+            #endif
             return true
         } catch {
             errorMessage = "Failed to remove category: \(error.localizedDescription)"
             CrashReporter.record(error, context: "SpotService.removeCategory")
+            #if DEBUG
+            print("[SpotService] removeCategory: ❌ Firestore write failed: \(error.localizedDescription)")
+            #endif
+            return false
+        }
+    }
+
+    // MARK: - Admin Remove Category (Full Cleanup)
+
+    /// Admin-only category removal that cleans up all per-category data in addition
+    /// to removing the category itself. Uses 4 sequential Firestore writes that each
+    /// match an existing security rule block:
+    ///   1. categories + categoryAddedBy + websiteDetectedCategories
+    ///   2. categoryRatings + averageRating + reviewCount
+    ///   3. verificationUpCount + verificationDownCount + lastVerificationDate + verificationUserCount
+    ///   4. offerings (+ mezcalOfferings for legacy compat)
+    func adminRemoveCategory(spotID: String, category: SpotCategory) async -> Bool {
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return false }
+        guard spots[index].categories.count > 1 else { return false }
+
+        var updated = spots[index].categories
+        updated.removeAll { $0 == category }
+        guard !updated.isEmpty else { return false }
+
+        let catKey = category.rawValue
+        let docRef = db.collection(collectionName).document(spotID)
+
+        do {
+            // ── Write 1: categories + attribution + websiteDetectedCategories ──
+            let rawCategories = updated.map { $0.rawValue }
+            var catData: [String: Any] = ["categories": rawCategories]
+
+            var attribution = spots[index].categoryAddedBy ?? [:]
+            attribution.removeValue(forKey: catKey)
+            catData["categoryAddedBy"] = attribution.isEmpty ? FieldValue.delete() : attribution
+
+            var detectedCats = spots[index].websiteDetectedCategories ?? []
+            detectedCats.removeAll { $0 == catKey }
+            catData["websiteDetectedCategories"] = detectedCats.isEmpty ? FieldValue.delete() : detectedCats
+
+            try await docRef.updateData(catData)
+
+            // ── Write 2: categoryRatings + averageRating + reviewCount (skip if nothing to clean) ──
+            var ratings = spots[index].categoryRatings ?? [:]
+            let hadRating = ratings.removeValue(forKey: catKey) != nil
+
+            var overallAverage = spots[index].averageRating
+            var totalReviews = spots[index].reviewCount
+
+            if hadRating {
+                // Recalculate overall weighted average from remaining categories
+                totalReviews = 0
+                var weightedSum = 0.0
+                for entry in ratings.values {
+                    totalReviews += entry.count
+                    weightedSum += entry.average * Double(entry.count)
+                }
+                overallAverage = totalReviews > 0 ? weightedSum / Double(totalReviews) : 0.0
+
+                var ratingData: [String: Any] = [
+                    "averageRating": overallAverage,
+                    "reviewCount": totalReviews
+                ]
+                if ratings.isEmpty {
+                    ratingData["categoryRatings"] = FieldValue.delete()
+                } else {
+                    var catRatingsEncoded: [String: [String: Any]] = [:]
+                    for (key, val) in ratings {
+                        catRatingsEncoded[key] = ["average": val.average, "count": val.count]
+                    }
+                    ratingData["categoryRatings"] = catRatingsEncoded
+                }
+                try await docRef.updateData(ratingData)
+            }
+
+            // ── Write 3: verification tallies (skip if nothing to clean) ──
+            var ups = spots[index].verificationUpCount ?? [:]
+            var downs = spots[index].verificationDownCount ?? [:]
+            let hadUps = ups.removeValue(forKey: catKey) != nil
+            let hadDowns = downs.removeValue(forKey: catKey) != nil
+
+            if hadUps || hadDowns {
+                var verifyData: [String: Any] = [
+                    "verificationUpCount": ups.isEmpty ? FieldValue.delete() : ups,
+                    "verificationDownCount": downs.isEmpty ? FieldValue.delete() : downs,
+                    "verificationUserCount": spots[index].verificationUserCount
+                ]
+                if let lastDate = spots[index].lastVerificationDate {
+                    verifyData["lastVerificationDate"] = lastDate
+                }
+                try await docRef.updateData(verifyData)
+            }
+
+            // ── Write 4: offerings (skip if nothing to clean) ──
+            var allOfferings = spots[index].offerings ?? [:]
+            let hadOfferings = allOfferings.removeValue(forKey: catKey) != nil
+
+            if hadOfferings {
+                var offerData: [String: Any] = [
+                    "offerings": allOfferings.isEmpty ? FieldValue.delete() : allOfferings
+                ]
+                // Keep mezcalOfferings in sync for legacy compat
+                if let mezcalList = allOfferings["mezcal"] {
+                    offerData["mezcalOfferings"] = mezcalList
+                } else if catKey == "mezcal" {
+                    // Removing mezcal category — clear legacy field too
+                    offerData["mezcalOfferings"] = FieldValue.delete()
+                }
+                try await docRef.updateData(offerData)
+            }
+
+            // ── Update local state ──
+            spots[index].categories = updated
+            spots[index].categoryAddedBy = attribution.isEmpty ? nil : attribution
+            spots[index].websiteDetectedCategories = detectedCats.isEmpty ? nil : detectedCats
+            spots[index].categoryRatings = ratings.isEmpty ? nil : ratings
+            spots[index].averageRating = overallAverage
+            spots[index].reviewCount = totalReviews
+            spots[index].verificationUpCount = ups.isEmpty ? nil : ups
+            spots[index].verificationDownCount = downs.isEmpty ? nil : downs
+            spots[index].offerings = allOfferings.isEmpty ? nil : allOfferings
+
+            return true
+        } catch {
+            errorMessage = "Admin category removal failed: \(error.localizedDescription)"
+            CrashReporter.record(error, context: "SpotService.adminRemoveCategory")
             return false
         }
     }

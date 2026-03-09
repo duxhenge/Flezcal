@@ -2,10 +2,27 @@ import SwiftUI
 
 /// Custom veladora (mezcal glass) icon drawn as a SwiftUI vector.
 /// Ribbed straight-sided veladora tumbler, orange wedge left, sal de gusano mound right.
+///
+/// **Minimum safe size: 16pt.** Below that, Canvas geometry calculations can produce
+/// NaN values that freeze CoreGraphics. Falls back to emoji at tiny sizes.
 struct VeladoraIcon: View {
     var size: CGFloat = 28
 
+    /// Below this threshold, Canvas geometry produces NaN values that crash CoreGraphics.
+    private static let minimumCanvasSize: CGFloat = 14
+
     var body: some View {
+        if size < Self.minimumCanvasSize {
+            // Emoji fallback — avoids NaN from Canvas geometry at very small sizes
+            Text("🥃")
+                .font(.system(size: size * 0.75))
+                .frame(width: size, height: size)
+        } else {
+            canvasIcon
+        }
+    }
+
+    private var canvasIcon: some View {
         Canvas { context, canvasSize in
             let w = canvasSize.width
             let h = canvasSize.height
@@ -131,10 +148,27 @@ struct VeladoraIcon: View {
 /// Custom flan icon drawn as a SwiftUI vector.
 /// A round caramel custard on a small plate, with golden-brown
 /// caramel dripping over a pale yellow custard body.
+///
+/// **Minimum safe size: 16pt.** Below that, Canvas geometry calculations can produce
+/// NaN values that freeze CoreGraphics. Falls back to emoji at tiny sizes.
 struct FlanIcon: View {
     var size: CGFloat = 28
 
+    /// Below this threshold, Canvas geometry produces NaN values that crash CoreGraphics.
+    private static let minimumCanvasSize: CGFloat = 14
+
     var body: some View {
+        if size < Self.minimumCanvasSize {
+            // Emoji fallback — avoids NaN from Canvas geometry at very small sizes
+            Text("🍮")
+                .font(.system(size: size * 0.75))
+                .frame(width: size, height: size)
+        } else {
+            canvasIcon
+        }
+    }
+
+    private var canvasIcon: some View {
         Canvas { context, canvasSize in
             let w = canvasSize.width
             let h = canvasSize.height
@@ -221,6 +255,7 @@ struct FlanIcon: View {
 
 /// Convenience view that shows the right icon for any SpotCategory.
 /// Flan and Mezcal use custom SwiftUI drawings.
+/// Custom Flezcals show the 🐛 worm emoji on a white pin.
 /// Any new category automatically gets its emoji as a fallback — no changes needed here.
 struct CategoryIcon: View {
     let category: SpotCategory
@@ -233,7 +268,8 @@ struct CategoryIcon: View {
         case .mezcal:
             VeladoraIcon(size: size)
         default:
-            // All other categories: render the emoji at a proportional size
+            // All other categories (including custom): render the emoji at a proportional size
+            // Custom Flezcals use 🐛 worm emoji (via SpotCategory.emoji)
             Text(category.emoji)
                 .font(.system(size: size * 0.75))
                 .frame(width: size, height: size)
@@ -242,19 +278,23 @@ struct CategoryIcon: View {
 }
 
 /// Convenience view that shows the right icon for any FoodCategory.
-/// Mezcal → veladora candle, Flan → flan drawing, all others → emoji text.
+/// Mezcal → veladora candle, Flan → flan drawing, custom → 🐛 worm emoji.
 /// Use this everywhere a FoodCategory icon is needed (ghost pins, filter pills, pick cards).
 struct FoodCategoryIcon: View {
     let category: FoodCategory
     var size: CGFloat = 28
 
     var body: some View {
-        switch category.id {
-        case "mezcal":
+        if category.id == "mezcal" {
             VeladoraIcon(size: size)
-        case "flan":
+        } else if category.id == "flan" {
             FlanIcon(size: size)
-        default:
+        } else if category.id.hasPrefix("custom_") {
+            // Custom Flezcals always show 🐛 worm until promoted to built-in
+            Text("🐛")
+                .font(.system(size: size * 0.75))
+                .frame(width: size, height: size)
+        } else {
             Text(category.emoji)
                 .font(.system(size: size * 0.75))
                 .frame(width: size, height: size)

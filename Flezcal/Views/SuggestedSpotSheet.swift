@@ -54,14 +54,9 @@ struct SuggestedSpotSheet: View {
     /// Use the frozen result so the sheet is stable after opening.
     private var displayResult: MultiCategoryCheckResult? { frozenResult }
 
-    /// Custom category tag derived from the user's selected Flezcal.
-    private var customCategoryTag: String? {
-        guard let flezcal = selectedFlezcal, flezcal.id.hasPrefix("custom_") else { return nil }
-        return String(flezcal.id.dropFirst("custom_".count))
-    }
-
     /// The SpotCategory for the user's selected Flezcal.
-    /// Returns nil for custom categories (they have no SpotCategory case).
+    /// Always returns a value — built-in IDs map to their case, custom IDs
+    /// map to `.custom(id)`.
     private var selectedSpotCategory: SpotCategory? {
         guard let flezcal = selectedFlezcal else { return nil }
         return SpotCategory(rawValue: flezcal.id)
@@ -177,6 +172,9 @@ struct SuggestedSpotSheet: View {
                     disabledCategoryIDs: Set(),
                     onSelect: { category in
                         selectedFlezcal = category
+                        #if DEBUG
+                        print("[CustomFlezcal] Selected Flezcal: \(category.displayName) (id: \(category.id), isCustom: \(category.id.hasPrefix("custom_")))")
+                        #endif
                         showFlezcalPicker = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                             showConfirmSpot = true
@@ -189,32 +187,17 @@ struct SuggestedSpotSheet: View {
                 .presentationDetents([.large])
             }
             .sheet(isPresented: $showConfirmSpot) {
-                if selectedFlezcal != nil,
-                   let spotCat = selectedSpotCategory {
+                if let spotCat = selectedSpotCategory {
+                    let _ = {
+                        #if DEBUG
+                        print("[CustomFlezcal] Opening ConfirmSpotView with SpotCategory: \(spotCat.rawValue) (isCustom: \(spotCat.isCustom))")
+                        #endif
+                    }()
                     ConfirmSpotView(
                         mapItem: suggestion.mapItem,
                         category: spotCat,
                         preVerified: true,
-                        websiteDetectedCategories: detectedCategoryIDs,
-                        customCategoryTag: customCategoryTag
-                    ) {
-                        onConfirm()
-                        dismiss()
-                    }
-                    .environmentObject(authService)
-                    .environmentObject(spotService)
-                    .environmentObject(photoService)
-                } else if selectedFlezcal != nil {
-                    // Custom category — no SpotCategory case.
-                    let fallbackCat = userPicks.compactMap({ SpotCategory(rawValue: $0.id) }).first
-                        ?? SpotCategory(rawValue: suggestedCategory.id)
-                        ?? .mezcal
-                    ConfirmSpotView(
-                        mapItem: suggestion.mapItem,
-                        category: fallbackCat,
-                        preVerified: true,
-                        websiteDetectedCategories: detectedCategoryIDs,
-                        customCategoryTag: customCategoryTag
+                        websiteDetectedCategories: detectedCategoryIDs
                     ) {
                         onConfirm()
                         dismiss()

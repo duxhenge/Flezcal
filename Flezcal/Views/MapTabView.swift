@@ -614,7 +614,7 @@ struct MapTabView: View {
                 }
                 Button("No", role: .cancel) { }
             } message: {
-                Text("Do you want to see all user verified spots for all 50 Flezcals in your search area?")
+                Text("Do you want to see all verified spots in your search area, including custom Flezcals?")
             }
         }
     }

@@ -285,10 +285,9 @@ enum SpotCategory: Hashable, Identifiable {
 
     /// Looks up the FoodCategory for this SpotCategory.
     /// Built-in categories use FoodCategory.allKnownCategories.
-    /// Custom categories use FoodCategory.activeCustomPicks.
+    /// Custom categories use the nonisolated snapshot of activeCustomPicks.
     private var foodCategory: FoodCategory? {
         FoodCategory.by(id: rawValue)
-            ?? FoodCategory.activeCustomPicks.first { $0.id == rawValue }
     }
 
     // MARK: - Display Properties
@@ -433,9 +432,9 @@ enum SpotCategory: Hashable, Identifiable {
         case .pierogi:           return "🥟"
         case .smashburgers:      return "🍔"
         case .pizza:             return "🍕"
-        // ── Custom ──
+        // ── Custom — always 🐛 worm until promoted to built-in ──
         case .custom:
-            return foodCategory?.emoji ?? "🍽️"
+            return "🐛"
         }
     }
 

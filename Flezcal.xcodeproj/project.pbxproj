@@ -82,6 +82,7 @@
 		VF0000010000000000000004 /* ClosureReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000004 /* ClosureReportService.swift */; };
 
 		VF0000010000000000000006 /* AdminClosureReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF0000020000000000000006 /* AdminClosureReportsView.swift */; };
+		AC0000010000000000000001 /* AdminCategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000020000000000000001 /* AdminCategoriesView.swift */; };
 		CP0000010000000000000001 /* AdminCustomPicksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CP0000020000000000000001 /* AdminCustomPicksView.swift */; };
 		FR0000010000000000000001 /* FlezcalRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR0000020000000000000001 /* FlezcalRowView.swift */; };
 		FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR0000020000000000000002 /* InlineRatingPicker.swift */; };
@@ -197,6 +198,7 @@
 		VF0000020000000000000004 /* ClosureReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosureReportService.swift; sourceTree = "<group>"; };
 
 		VF0000020000000000000006 /* AdminClosureReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClosureReportsView.swift; sourceTree = "<group>"; };
+		AC0000020000000000000001 /* AdminCategoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminCategoriesView.swift; sourceTree = "<group>"; };
 		CP0000020000000000000001 /* AdminCustomPicksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminCustomPicksView.swift; sourceTree = "<group>"; };
 		FR0000020000000000000001 /* FlezcalRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalRowView.swift; sourceTree = "<group>"; };
 		FR0000020000000000000002 /* InlineRatingPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineRatingPicker.swift; sourceTree = "<group>"; };
@@ -270,6 +272,7 @@
 				AD0000020000000000000008 /* AdminDeadlinesView.swift */,
 				AD0000020000000000000009 /* AdminNotesView.swift */,
 				VF0000020000000000000006 /* AdminClosureReportsView.swift */,
+				AC0000020000000000000001 /* AdminCategoriesView.swift */,
 				CP0000020000000000000001 /* AdminCustomPicksView.swift */,
 				AF0000020000000000000001 /* AdminFeatureFlagsView.swift */,
 				AF0000020000000000000002 /* AdminFeedbackListView.swift */,
@@ -698,6 +701,7 @@
 				VF0000010000000000000004 /* ClosureReportService.swift in Sources */,
 
 				VF0000010000000000000006 /* AdminClosureReportsView.swift in Sources */,
+				AC0000010000000000000001 /* AdminCategoriesView.swift in Sources */,
 				CP0000010000000000000001 /* AdminCustomPicksView.swift in Sources */,
 				NM0000010000000000000001 /* NetworkMonitor.swift in Sources */,
 				AN0000010000000000000001 /* AnalyticsService.swift in Sources */,

@@ -28,6 +28,7 @@ struct SpotDetailView: View {
     // Remove-category state
     @State private var categoryToRemove: SpotCategory?
     @State private var showRemoveCategoryAlert = false
+    @State private var showRemoveCategoryFailed = false
 
     // Closure reporting
     @State private var showClosureReportAlert = false
@@ -491,7 +492,17 @@ struct SpotDetailView: View {
                                 await spotService.hideSpot(spotID: spot.id)
                                 dismiss()
                             } else {
-                                _ = await spotService.removeCategory(spotID: spot.id, category: cat)
+                                let success = await spotService.removeCategory(spotID: spot.id, category: cat)
+                                if !success {
+                                    showRemoveCategoryFailed = true
+                                }
+                                #if DEBUG
+                                print("[SpotDetail] removeCategory(\(cat.rawValue)) from \(spot.name): \(success ? "✅" : "❌")")
+                                if success {
+                                    let updatedSpot = spotService.spots.first(where: { $0.id == spot.id })
+                                    print("[SpotDetail]   categories after: \(updatedSpot?.categories.map(\.rawValue) ?? [])")
+                                }
+                                #endif
                             }
                         }
                     }
@@ -507,6 +518,11 @@ struct SpotDetailView: View {
                         Text("Remove \(cat.displayName) from \(spot.name)? This can be re-added later.")
                     }
                 }
+            }
+            .alert("Removal Failed", isPresented: $showRemoveCategoryFailed) {
+                Button("OK") {}
+            } message: {
+                Text("Could not remove the category. The change may not have been saved to the server.")
             }
         }
     }
@@ -982,7 +998,6 @@ private struct AddFlezcalFlow: View {
     /// Spot already had this category — skip straight to rating offer
     @State private var showAlreadyThere = false
     /// Custom category was added — show info about limited features
-    @State private var showCustomPickInfo = false
 
     /// Live version of the spot — reflects in-session mutations.
     private var liveSpot: Spot {
@@ -1062,12 +1077,6 @@ private struct AddFlezcalFlow: View {
         } message: {
             Text(thankYouMessage)
         }
-        .alert("Custom Flezcal Added!", isPresented: $showCustomPickInfo) {
-            Button("Got It") { dismiss() }
-        } message: {
-            Text("Your custom Flezcal has been tagged on this spot. Custom Flezcals don't include ratings, verifications, or offerings yet. "
-                + "Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
-        }
         .overlay {
             if isSaving {
                 ZStack {
@@ -1090,32 +1099,23 @@ private struct AddFlezcalFlow: View {
             var alreadyHadCategory = false
 
             // Save curated category via addCategories
-            if let spotCat = SpotCategory(rawValue: category.id) {
-                savedCategory = spotCat
+            let spotCat = SpotCategory(rawValue: category.id)
+            savedCategory = spotCat
 
-                // Check if category already exists on the live spot
-                if liveSpot.categories.contains(spotCat) {
-                    alreadyHadCategory = true
-                    success = true
-                } else {
-                    success = await spotService.addCategories(
-                        spotID: spot.id,
-                        newCategories: [spotCat],
-                        addedBy: userID
-                    )
-                    if success {
-                        // Auto-create verification (bug fix: old AddCategorySheet was missing this)
-                        await VerificationService.autoVerify(spotID: spot.id, userID: userID, category: spotCat)
-                    }
-                }
-            }
-
-            // Save custom category tag
-            let isCustomPick = category.id.hasPrefix("custom_")
-            if isCustomPick {
-                let tag = String(category.id.dropFirst("custom_".count))
-                _ = await spotService.addCustomCategoryTags(spotID: spot.id, tags: [tag])
+            // Check if category already exists on the live spot
+            if liveSpot.categories.contains(spotCat) {
+                alreadyHadCategory = true
                 success = true
+            } else {
+                success = await spotService.addCategories(
+                    spotID: spot.id,
+                    newCategories: [spotCat],
+                    addedBy: userID
+                )
+                if success {
+                    // Auto-create verification (bug fix: old AddCategorySheet was missing this)
+                    await VerificationService.autoVerify(spotID: spot.id, userID: userID, category: spotCat)
+                }
             }
 
             await MainActor.run {
@@ -1125,13 +1125,7 @@ private struct AddFlezcalFlow: View {
                 } else if success {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    if isCustomPick {
-                        // Custom picks don't have rating infrastructure yet —
-                        // show info message instead of the rating flow.
-                        showCustomPickInfo = true
-                    } else {
-                        showRatingFlow = true
-                    }
+                    showRatingFlow = true
                 }
             }
         }

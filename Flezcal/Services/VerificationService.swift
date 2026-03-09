@@ -483,8 +483,8 @@ class VerificationService: ObservableObject {
         // Recalculate aggregates for each category that had migrated reviews
         let affectedCategories = Set(spotReviews.compactMap { $0.category ?? "flan" })
         for catKey in affectedCategories {
-            if let cat = SpotCategory(rawValue: catKey),
-               let aggregate = categoryAggregateRating(for: cat) {
+            let cat = SpotCategory(rawValue: catKey)
+            if let aggregate = categoryAggregateRating(for: cat) {
                 await spotService.updateCategoryRating(
                     spotID: spotID, category: catKey,
                     newAverage: aggregate.average, newCount: aggregate.count

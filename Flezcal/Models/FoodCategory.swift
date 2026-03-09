@@ -916,6 +916,7 @@ extension FoodCategory {
     /// Modified built-in picks override their static counterparts during scanning.
     @MainActor static func registerUserPicks(_ picks: [FoodCategory]) {
         activeCustomPicks = picks.filter { $0.id.hasPrefix("custom_") }
+        activeCustomPicksSnapshot = activeCustomPicks
         modifiedBuiltInPicks = [:]
         for pick in picks where !pick.id.hasPrefix("custom_") {
             if let original = allCategories.first(where: { $0.id == pick.id }),
@@ -941,17 +942,25 @@ extension FoodCategory {
 
     // MARK: - Lookup helpers
 
+    /// Thread-safe snapshot of custom picks for use in non-MainActor contexts
+    /// (e.g. Codable decoding, background property access).
+    /// Updated alongside activeCustomPicks in setActiveCustomPicks().
+    nonisolated(unsafe) private(set) static var activeCustomPicksSnapshot: [FoodCategory] = []
+
     /// Returns the FoodCategory whose id matches the given string, or nil if not found.
-    /// Checks allKnownCategories (including legacy ones) for backward compat.
+    /// Checks allKnownCategories (including legacy ones) for backward compat,
+    /// then falls back to activeCustomPicks for user-created categories.
     static func by(id: String) -> FoodCategory? {
         allKnownCategories.first { $0.id == id }
+            ?? activeCustomPicksSnapshot.first { $0.id == id }
     }
 
     /// Convenience initializer from a SpotCategory.
     /// Since SpotCategory.rawValue == FoodCategory.id by design, this always succeeds
     /// for any SpotCategory case that was added alongside its FoodCategory counterpart.
+    /// Also checks activeCustomPicks for user-created categories.
     init?(spotCategory: SpotCategory) {
-        guard let match = FoodCategory.allKnownCategories.first(where: { $0.id == spotCategory.rawValue }) else {
+        guard let match = FoodCategory.by(id: spotCategory.rawValue) else {
             return nil
         }
         self = match

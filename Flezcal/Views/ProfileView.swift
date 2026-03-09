@@ -607,21 +607,20 @@ struct SignedInProfileView: View {
             } else {
                 FlowLayout(spacing: 8) {
                     ForEach(topCats, id: \.id) { entry in
-                        if let cat = SpotCategory(rawValue: entry.id) {
-                            HStack(spacing: 4) {
-                                CategoryIcon(category: cat, size: 21)
-                                Text(cat.displayName)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                Text("\u{00D7}\(entry.count)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(cat.color.opacity(0.12))
-                            .clipShape(Capsule())
+                        let cat = SpotCategory(rawValue: entry.id)
+                        HStack(spacing: 4) {
+                            CategoryIcon(category: cat, size: 21)
+                            Text(cat.displayName)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text("\u{00D7}\(entry.count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(cat.color.opacity(0.12))
+                        .clipShape(Capsule())
                     }
                 }
             }
@@ -719,63 +718,62 @@ struct VerificationHistoryView: View {
     var body: some View {
         List {
             ForEach(verifications) { verification in
-                if let cat = SpotCategory(rawValue: verification.category) {
-                    let spotName = spotService.spots.first(where: { $0.id == verification.spotID })?.name ?? "Unknown Spot"
-                    NavigationLink {
-                        if let spot = spotService.spots.first(where: { $0.id == verification.spotID }) {
-                            SpotDetailView(spot: spot)
+                let cat = SpotCategory(rawValue: verification.category)
+                let spotName = spotService.spots.first(where: { $0.id == verification.spotID })?.name ?? "Unknown Spot"
+                NavigationLink {
+                    if let spot = spotService.spots.first(where: { $0.id == verification.spotID }) {
+                        SpotDetailView(spot: spot)
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        CategoryIcon(category: cat, size: 26)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(cat.displayName)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Text(spotName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                    } label: {
-                        HStack(spacing: 8) {
-                            CategoryIcon(category: cat, size: 26)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(cat.displayName)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
+                        Spacer()
 
-                                Text(spotName)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            if verification.vote {
-                                if let rating = verification.rating {
-                                    HStack(spacing: 1) {
-                                        Text("🍮")
-                                            .font(.caption2)
-                                            .accessibilityHidden(true)
-                                        Text("\(rating)")
-                                            .font(.caption)
-                                            .fontWeight(.medium)
-                                    }
-                                    .accessibilityElement(children: .ignore)
-                                    .accessibilityLabel("Rated \(rating) out of 5")
-                                } else {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                        .font(.caption)
-                                        .accessibilityLabel("Confirmed")
-                                }
-                            } else {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.orange)
-                                        .font(.caption)
-                                    Text("Unavailable")
+                        if verification.vote {
+                            if let rating = verification.rating {
+                                HStack(spacing: 1) {
+                                    Text("🍮")
                                         .font(.caption2)
-                                        .foregroundStyle(.orange)
+                                        .accessibilityHidden(true)
+                                    Text("\(rating)")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
                                 }
                                 .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("Reported as unavailable")
+                                .accessibilityLabel("Rated \(rating) out of 5")
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                                    .accessibilityLabel("Confirmed")
                             }
-
-                            Text(verification.date, style: .date)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                        } else {
+                            HStack(spacing: 2) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                Text("Unavailable")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Reported as unavailable")
                         }
+
+                        Text(verification.date, style: .date)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
