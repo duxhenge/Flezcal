@@ -28,6 +28,9 @@ struct ContentView: View {
     /// carries over when switching to the other.
     @State private var activePickIDs: Set<String> = []
     @State private var activePickIDsInitialized = false
+    /// Community Map mode — shows all verified spots across all 50 categories,
+    /// hides ghost pins. Shared between Map and Spots tabs.
+    @State private var showCommunityMap = false
     @State private var showDisplayNamePrompt = false
     @State private var promptedName = ""
 
@@ -52,12 +55,13 @@ struct ContentView: View {
                 MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
                           pendingMapCenter: $pendingMapCenter,
                           activePickIDs: $activePickIDs,
+                          showCommunityMap: $showCommunityMap,
                           websiteChecker: websiteChecker)
                     .environmentObject(picksService)
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
-                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, websiteChecker: websiteChecker)
+                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, websiteChecker: websiteChecker)
                     .tabItem { Label("Spots", systemImage: "list.bullet") }
                     .tag(AppTab.spots)
 

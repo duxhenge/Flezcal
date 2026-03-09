@@ -884,12 +884,15 @@ struct ListTabView: View {
 
     /// Shared Flezcal filter state — synced with Map tab via ContentView.
     @Binding var activePickIDs: Set<String>
+    /// Community Map mode — shows all verified spots, hides ghost pins.
+    @Binding var showCommunityMap: Bool
 
-    init(locationManager: LocationManager, picksService: UserPicksService, activePickIDs: Binding<Set<String>>, websiteChecker: WebsiteCheckService) {
+    init(locationManager: LocationManager, picksService: UserPicksService, activePickIDs: Binding<Set<String>>, showCommunityMap: Binding<Bool>, websiteChecker: WebsiteCheckService) {
         self.locationManager = locationManager
         self.currentLocation = { [locationManager] in locationManager.userLocation }
         self.picksService = picksService
         self._activePickIDs = activePickIDs
+        self._showCommunityMap = showCommunityMap
         self.websiteChecker = websiteChecker
     }
     @State private var selectedSpot: Spot?
@@ -936,8 +939,10 @@ struct ListTabView: View {
 
     /// Whether the Explore search engine should be active — true when either
     /// Possible or Unchecked filter is on (both need search results).
+    /// Disabled in Community Map mode (only verified spots shown).
     private var showExploreSearch: Bool {
-        showPossible || showUnchecked
+        guard !showCommunityMap else { return false }
+        return showPossible || showUnchecked
     }
 
     /// The picks currently active for filtering / searching.
@@ -961,14 +966,21 @@ struct ListTabView: View {
     // MARK: Community data
 
     private var filteredAndSortedSpots: [Spot] {
-        // When no picks are toggled on, show nothing
-        guard !activePickIDs.isEmpty else { return [] }
-
-        // Always filter to only spots whose categories overlap with active picks.
-        // A pizza spot should never appear when only mezcal/flan/tacos are selected.
         let all = spotService.filteredSpots(for: SpotFilter(category: nil))
-        let categoryFiltered = all.filter { spot in
-            spot.categories.contains { cat in activePickIDs.contains(cat.rawValue) }
+
+        // Community Map mode — show all verified spots across all categories
+        let categoryFiltered: [Spot]
+        if showCommunityMap {
+            categoryFiltered = all
+        } else {
+            // When no picks are toggled on, show nothing
+            guard !activePickIDs.isEmpty else { return [] }
+
+            // Always filter to only spots whose categories overlap with active picks.
+            // A pizza spot should never appear when only mezcal/flan/tacos are selected.
+            categoryFiltered = all.filter { spot in
+                spot.categories.contains { cat in activePickIDs.contains(cat.rawValue) }
+            }
         }
 
         // Text search — filter by name/address/offerings
@@ -1089,7 +1101,8 @@ struct ListTabView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Category filter — matching Map tab's PicksFilterBar (top position)
-                PicksFilterBar(picks: picksService.picks, activeIDs: $activePickIDs)
+                PicksFilterBar(picks: picksService.picks, activeIDs: $activePickIDs,
+                               showCommunityMap: $showCommunityMap)
                     .padding(.top, 8)
 
                 // ── Search bar ────────────────────────────────────────────────
@@ -1344,28 +1357,31 @@ struct ListTabView: View {
                 isOn: $showVerified
             )
 
-            if possibleCount > 0 || isSearchActive {
-                PinToggleButton(
-                    count: possibleCount,
-                    label: "Likely",
-                    color: .green,
-                    filled: false,
-                    isOn: $showPossible
-                )
-            }
+            // Hide Likely/Nearby toggles in Community Map mode
+            if !showCommunityMap {
+                if possibleCount > 0 || isSearchActive {
+                    PinToggleButton(
+                        count: possibleCount,
+                        label: "Likely",
+                        color: .green,
+                        filled: false,
+                        isOn: $showPossible
+                    )
+                }
 
-            if uncheckedCount > 0 || isSearchActive {
-                PinToggleButton(
-                    count: uncheckedCount,
-                    label: "Nearby",
-                    color: .yellow,
-                    isOn: $showUnchecked
-                )
-            }
+                if uncheckedCount > 0 || isSearchActive {
+                    PinToggleButton(
+                        count: uncheckedCount,
+                        label: "Nearby",
+                        color: .yellow,
+                        isOn: $showUnchecked
+                    )
+                }
 
-            if isSearchActive {
-                ProgressView()
-                    .controlSize(.small)
+                if isSearchActive {
+                    ProgressView()
+                        .controlSize(.small)
+                }
             }
         }
         .padding(.horizontal)
@@ -1607,6 +1623,6 @@ struct ListTabView: View {
 }
 
 #Preview {
-    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), websiteChecker: WebsiteCheckService())
+    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), showCommunityMap: .constant(false), websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
 }

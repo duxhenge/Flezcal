@@ -152,6 +152,23 @@ jobs:
           echo "DEST=$DEVICE" >> $GITHUB_OUTPUT
           echo "Using simulator: $DEVICE"
 
+      # Symlink SPM checkouts so the Crashlytics run-script phase can find them.
+      # The "Upload dSYMs" script uses ${BUILD_DIR%/Build/*}/SourcePackages/...
+      # but -clonedSourcePackagesDirPath puts them under build/SourcePackages/.
+      - name: Link SPM checkouts for Crashlytics script
+        run: |
+          DERIVED=$(xcodebuild -project $XCODEPROJ -scheme $SCHEME -showBuildSettings 2>/dev/null \
+            | grep -m1 'BUILD_DIR' | awk '{print $3}')
+          DERIVED_ROOT="${DERIVED%/Build/*}"
+          mkdir -p "$DERIVED_ROOT/SourcePackages/checkouts"
+          if [ -d build/SourcePackages/checkouts/firebase-ios-sdk ]; then
+            ln -sfn "$(pwd)/build/SourcePackages/checkouts/firebase-ios-sdk" \
+              "$DERIVED_ROOT/SourcePackages/checkouts/firebase-ios-sdk"
+            echo "✓ Symlinked firebase-ios-sdk for Crashlytics script"
+          else
+            echo "⚠ firebase-ios-sdk not found in build/SourcePackages — Crashlytics script may fail"
+          fi
+
       # Build for testing (xcbeautify is pre-installed on macos-15 runners)
       - name: Build
         run: |

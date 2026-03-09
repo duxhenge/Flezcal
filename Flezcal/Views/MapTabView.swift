@@ -11,6 +11,8 @@ struct MapTabView: View {
     @Binding var pendingMapCenter: CLLocationCoordinate2D?
     /// Shared Flezcal filter state — synced with Spots tab via ContentView.
     @Binding var activePickIDs: Set<String>
+    /// Community Map mode — shows all verified spots, hides ghost pins.
+    @Binding var showCommunityMap: Bool
 
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
@@ -249,6 +251,8 @@ struct MapTabView: View {
     ///   suggestions load. Pass false for boot auto-fetches where the camera
     ///   should stay at the user's location.
     private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory], zoomToFit: Bool = false) {
+        // Community Map mode — no ghost pin fetches needed
+        guard !showCommunityMap else { return }
         // Cancel any in-flight fetch + pre-screen so a new call doesn't
         // race with the previous one and overwrite green pin results.
         fetchAndPreScreenTask?.cancel()
@@ -437,14 +441,24 @@ struct MapTabView: View {
     }
 
     /// Confirmed spots filtered by the active pick IDs (multi-toggle).
-    /// Always filters to only show spots whose categories overlap with the user's
-    /// active picks — a pizza spot should never appear when only mezcal/flan/tacos are on.
-    /// - No picks active → empty (all toggled off).
+    /// In Community Map mode, returns all verified spots across all categories.
+    /// In normal mode, filters to only spots whose categories overlap with the
+    /// user's active picks. No picks active → empty (all toggled off).
     private var filteredSpots: [Spot] {
-        // When no picks are toggled on, show nothing
-        guard !activePickIDs.isEmpty else { return [] }
-
         let all = spotService.filteredSpots(for: SpotFilter(category: nil))
+
+        // Community Map mode — show all verified spots across all categories
+        if showCommunityMap {
+            guard !searchText.isEmpty else { return all }
+            return all.filter { spot in
+                spot.name.localizedCaseInsensitiveContains(searchText) ||
+                spot.address.localizedCaseInsensitiveContains(searchText) ||
+                (spot.mezcalOfferings ?? []).contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
+            }
+        }
+
+        // Normal mode — filter by active picks
+        guard !activePickIDs.isEmpty else { return [] }
         let base = all.filter { spot in
             spot.categories.contains { cat in activePickIDs.contains(cat.rawValue) }
         }
@@ -495,9 +509,12 @@ struct MapTabView: View {
     }
 
     /// Ghost pins filtered by pin-type toggles AND active pick IDs.
+    /// Hidden entirely in Community Map mode (only verified spots shown).
     /// When all Flezcal pills are off, no ghost pins show.
     /// Pre-filtered to avoid conditional `if` inside MapContentBuilder's ForEach.
     private var visibleGhostPins: [SuggestedSpot] {
+        // Community Map mode — no ghost pins
+        guard !showCommunityMap else { return [] }
         // If all Flezcal pills are toggled off, hide all ghost pins too
         guard !activePickIDs.isEmpty else { return [] }
         return filteredSuggestions.filter { suggestion in
@@ -784,7 +801,8 @@ struct MapTabView: View {
             // Filter pills — one toggleable pill per pick
             VStack(spacing: 8) {
                 PicksFilterBar(picks: picksService.picks,
-                               activeIDs: $activePickIDs)
+                               activeIDs: $activePickIDs,
+                               showCommunityMap: $showCommunityMap)
                     .tutorialTarget("filterPills")
 
                 // Pin-type toggle buttons — tap to show/hide each category
@@ -797,23 +815,26 @@ struct MapTabView: View {
                             isOn: $showVerifiedPins
                         )
 
-                        if !possibleSuggestions.isEmpty {
-                            PinToggleButton(
-                                count: possibleSuggestions.count,
-                                label: "Likely",
-                                color: .green,
-                                filled: false,
-                                isOn: $showPossiblePins
-                            )
-                        }
+                        // Hide Likely/Nearby toggles in Community Map mode
+                        if !showCommunityMap {
+                            if !possibleSuggestions.isEmpty {
+                                PinToggleButton(
+                                    count: possibleSuggestions.count,
+                                    label: "Likely",
+                                    color: .green,
+                                    filled: false,
+                                    isOn: $showPossiblePins
+                                )
+                            }
 
-                        if !uncheckedSuggestions.isEmpty {
-                            PinToggleButton(
-                                count: uncheckedSuggestions.count,
-                                label: "Nearby",
-                                color: .yellow,
-                                isOn: $showUncheckedPins
-                            )
+                            if !uncheckedSuggestions.isEmpty {
+                                PinToggleButton(
+                                    count: uncheckedSuggestions.count,
+                                    label: "Nearby",
+                                    color: .yellow,
+                                    isOn: $showUncheckedPins
+                                )
+                            }
                         }
                     }
                     .tutorialTarget("pinToggles")
@@ -1034,7 +1055,8 @@ struct MapTabView: View {
             .padding(.top, 8)
 
             PicksFilterBar(picks: picksService.picks,
-                           activeIDs: $activePickIDs)
+                           activeIDs: $activePickIDs,
+                           showCommunityMap: $showCommunityMap)
                 .padding(.top, 8)
 
             Text("\(filteredSpots.count) spot\(filteredSpots.count == 1 ? "" : "s") found")
@@ -1127,13 +1149,21 @@ struct PinToggleButton: View {
 
 /// Multi-toggle filter pill bar — each pill independently toggles visibility.
 /// Used on both Map and Spots tabs with a shared `activeIDs` binding.
+/// Includes a "Community" pill to show all verified spots across all categories.
 struct PicksFilterBar: View {
     let picks: [FoodCategory]
     @Binding var activeIDs: Set<String>
+    @Binding var showCommunityMap: Bool
+    @State private var showCommunityIntro = false
+    @AppStorage("hasSeenCommunityMapIntro") private var hasSeenIntro = false
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                // Community Map pill — leading position
+                communityPill
+
+                // Pick pills — dimmed and non-interactive when Community Map is on
                 ForEach(picks) { pick in
                     let isOn = activeIDs.contains(pick.id)
                     filterPill(label: pick.displayName, category: pick,
@@ -1146,11 +1176,92 @@ struct PicksFilterBar: View {
                             }
                         }
                     }
+                    .opacity(showCommunityMap ? 0.4 : 1.0)
+                    .allowsHitTesting(!showCommunityMap)
                 }
             }
             .padding(.horizontal)
         }
+        .sheet(isPresented: $showCommunityIntro) {
+            communityIntroSheet
+        }
     }
+
+    // MARK: - Community pill
+
+    @ViewBuilder
+    private var communityPill: some View {
+        Button {
+            if !hasSeenIntro {
+                showCommunityIntro = true
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showCommunityMap.toggle()
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: showCommunityMap
+                      ? "globe.americas.fill" : "globe.americas")
+                    .font(.system(size: 14))
+                Text("Community")
+                    .font(.subheadline)
+                    .fontWeight(showCommunityMap ? .semibold : .regular)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(showCommunityMap ? .blue : Color(.systemBackground)))
+            .foregroundStyle(showCommunityMap ? .white : .primary)
+            .overlay(Capsule().stroke(Color.secondary.opacity(0.3),
+                                      lineWidth: showCommunityMap ? 0 : 1))
+        }
+    }
+
+    // MARK: - First-tap explainer sheet
+
+    @ViewBuilder
+    private var communityIntroSheet: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "globe.americas.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.blue)
+                .padding(.top, 24)
+
+            Text("Community Map")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("See all verified spots from the Flezcal community "
+                 + "across all 50 categories. Ghost pins are hidden "
+                 + "— only confirmed spots appear.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            Button {
+                hasSeenIntro = true
+                showCommunityIntro = false
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showCommunityMap = true
+                }
+            } label: {
+                Text("Got it")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(.blue)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 16)
+        }
+        .presentationDetents([.height(280)])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Filter pill
 
     @ViewBuilder
     private func filterPill(label: String, category: FoodCategory?, color: Color,
@@ -1163,7 +1274,7 @@ struct PicksFilterBar: View {
                         .font(.subheadline)
                         .fontWeight(isSelected ? .semibold : .regular)
                 }
-                if !isSelected {
+                if !isSelected && !showCommunityMap {
                     Text("Filter off")
                         .font(.caption2)
                         .fontWeight(.medium)
@@ -1368,6 +1479,7 @@ private struct MapEmptyListState: View {
     MapTabView(pendingMapSuggestion: .constant(nil),
                pendingMapCenter: .constant(nil),
                activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])),
+               showCommunityMap: .constant(false),
                websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())
