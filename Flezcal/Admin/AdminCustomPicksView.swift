@@ -213,7 +213,7 @@ struct AdminCustomPicksView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
-                ForEach(Array(trendingTerms.enumerated()), id: \.offset) { index, item in
+                ForEach(Array(trendingTerms.enumerated()), id: \.offset) { _, item in
                     HStack {
                         Text(item.term)
                             .font(.subheadline)

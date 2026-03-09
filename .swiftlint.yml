@@ -73,12 +73,14 @@ disabled_rules:
 # ─── Rule Configuration ───────────────────────────────────────────
 
 # File length: Largest file is 1383 lines (SpotDetailView).
+# FoodCategory.swift and SpotCategory.swift are necessarily large (50-category switch statements).
 file_length:
   warning: 600
   error: 1500
   ignore_comment_only_lines: true
 
 # Type body length: SpotDetailView body is long due to SwiftUI composition.
+# SpotCategory enum has 9 switch statements × 50 cases — structural, not a code smell.
 type_body_length:
   warning: 500
   error: 1200

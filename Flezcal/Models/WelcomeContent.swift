@@ -36,14 +36,36 @@ struct WelcomeContent: Codable {
     static let fallback = WelcomeContent(
         version: "3.0",
         title: "Welcome to Flezcal!",
-        subtitle: "50 categories and growing, from mezcal and birria to natural wine and high-end tequila. Pick the ones you care about and help build the guide.",
-        tagline: "A Flezcal is your favorite food or drink, the thing you'll drive across town for. The name started as Flan + Mezcal, but a Flezcal is now anything you're passionate about finding and sharing.",
+        subtitle: "50 categories and growing, from mezcal and birria to natural wine and high-end tequila. "
+            + "Pick the ones you care about and help build the guide.",
+        tagline: "A Flezcal is your favorite food or drink, the thing you'll drive across town for. "
+            + "The name started as Flan + Mezcal, but a Flezcal is now anything you're passionate about finding and sharing.",
         items: [
-            WelcomeItem(icon: "fork.knife",       text: "🍽️ Pick your Flezcals. Choose up to 3 foods or drinks you're passionate about. These drive your map and search results."),
-            WelcomeItem(icon: "map",               text: "🗺️ Find spots nearby. The map scans restaurant and bar menus to surface places that carry what you're looking for."),
-            WelcomeItem(icon: "plus.circle",       text: "➕ Share what you know. Found a spot with incredible mole or a mezcal list worth the trip? Add it. The best finds come from people who actually care."),
-            WelcomeItem(icon: "star.fill",         text: "⭐ Rate and verify. Who does it best? Rate Flezcals at your spots and verify what others have found."),
-            WelcomeItem(icon: "sparkles",          text: "✨ Create your own. Don't see your Flezcal? Create a custom one. When enough people search for the same thing, it becomes an official category."),
+            WelcomeItem(
+                icon: "fork.knife",
+                text: "🍽️ Pick your Flezcals. Choose up to 3 foods or drinks you're passionate about. "
+                    + "These drive your map and search results."
+            ),
+            WelcomeItem(
+                icon: "map",
+                text: "🗺️ Find spots nearby. The map scans restaurant and bar menus "
+                    + "to surface places that carry what you're looking for."
+            ),
+            WelcomeItem(
+                icon: "plus.circle",
+                text: "➕ Share what you know. Found a spot with incredible mole or a mezcal list worth the trip? "
+                    + "Add it. The best finds come from people who actually care."
+            ),
+            WelcomeItem(
+                icon: "star.fill",
+                text: "⭐ Rate and verify. Who does it best? "
+                    + "Rate Flezcals at your spots and verify what others have found."
+            ),
+            WelcomeItem(
+                icon: "sparkles",
+                text: "✨ Create your own. Don't see your Flezcal? Create a custom one. "
+                    + "When enough people search for the same thing, it becomes an official category."
+            ),
         ],
         pages: [
             WelcomePage(

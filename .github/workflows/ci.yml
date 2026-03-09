@@ -86,11 +86,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Log Xcode environment for debugging
+      # Pin Xcode and log environment
       - name: Xcode Info
         run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
           xcodebuild -version
-          xcrun simctl list devices available | head -20
+          xcrun simctl list runtimes
+          xcrun simctl list devices available | head -30
 
       # Inject Secrets.xcconfig from GitHub Secret
       - name: Inject Secrets.xcconfig
@@ -134,23 +136,23 @@ jobs:
       - name: Resolve Simulator
         id: sim
         run: |
-          # Find the first available iPhone simulator
+          # Find the first available iPhone simulator with an iOS 18.x runtime
           DEVICE=$(xcrun simctl list devices available -j | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
-          for runtime, devices in data.get('devices', {}).items():
+          for runtime, devices in sorted(data.get('devices', {}).items()):
               if 'iOS' not in runtime:
                   continue
               for d in devices:
                   if 'iPhone' in d['name'] and d['isAvailable']:
                       print(f'platform=iOS Simulator,id={d[\"udid\"]}')
                       sys.exit(0)
-          print('platform=iOS Simulator,name=iPhone 16 Pro,OS=latest')
+          sys.exit(1)
           ")
           echo "DEST=$DEVICE" >> $GITHUB_OUTPUT
           echo "Using simulator: $DEVICE"
 
-      # Build for testing
+      # Build for testing (xcbeautify is pre-installed on macos-15 runners)
       - name: Build
         run: |
           set -o pipefail
@@ -163,12 +165,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee build.log | xcpretty --color || {
-              echo "::group::Full build log (last 100 lines)"
-              tail -100 build.log
-              echo "::endgroup::"
-              exit 1
-            }
+            2>&1 | xcbeautify --renderer github-actions
 
       # Run unit tests only (skip UI tests)
       - name: Unit Tests
@@ -185,7 +182,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | xcpretty --color
+            2>&1 | xcbeautify --renderer github-actions
 
       # Extract and report code coverage
       - name: Code Coverage Report
