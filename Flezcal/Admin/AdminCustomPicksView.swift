@@ -46,7 +46,7 @@ struct AdminCustomPicksView: View {
     var body: some View {
         Group {
             if customService.isLoading {
-                ProgressView("Loading custom picks...")
+                ProgressView("Loading trending picks...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if customService.customCategories.isEmpty {
                 emptyState
@@ -91,11 +91,11 @@ struct AdminCustomPicksView: View {
         let totalPicks = categories.reduce(0) { $0 + $1.pickCount }
 
         VStack(alignment: .leading, spacing: 12) {
-            Label("Custom Picks Summary", systemImage: "sparkles")
+            Label("Trending Picks Summary", systemImage: "sparkles")
                 .font(.headline)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                metricCard(title: "Unique Terms", value: "\(categories.count)", color: .purple)
+                metricCard(title: "Unique Terms", value: "\(categories.count)", color: .cyan)
                 metricCard(title: "Total Picks", value: "\(totalPicks)", color: .blue)
                 metricCard(title: "Promotion Ready", value: "\(promotionCandidates.count)", color: .green)
                 metricCard(title: "Single-User", value: "\(singleUserTerms.count)", color: .secondary)
@@ -132,7 +132,7 @@ struct AdminCustomPicksView: View {
             }()
 
             if ranked.isEmpty {
-                Text("No custom picks for this time period.")
+                Text("No trending picks for this time period.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
@@ -162,7 +162,7 @@ struct AdminCustomPicksView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "person.2")
                                 .font(.caption)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(.cyan)
                             Text("\(item.pickCount)")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
@@ -239,9 +239,9 @@ struct AdminCustomPicksView: View {
             Spacer()
             Image(systemName: "sparkles")
                 .font(.system(size: 50))
-                .foregroundStyle(.purple)
+                .foregroundStyle(.cyan)
 
-            Text("No Custom Picks Yet")
+            Text("No Trending Picks Yet")
                 .font(.title3)
                 .fontWeight(.semibold)
 
@@ -280,7 +280,7 @@ struct AdminCustomPicksView: View {
         let fraction = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0
         let barWidth = Swift.max(1, 60 * fraction)
         RoundedRectangle(cornerRadius: 3)
-            .fill(Color.purple.opacity(0.4))
+            .fill(Color.cyan.opacity(0.4))
             .frame(width: barWidth, height: 14)
     }
 

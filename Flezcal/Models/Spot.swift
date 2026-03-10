@@ -190,7 +190,9 @@ struct Spot: Identifiable, Codable, Hashable {
             return .unverified
         }
 
-        // Fewer than 10 total votes: 1 thumbs-up = confirmed
+        // Fewer than 10 total votes: 1 thumbs-up = confirmed.
+        // Primary misclick protection: confirmation dialog in AddFlezcalFlow.
+        // Threshold can be raised to 2+ when community activity supports it.
         if total < 10 {
             return ups > 0 ? .confirmed : .unverified
         }

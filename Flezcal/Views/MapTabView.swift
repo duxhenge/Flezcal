@@ -16,12 +16,11 @@ struct MapTabView: View {
 
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
+    @EnvironmentObject var rankingService: RankingService
     @StateObject private var suggestionService = SuggestionService()
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var selectedSpot: Spot?
     @State private var selectedSuggestion: SuggestedSpot?
-    @State private var showListView = false
-    @State private var searchText = ""
     @State private var visibleRegion: MKCoordinateRegion?
     @State private var emptyStateDismissed = false
     @State private var initialRegionSeen = false
@@ -48,6 +47,8 @@ struct MapTabView: View {
     @State private var showNoPinsAlert = false
     /// Worm easter egg — tapping the worm shows a prompt to enable Community Map.
     @State private var showCommunityEasterEgg = false
+    /// Which categories to show in Community Map mode.
+    @State private var communityMapFilter: CommunityMapFilter = .top50
     /// Set true when picks change while the map tab is off-screen.
     /// Triggers an auto-fetch when the user returns to the map.
     @State private var picksChangedWhileAway = false
@@ -443,32 +444,29 @@ struct MapTabView: View {
     }
 
     /// Confirmed spots filtered by the active pick IDs (multi-toggle).
-    /// In Community Map mode, returns all verified spots across all categories.
+    /// In Community Map mode with `.top50` filter, returns only verified spots
+    /// whose categories overlap with Top 50 rankings. With `.all`, returns all.
     /// In normal mode, filters to only spots whose categories overlap with the
     /// user's active picks. No picks active → empty (all toggled off).
     private var filteredSpots: [Spot] {
         let all = spotService.filteredSpots(for: SpotFilter(category: nil))
 
-        // Community Map mode — show all verified spots across all categories
+        // Community Map mode — show verified spots, optionally filtered by tier
         if showCommunityMap {
-            guard !searchText.isEmpty else { return all }
-            return all.filter { spot in
-                spot.name.localizedCaseInsensitiveContains(searchText) ||
-                spot.address.localizedCaseInsensitiveContains(searchText) ||
-                (spot.mezcalOfferings ?? []).contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
+            switch communityMapFilter {
+            case .top50:
+                return all.filter { spot in
+                    spot.categories.contains { cat in rankingService.isTop50(cat.rawValue) }
+                }
+            case .all:
+                return all
             }
         }
 
         // Normal mode — filter by active picks
         guard !activePickIDs.isEmpty else { return [] }
-        let base = all.filter { spot in
+        return all.filter { spot in
             spot.categories.contains { cat in activePickIDs.contains(cat.rawValue) }
-        }
-        guard !searchText.isEmpty else { return base }
-        return base.filter { spot in
-            spot.name.localizedCaseInsensitiveContains(searchText) ||
-            spot.address.localizedCaseInsensitiveContains(searchText) ||
-            (spot.mezcalOfferings ?? []).contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
         }
     }
 
@@ -529,36 +527,42 @@ struct MapTabView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if showListView {
-                    listContent
-                } else {
-                    mapContent
-                        .tutorialTarget("mapView")
-                }
-            }
+            mapContent
+                .tutorialTarget("mapView")
             .navigationTitle(AppConstants.appName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        withAnimation { showListView.toggle() }
+                        // Exit Community Map mode before switching — the Spots tab
+                        // should show normal filtered results, not all verified spots.
+                        showCommunityMap = false
+
+                        // Switch to Spots tab using the current map center
+                        let center = visibleRegion?.center
+                            ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
+                        NotificationCenter.default.post(
+                            name: .showSpotsAtLocation,
+                            object: nil,
+                            userInfo: [
+                                "latitude": center.latitude,
+                                "longitude": center.longitude,
+                            ]
+                        )
                     } label: {
-                        Image(systemName: showListView ? "map" : "list.bullet")
+                        Image(systemName: "list.bullet")
                     }
-                    .accessibilityLabel(showListView ? "Show map" : "Show list")
+                    .accessibilityLabel("Show spots list")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if !showListView {
-                        Button {
-                            withAnimation {
-                                cameraPosition = .userLocation(fallback: .automatic)
-                            }
-                        } label: {
-                            Image(systemName: "location.fill")
+                    Button {
+                        withAnimation {
+                            cameraPosition = .userLocation(fallback: .automatic)
                         }
-                        .accessibilityLabel("Center on my location")
+                    } label: {
+                        Image(systemName: "location.fill")
                     }
+                    .accessibilityLabel("Center on my location")
                     Button {
                         Task { await spotService.fetchSpots() }
                     } label: {
@@ -606,15 +610,22 @@ struct MapTabView: View {
             .alert("No Flezcals selected", isPresented: $showNoPinsAlert) {
                 Button("OK", role: .cancel) { }
             }
-            .alert("Easter Egg! 🐛", isPresented: $showCommunityEasterEgg) {
-                Button("Yes") {
+            .confirmationDialog("Easter Egg! 🐛", isPresented: $showCommunityEasterEgg, titleVisibility: .visible) {
+                Button("Top 50 Flezcals") {
+                    communityMapFilter = .top50
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showCommunityMap = true
                     }
                 }
-                Button("No", role: .cancel) { }
+                Button("All Verified Flezcals") {
+                    communityMapFilter = .all
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showCommunityMap = true
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
             } message: {
-                Text("Do you want to see all verified spots in your search area, including custom Flezcals?")
+                Text("Show verified Flezcal spots in your search area.")
             }
         }
     }
@@ -1045,62 +1056,16 @@ struct MapTabView: View {
         }
     }
 
-    // MARK: - List View
+}
 
-    private var listContent: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField("Search spots...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .autocorrectionDisabled()
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .padding(10)
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal)
-            .padding(.top, 8)
+// MARK: - Community Map Filter
 
-            PicksFilterBar(picks: picksService.picks,
-                           activeIDs: $activePickIDs)
-                .padding(.top, 8)
-
-            Text("\(filteredSpots.count) spot\(filteredSpots.count == 1 ? "" : "s") found")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
-
-            if spotService.isLoading {
-                Spacer()
-                ProgressView("Loading spots...")
-                Spacer()
-            } else if filteredSpots.isEmpty {
-                Spacer()
-                MapEmptyListState(
-                    categoryName: activePicks.first?.displayName.lowercased() ?? "spot",
-                    isSearchActive: !searchText.isEmpty
-                )
-                Spacer()
-            } else {
-                List(filteredSpots) { spot in
-                    Button { selectedSpot = spot } label: {
-                        SpotListRowView(spot: spot)
-                    }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                }
-                .listStyle(.plain)
-            }
-        }
-    }
+/// Controls which verified spots appear in Community Map mode.
+enum CommunityMapFilter {
+    /// Show only spots with at least one Top 50 category.
+    case top50
+    /// Show all verified spots (Top 50 + Trending + custom).
+    case all
 }
 
 // MARK: - Community Worm Button
@@ -1294,83 +1259,6 @@ struct SpotPinView: View {
     }
 }
 
-// MARK: - Spot List Row
-
-struct SpotListRowView: View {
-    let spot: Spot
-    var userLocation: CLLocationCoordinate2D? = nil
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SpotIcons(categories: spot.categories, size: 28)
-                .frame(width: 44, height: 44)
-                .background(spot.primaryCategory.color.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(spot.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(cityName(from: spot.address))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .layoutPriority(1)
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                if let dist = formattedDistanceMiles(from: userLocation, to: spot.coordinate) {
-                    Text(dist)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                        .monospacedDigit()
-                        .fixedSize()
-                }
-                if let level = displayRatingLevel {
-                    HStack(spacing: 2) {
-                        Text(level.emoji)
-                            .font(.caption2)
-                        Text(level.label)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
-                } else {
-                    Text("New")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .frame(minWidth: 60, alignment: .trailing)
-        }
-        .padding(.vertical, 4)
-    }
-
-    /// Best category rating to display — first category with reviews
-    private var bestCategoryRating: CategoryRating? {
-        for cat in spot.categories {
-            if let rating = spot.rating(for: cat), rating.count > 0 {
-                return rating
-            }
-        }
-        return nil
-    }
-
-    /// Rating level to display — prefers per-category, falls back to legacy aggregate
-    private var displayRatingLevel: RatingLevel? {
-        if let catRating = bestCategoryRating {
-            return RatingLevel.from(max(1, min(5, Int(catRating.average.rounded()))))
-        } else if spot.reviewCount > 0 {
-            return RatingLevel.from(max(1, min(5, Int(spot.averageRating.rounded()))))
-        }
-        return nil
-    }
-}
-
 // MARK: - SpotFilter (used by SpotService.filteredSpots)
 
 struct SpotFilter: Equatable {
@@ -1425,30 +1313,6 @@ private struct MapEmptyBanner: View {
             Spacer()
         }
         .padding(.top, 80)
-    }
-}
-
-/// Centered empty state shown in the list view when no spots match.
-private struct MapEmptyListState: View {
-    let categoryName: String
-    let isSearchActive: Bool
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "mappin.slash")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
-            Text("No spots found")
-                .font(.headline)
-            Text(isSearchActive
-                 ? "Try a different search term."
-                 : "Be the first to add a \(categoryName) here!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .accessibilityElement(children: .combine)
-        .padding()
     }
 }
 

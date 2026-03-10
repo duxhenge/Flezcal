@@ -49,7 +49,7 @@ struct FoodCategoryGridView: View {
                 .alert("Sign In Required", isPresented: $showSignInPrompt) {
                     Button("OK", role: .cancel) { }
                 } message: {
-                    Text("Sign in from the Profile tab to create custom Flezcals.")
+                    Text("Sign in from the Profile tab to create trending Flezcals.")
                 }
         }
     }
@@ -158,7 +158,7 @@ struct FoodCategoryGridView: View {
             if FeatureFlags.broadSearchEnabled {
                 Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
             } else {
-                Text("Select up to \(UserPicksService.maxPicks) categories, or create your own custom Flezcal!")
+                Text("Select up to \(UserPicksService.maxPicks) categories, or create your own trending Flezcal!")
             }
         }
         .font(.subheadline)
@@ -238,15 +238,14 @@ struct FoodCategoryGridView: View {
 
     private func customPicksSection(_ customPicks: [FoodCategory]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Your Custom Picks")
+            Text("Your Trending Picks")
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
 
             ForEach(customPicks) { pick in
-                let isTrending = rankingService.isTrending(pick.id)
-                let fillColor = isTrending ? Color.cyan.opacity(0.08) : Color.purple.opacity(0.08)
-                let strokeColor = isTrending ? Color.cyan.opacity(0.3) : Color.purple.opacity(0.3)
+                let fillColor = Color.cyan.opacity(0.08)
+                let strokeColor = Color.cyan.opacity(0.3)
 
                 HStack(spacing: 12) {
                     FoodCategoryIcon(category: pick, size: 26)
@@ -293,7 +292,7 @@ struct FoodCategoryGridView: View {
             HStack(spacing: 10) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(.cyan)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create Your Own")
                         .font(.subheadline)
@@ -311,10 +310,10 @@ struct FoodCategoryGridView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.purple.opacity(0.06))
+                    .fill(Color.cyan.opacity(0.06))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.cyan.opacity(0.2), lineWidth: 1)
                     )
             )
         }

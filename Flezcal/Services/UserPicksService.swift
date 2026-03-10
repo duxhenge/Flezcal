@@ -209,8 +209,20 @@ class UserPicksService: ObservableObject {
         // User-customized categories (edited via EditSpotSearchView) keep their terms.
         let customizedIDs = loadCustomizedTermsIDs()
         let refreshed = saved.map { pick -> FoodCategory in
-            // Custom user-created categories — keep as-is
-            guard !pick.id.hasPrefix("custom_") else { return pick }
+            // Custom user-created categories — refresh color to match current
+            // CustomCategory.color (prevents stale serialized colors persisting).
+            if pick.id.hasPrefix("custom_") {
+                return FoodCategory(
+                    id: pick.id,
+                    displayName: pick.displayName,
+                    emoji: pick.emoji,
+                    color: .cyan,
+                    mapSearchTerms: pick.mapSearchTerms,
+                    websiteKeywords: pick.websiteKeywords,
+                    relatedKeywords: pick.relatedKeywords,
+                    addSpotPrompt: pick.addSpotPrompt
+                )
+            }
             // User intentionally customized this one — keep their edits
             guard !customizedIDs.contains(pick.id) else { return pick }
             // Refresh from static definition if available

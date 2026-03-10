@@ -405,7 +405,7 @@ struct AdminOverviewView: View {
     private func customPicksSection() -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Custom Picks (\(customService.customCategories.count))", systemImage: "sparkles")
+                Label("Trending Picks (\(customService.customCategories.count))", systemImage: "sparkles")
                     .font(.headline)
                 Spacer()
             }
@@ -437,7 +437,7 @@ struct AdminOverviewView: View {
                 }()
 
                 if ranked.isEmpty {
-                    Text("No custom picks for this time period.")
+                    Text("No trending picks for this time period.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 4)
@@ -461,7 +461,7 @@ struct AdminOverviewView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "person.2.fill")
                                     .font(.caption2)
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(.cyan)
                                 Text("\(item.pickCount)")
                                     .font(.subheadline)
                                     .fontWeight(.medium)

@@ -90,6 +90,13 @@ enum FirestoreCollections {
     static let categoryPicks     = "categoryPicks"
 }
 
+/// Single source of truth for the app's display name.
+/// Change these two values to rebrand all UI strings at once.
+enum AppBranding {
+    static let name = "Flezcal"
+    static let namePlural = "Flezcals"
+}
+
 /// Feature flags for phased rollout.
 /// Phase 4: Set broadSearchEnabled = true and maxCustomItems = 3 to unlock full custom search.
 enum FeatureFlags {
@@ -121,4 +128,7 @@ extension Notification.Name {
     /// Post with a CLLocationCoordinate2D (as ["latitude": Double, "longitude": Double])
     /// to switch to the Map tab, center on that area, and run a full search + pre-screen.
     static let showAreaOnMap = Notification.Name("showAreaOnMap")
+    /// Post with latitude/longitude to switch to the Spots tab and set the
+    /// custom search location to the given coordinates.
+    static let showSpotsAtLocation = Notification.Name("showSpotsAtLocation")
 }

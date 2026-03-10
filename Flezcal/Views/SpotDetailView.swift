@@ -103,7 +103,8 @@ struct SpotDetailView: View {
                                         category: category,
                                         verificationService: verificationService,
                                         canRemove: authService.isSignedIn
-                                            && liveSpot.canRemoveCategory(category, userID: authService.userID),
+                                            && (AdminAccess.isAdmin(uid: authService.userID)
+                                                || liveSpot.canRemoveCategory(category, userID: authService.userID)),
                                         onRemoveCategory: {
                                             categoryToRemove = category
                                             showRemoveCategoryAlert = true
@@ -492,7 +493,12 @@ struct SpotDetailView: View {
                                 await spotService.hideSpot(spotID: spot.id)
                                 dismiss()
                             } else {
-                                let success = await spotService.removeCategory(spotID: spot.id, category: cat)
+                                let success: Bool
+                                if AdminAccess.isAdmin(uid: authService.userID) {
+                                    success = await spotService.adminRemoveCategory(spotID: spot.id, category: cat)
+                                } else {
+                                    success = await spotService.removeCategory(spotID: spot.id, category: cat)
+                                }
                                 if !success {
                                     showRemoveCategoryFailed = true
                                 }
@@ -997,7 +1003,12 @@ private struct AddFlezcalFlow: View {
     @State private var savedCategory: SpotCategory? = nil
     /// Spot already had this category — skip straight to rating offer
     @State private var showAlreadyThere = false
-    /// Custom category was added — show info about limited features
+    /// Category awaiting user confirmation before saving
+    @State private var pendingCategory: FoodCategory? = nil
+    @State private var showCategoryConfirmation = false
+    /// Trending Flezcals from Firestore
+    @StateObject private var customService = CustomCategoryService()
+    @State private var showCreateTrending = false
 
     /// Live version of the spot — reflects in-session mutations.
     private var liveSpot: Spot {
@@ -1015,11 +1026,17 @@ private struct AddFlezcalFlow: View {
             allCategories: FoodCategory.allCategories,
             disabledCategoryIDs: disabledIDs,
             onSelect: { category in
-                selectedFlezcal = category
-                saveCategory(category)
+                pendingCategory = category
+                showCategoryConfirmation = true
             },
-            onCancel: { dismiss() }
+            onCancel: { dismiss() },
+            trendingCategories: customService.customCategories.map { $0.toFoodCategory() },
+            onCreateTrending: { showCreateTrending = true }
         )
+        .task { await customService.fetchAll() }
+        .sheet(isPresented: $showCreateTrending) {
+            CreateCustomCategoryView()
+        }
         .sheet(isPresented: $showRatingFlow, onDismiss: {
             // Swipe-to-dismiss or Skip: just finish — no thank-you unless they rated
             if !showThankYou {
@@ -1070,6 +1087,22 @@ private struct AddFlezcalFlow: View {
         } message: {
             if let cat = savedCategory {
                 Text("\(spot.name) already has \(cat.displayName). Would you like to rate it?")
+            }
+        }
+        .alert("Add Flezcal", isPresented: $showCategoryConfirmation) {
+            Button("Add") {
+                if let category = pendingCategory {
+                    selectedFlezcal = category
+                    saveCategory(category)
+                }
+                pendingCategory = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingCategory = nil
+            }
+        } message: {
+            if let category = pendingCategory {
+                Text("Add \(category.emoji) \(category.displayName) to \(spot.name)?")
             }
         }
         .alert("Thank You!", isPresented: $showThankYou) {

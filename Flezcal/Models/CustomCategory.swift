@@ -25,7 +25,7 @@ struct CustomCategory: Identifiable, Codable, Equatable, Hashable {
     // MARK: - Computed
 
     var normalizedName: String { displayName.lowercased().trimmingCharacters(in: .whitespaces) }
-    var color: Color { .purple }
+    var color: Color { .cyan }
 
     // MARK: - Memberwise init (required because custom init(from:) suppresses it)
 
@@ -501,7 +501,8 @@ extension CustomCategory {
     }
 
     /// Returns nil if valid, or an error message if the name is problematic.
-    static func validate(_ name: String) -> String? {
+    /// Pass `existingCustom` to also check against user-created Trending categories.
+    static func validate(_ name: String, existingCustom: [CustomCategory] = []) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let lower = trimmed.lowercased()
 
@@ -515,7 +516,7 @@ extension CustomCategory {
             return "\"\(trimmed)\" is too broad. Try something more specific like a particular dish."
         }
 
-        // Check against visible categories only — legacy/hidden categories
+        // Check against visible built-in categories — legacy/hidden categories
         // shouldn't block custom creation since the user can't see them.
         let existingNames = FoodCategory.allCategories.map { $0.displayName.lowercased() }
         let existingIDs = FoodCategory.allCategories.map { $0.id }
@@ -523,7 +524,7 @@ extension CustomCategory {
             return "\"\(trimmed)\" already exists as a category."
         }
 
-        // Check for very close matches (e.g. "taco" vs "tacos")
+        // Check for very close matches against built-ins (e.g. "taco" vs "tacos")
         for existing in existingNames {
             if lower.hasPrefix(existing) || existing.hasPrefix(lower) {
                 let match = FoodCategory.allCategories.first {
@@ -532,6 +533,18 @@ extension CustomCategory {
                 if let match {
                     return "Did you mean \"\(match.displayName)\"? It's already a category."
                 }
+            }
+        }
+
+        // Check against existing custom/Trending categories
+        for custom in existingCustom {
+            let customLower = custom.normalizedName
+            if lower == customLower {
+                return "\"\(custom.displayName)\" already exists as a Trending category."
+            }
+            // Prefix overlap: "tamale" vs "tamales", "dumpling" vs "dumplings"
+            if lower.hasPrefix(customLower) || customLower.hasPrefix(lower) {
+                return "Did you mean \"\(custom.displayName)\"? It's already a Trending category."
             }
         }
 

@@ -1,5 +1,5 @@
 import Foundation
-import FirebaseFirestore
+@preconcurrency import FirebaseFirestore
 
 /// Fetches and caches category rankings from Firestore `app_config/flezcal_rankings`.
 /// Provides tier lookups (Top 50 vs Trending) consumed by FoodCategoryGridView.
@@ -165,8 +165,9 @@ final class RankingService: ObservableObject {
             }
         }
 
-        // Build Firestore document
-        let rankingsData: [[String: Any]] = all.map { entry in
+        // Build Firestore document — nonisolated(unsafe) suppresses the
+        // sendability warning on [String: Any] bridging to NSDictionary.
+        nonisolated(unsafe) let rankingsData: [[String: Any]] = all.map { entry in
             [
                 "categoryID": entry.categoryID,
                 "displayName": entry.displayName,
@@ -178,7 +179,7 @@ final class RankingService: ObservableObject {
             ]
         }
 
-        let docData: [String: Any] = [
+        nonisolated(unsafe) let docData: [String: Any] = [
             "lastUpdated": FieldValue.serverTimestamp(),
             "rankings": rankingsData,
             "top50": top50,

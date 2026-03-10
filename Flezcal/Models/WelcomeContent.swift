@@ -63,8 +63,8 @@ struct WelcomeContent: Codable {
             ),
             WelcomeItem(
                 icon: "sparkles",
-                text: "✨ Create your own. Don't see your Flezcal? Create a custom one. "
-                    + "When enough people search for the same thing, it becomes an official category."
+                text: "✨ Create your own. Don't see your Flezcal? Create a trending one. "
+                    + "Popular trending Flezcals may be promoted to the Top 50."
             ),
         ],
         pages: [
@@ -91,7 +91,7 @@ struct WelcomeContent: Codable {
             WelcomePage(
                 icon: "heart.circle.fill",
                 headline: "Categories Evolve",
-                description: "The 50 built-in categories are just the start. Custom searches get tracked, and when a pattern emerges, it becomes official. The community decides what matters.",
+                description: "The Top 50 Flezcals are just the start. Trending searches get tracked, and when a pattern emerges, it joins the Top 50. The community decides what matters.",
                 color: "pink"
             ),
             WelcomePage(

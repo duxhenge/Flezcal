@@ -26,7 +26,7 @@ struct CreateCustomCategoryView: View {
     /// stops updating the list so edits aren't overwritten.
     @State private var userEditedTerms = false
 
-    /// All custom Flezcals use the worm emoji until promoted to a built-in category.
+    /// All trending Flezcals use the worm emoji.
     private let customEmoji = "🐛"
 
     var body: some View {
@@ -49,15 +49,15 @@ struct CreateCustomCategoryView: View {
                         Label("What to expect", systemImage: "info.circle.fill")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(.cyan)
 
-                        Text("Custom Flezcals work just like built-in categories — search for spots, add ratings, verify locations, and track offerings. "
-                            + "Popular custom Flezcals are tracked across the community and may be promoted to built-in categories with unique icons.")
+                        Text("Trending Flezcals work just like Top 50 Flezcals — search for spots, add ratings, verify locations, and track offerings. "
+                            + "Popular trending Flezcals may be promoted to the Top 50 with unique icons.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .padding(12)
-                    .background(Color.purple.opacity(0.06))
+                    .background(Color.cyan.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     // Name input
@@ -69,7 +69,7 @@ struct CreateCustomCategoryView: View {
                             .textFieldStyle(.roundedBorder)
                             .autocapitalization(.words)
                             .onChange(of: name) { _, newValue in
-                                validationError = CustomCategory.validate(newValue)
+                                validationError = CustomCategory.validate(newValue, existingCustom: customService.customCategories)
                                 saveError = nil
                                 // Auto-update search terms unless the user has manually edited them
                                 if !userEditedTerms {
@@ -129,7 +129,7 @@ struct CreateCustomCategoryView: View {
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 8)
-                                            .background(Color.purple.opacity(0.15))
+                                            .background(Color.cyan.opacity(0.15))
                                             .clipShape(Capsule())
                                         }
                                         .buttonStyle(.plain)
@@ -157,18 +157,18 @@ struct CreateCustomCategoryView: View {
                                 .frame(width: 48, height: 48)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(Color.purple.opacity(0.2))
+                                        .fill(Color.cyan.opacity(0.2))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.purple, lineWidth: 2)
+                                        .stroke(Color.cyan, lineWidth: 2)
                                 )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("All custom Flezcals use the worm icon")
+                                Text("All trending Flezcals use the worm icon")
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                Text("If your category becomes popular, it may be promoted to a built-in Flezcal with its own unique icon.")
+                                Text("If your category becomes popular, it may be promoted to a Top 50 Flezcal with its own unique icon.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -195,7 +195,7 @@ struct CreateCustomCategoryView: View {
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
-                            .background(Color.purple.opacity(0.1))
+                            .background(Color.cyan.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
@@ -216,7 +216,7 @@ struct CreateCustomCategoryView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.purple)
+                    .tint(.cyan)
                     .disabled(isSaving || name.trimmingCharacters(in: .whitespaces).isEmpty || validationError != nil)
 
                     if let error = saveError {
@@ -227,7 +227,7 @@ struct CreateCustomCategoryView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Custom Category")
+            .navigationTitle("Trending Flezcal")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 // Fetch popular custom categories so we can suggest similar ones
@@ -241,7 +241,7 @@ struct CreateCustomCategoryView: View {
             .alert("Category Created!", isPresented: $showSuccess) {
                 Button("Done") { dismiss() }
             } message: {
-                Text("\(name.trimmingCharacters(in: .whitespaces)) has been added to your picks! Ghost pins will now search for it. Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
+                Text("\(name.trimmingCharacters(in: .whitespaces)) has been added to your picks! Ghost pins will now search for it.")
             }
         }
     }
@@ -261,7 +261,7 @@ struct CreateCustomCategoryView: View {
                     } label: {
                         Text("Reset")
                             .font(.caption)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(.cyan)
                     }
                 }
             }
@@ -289,7 +289,7 @@ struct CreateCustomCategoryView: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.purple.opacity(0.1))
+                    .background(Color.cyan.opacity(0.1))
                     .clipShape(Capsule())
                 }
             }
@@ -307,7 +307,7 @@ struct CreateCustomCategoryView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(.cyan)
                 }
                 .disabled(newTerm.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -390,7 +390,7 @@ struct CreateCustomCategoryView: View {
                     generator.notificationOccurred(.success)
                     dismiss()
                 } else {
-                    saveError = "You've reached the maximum number of custom picks."
+                    saveError = "You've reached the maximum number of trending picks."
                 }
             } else {
                 isSaving = false
@@ -405,7 +405,7 @@ struct CreateCustomCategoryView: View {
             return
         }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard CustomCategory.validate(trimmed) == nil else { return }
+        guard CustomCategory.validate(trimmed, existingCustom: customService.customCategories) == nil else { return }
 
         isSaving = true
 
@@ -425,7 +425,7 @@ struct CreateCustomCategoryView: View {
                     generator.notificationOccurred(.success)
                     showSuccess = true
                 } else {
-                    saveError = "You've reached the maximum number of custom picks."
+                    saveError = "You've reached the maximum number of trending picks."
                 }
             } else {
                 isSaving = false

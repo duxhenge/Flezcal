@@ -39,6 +39,9 @@ struct SuggestedSpotSheet: View {
     @State private var pendingAddAfterSignIn = false
     /// Frozen copy captured when the sheet first appears.
     @State private var frozenResult: MultiCategoryCheckResult? = nil
+    /// Trending Flezcals from Firestore
+    @StateObject private var customService = CustomCategoryService()
+    @State private var showCreateTrending = false
 
     /// The FoodCategory the suggestion was found for.
     private var suggestedCategory: FoodCategory { suggestion.suggestedCategory }
@@ -182,8 +185,16 @@ struct SuggestedSpotSheet: View {
                     },
                     onCancel: {
                         showFlezcalPicker = false
+                    },
+                    trendingCategories: customService.customCategories.map { $0.toFoodCategory() },
+                    onCreateTrending: {
+                        showFlezcalPicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            showCreateTrending = true
+                        }
                     }
                 )
+                .task { await customService.fetchAll() }
                 .presentationDetents([.large])
             }
             .sheet(isPresented: $showConfirmSpot) {
@@ -206,6 +217,9 @@ struct SuggestedSpotSheet: View {
                     .environmentObject(spotService)
                     .environmentObject(photoService)
                 }
+            }
+            .sheet(isPresented: $showCreateTrending) {
+                CreateCustomCategoryView()
             }
         }
     }

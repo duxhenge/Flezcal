@@ -165,16 +165,16 @@ extension Tutorial {
             .spotlight(
                 "customizeButton",
                 title: "Make It Yours",
-                body: "There are 50+ trending categories to choose from, and you can have up to 3 active at once. "
+                body: "There are 50+ categories to choose from — Top 50 and trending — and you can have up to 3 active at once. "
                     + "Your picks shape everything: the map, the search results, the ghost pins.",
                 arrowEdge: .bottom,
                 shape: .rect(cornerRadius: 16)
             ),
             .textOnly(
                 title: "Or Create Something New",
-                body: "Don't see your thing? Tap \"Create Your Own\" Flezcal category. "
-                    + "Name it, pick an emoji, and refine your search terms. We track them "
-                    + "and when enough people search for the same thing, it can become an official category."
+                body: "Don't see your thing? Tap \"Create Your Own\" to create a trending Flezcal. "
+                    + "Name it, refine your search terms, and start searching. Popular trending Flezcals "
+                    + "may be promoted to the Top 50 with unique icons."
             ),
         ],
         estimatedMinutes: 1
@@ -187,7 +187,7 @@ extension Tutorial {
         title: "The Spots Tab",
         subtitle: "Browse, search, and filter verified spots and web search results in one place.",
         icon: "list.bullet",
-        color: .purple,
+        color: .cyan,
         steps: [
             .screenshot(
                 "tutorial_spots_overview",

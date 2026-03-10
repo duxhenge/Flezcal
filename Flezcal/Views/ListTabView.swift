@@ -406,6 +406,12 @@ private struct ExplorePanel: View {
         var rest: [MKMapItem] = []
 
         for (index, item) in results.prefix(preScreenedPoolSize).enumerated() {
+            // Skip venues that already exist as verified spots in Firestore.
+            if let name = item.name,
+               let coord = item.placemark.location?.coordinate,
+               findExistingSpot(name, coord.latitude, coord.longitude) != nil {
+                continue
+            }
             if isFilterSearch && matchedIndices.contains(index) {
                 top.append(item)
             } else {
@@ -886,13 +892,16 @@ struct ListTabView: View {
     @Binding var activePickIDs: Set<String>
     /// Community Map mode — shows all verified spots, hides ghost pins.
     @Binding var showCommunityMap: Bool
+    /// Set by the Map tab's list button — consumed on appear to set customLocation.
+    @Binding var pendingSpotsLocation: CustomSearchLocation?
 
-    init(locationManager: LocationManager, picksService: UserPicksService, activePickIDs: Binding<Set<String>>, showCommunityMap: Binding<Bool>, websiteChecker: WebsiteCheckService) {
+    init(locationManager: LocationManager, picksService: UserPicksService, activePickIDs: Binding<Set<String>>, showCommunityMap: Binding<Bool>, pendingSpotsLocation: Binding<CustomSearchLocation?>, websiteChecker: WebsiteCheckService) {
         self.locationManager = locationManager
         self.currentLocation = { [locationManager] in locationManager.userLocation }
         self.picksService = picksService
         self._activePickIDs = activePickIDs
         self._showCommunityMap = showCommunityMap
+        self._pendingSpotsLocation = pendingSpotsLocation
         self.websiteChecker = websiteChecker
     }
     @State private var selectedSpot: Spot?
@@ -1342,6 +1351,11 @@ struct ListTabView: View {
             } message: {
                 Text("Do you want to see all user verified spots for all 50 Flezcals in your search area?")
             }
+            .onChange(of: pendingSpotsLocation) { _, newLocation in
+                guard let location = newLocation else { return }
+                pendingSpotsLocation = nil  // consume immediately
+                customLocation = location
+            }
         }
     }
 
@@ -1655,6 +1669,6 @@ struct ListTabView: View {
 }
 
 #Preview {
-    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), showCommunityMap: .constant(false), websiteChecker: WebsiteCheckService())
+    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), showCommunityMap: .constant(false), pendingSpotsLocation: .constant(nil), websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
 }

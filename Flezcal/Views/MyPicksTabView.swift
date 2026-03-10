@@ -62,24 +62,7 @@ struct MyPicksTabView: View {
                     }
                     .padding(.horizontal)
 
-                    // Custom picks info banner (only when user has custom picks)
-                    if picksService.picks.contains(where: { $0.id.hasPrefix("custom_") }) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("About Custom Flezcals", systemImage: "info.circle.fill")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.purple)
 
-                            Text("Custom Flezcals let you search and tag spots, but don't include ratings, verifications, or offerings yet. "
-                                + "Popular custom Flezcals are tracked across the community and may be promoted to full categories with all features.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(12)
-                        .background(Color.purple.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .padding(.horizontal)
-                    }
 
                     // Button
                     Button {
@@ -151,18 +134,10 @@ private struct PickCard: View {
                     .font(.title3)
                     .fontWeight(.bold)
 
-                // Custom picks show community label; built-in show websiteKeywords
-                if category.id.hasPrefix("custom_") {
-                    Text("Community pick · search & tag")
-                        .font(.caption)
-                        .foregroundStyle(.purple.opacity(0.8))
-                        .lineLimit(1)
-                } else {
-                    Text(category.websiteKeywords.prefix(3).joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text(category.websiteKeywords.prefix(3).joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()

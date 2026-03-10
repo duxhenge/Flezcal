@@ -30,6 +30,7 @@ struct Verification: Identifiable, Codable {
 ///
 /// Threshold logic:
 /// - 1 user can verify instantly (< 10 total votes, any thumbs-up = confirmed)
+/// - Primary misclick protection: confirmation dialog in AddFlezcalFlow
 /// - 10+ votes: 70% positive threshold required to stay confirmed
 /// - Original verifier's vote does not expire (until user base is large enough)
 /// - Other votes expire after 3 months (rolling window — future enhancement)

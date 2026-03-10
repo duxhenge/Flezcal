@@ -432,7 +432,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .pierogi:           return "🥟"
         case .smashburgers:      return "🍔"
         case .pizza:             return "🍕"
-        // ── Custom — always 🐛 worm until promoted to built-in ──
+        // ── Custom / Trending — 🐛 worm icon ──
         case .custom:
             return "🐛"
         }
@@ -466,7 +466,7 @@ enum SpotCategory: Hashable, Identifiable {
     }
 
     /// Accent color for badges, filter chips, and map pins.
-    /// Custom Flezcals use white — they get a permanent color when promoted.
+    /// Custom / Trending Flezcals use cyan to match the trending tier.
     var color: Color {
         switch self {
         // ── Food ──
@@ -533,8 +533,8 @@ enum SpotCategory: Hashable, Identifiable {
         case .pierogi:           return Color(red: 0.8, green: 0.6, blue: 0.15)
         case .smashburgers:      return Color(red: 0.8, green: 0.15, blue: 0.1)
         case .pizza:             return Color(red: 0.8, green: 0.2, blue: 0.1)
-        // ── Custom — white pin until promoted ──
-        case .custom:            return .white
+        // ── Custom / Trending — cyan to match trending tier ──
+        case .custom:            return .cyan
         }
     }
 

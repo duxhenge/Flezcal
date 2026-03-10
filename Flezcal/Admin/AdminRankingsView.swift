@@ -134,7 +134,7 @@ struct AdminRankingsView: View {
             // Top 50
             let top50 = rankedList.filter { $0.tier == .top50 }
             if !top50.isEmpty {
-                Section("Top 50") {
+                Section("Top 50 Flezcals") {
                     ForEach(top50) { entry in
                         rankingRow(entry)
                     }
@@ -144,7 +144,7 @@ struct AdminRankingsView: View {
             // Trending
             let trending = rankedList.filter { $0.tier == .trending }
             if !trending.isEmpty {
-                Section("Trending") {
+                Section("Trending Flezcals") {
                     ForEach(trending) { entry in
                         rankingRow(entry)
                     }
@@ -174,7 +174,7 @@ struct AdminRankingsView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(Capsule().fill(.purple.opacity(0.7)))
+                            .background(Capsule().fill(.cyan.opacity(0.7)))
                     }
                 }
             }

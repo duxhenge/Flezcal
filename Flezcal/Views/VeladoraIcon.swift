@@ -255,7 +255,7 @@ struct FlanIcon: View {
 
 /// Convenience view that shows the right icon for any SpotCategory.
 /// Flan and Mezcal use custom SwiftUI drawings.
-/// Custom Flezcals show the 🐛 worm emoji on a white pin.
+/// Trending Flezcals show the 🐛 worm emoji.
 /// Any new category automatically gets its emoji as a fallback — no changes needed here.
 struct CategoryIcon: View {
     let category: SpotCategory
@@ -278,7 +278,7 @@ struct CategoryIcon: View {
 }
 
 /// Convenience view that shows the right icon for any FoodCategory.
-/// Mezcal → veladora candle, Flan → flan drawing, custom → 🐛 worm emoji.
+/// Mezcal → veladora candle, Flan → flan drawing, trending → 🐛 worm emoji.
 /// Use this everywhere a FoodCategory icon is needed (ghost pins, filter pills, pick cards).
 struct FoodCategoryIcon: View {
     let category: FoodCategory
@@ -290,7 +290,7 @@ struct FoodCategoryIcon: View {
         } else if category.id == "flan" {
             FlanIcon(size: size)
         } else if category.id.hasPrefix("custom_") {
-            // Custom Flezcals always show 🐛 worm until promoted to built-in
+            // Trending Flezcals show 🐛 worm emoji
             Text("🐛")
                 .font(.system(size: size * 0.75))
                 .frame(width: size, height: size)

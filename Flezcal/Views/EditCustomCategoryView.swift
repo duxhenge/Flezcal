@@ -68,7 +68,7 @@ struct EditCustomCategoryView: View {
                             } label: {
                                 Text("Reset to defaults")
                                     .font(.caption)
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(category.color)
                             }
                         }
 
@@ -89,7 +89,7 @@ struct EditCustomCategoryView: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(Color.purple.opacity(0.1))
+                                .background(category.color.opacity(0.1))
                                 .clipShape(Capsule())
                             }
                         }
@@ -107,7 +107,7 @@ struct EditCustomCategoryView: View {
                             } label: {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.title3)
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(category.color)
                             }
                             .disabled(newTerm.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
@@ -123,7 +123,7 @@ struct EditCustomCategoryView: View {
                             .frame(height: 50)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.purple)
+                    .tint(category.color)
                     .disabled(!hasChanges || searchTerms.isEmpty)
                 }
                 .padding()

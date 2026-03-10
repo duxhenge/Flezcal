@@ -102,6 +102,8 @@
 		TU0000010000000000000002 /* TutorialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000002 /* TutorialService.swift */; };
 		TU0000010000000000000003 /* TutorialOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000003 /* TutorialOverlay.swift */; };
 		TU0000010000000000000004 /* TutorialCurriculumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000004 /* TutorialCurriculumView.swift */; };
+		RK0000010000000000000001 /* RankingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = RK0000020000000000000001 /* RankingService.swift */; };
+		AR0000010000000000000001 /* AdminRankingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AR0000020000000000000001 /* AdminRankingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -219,6 +221,8 @@
 		TU0000020000000000000002 /* TutorialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialService.swift; sourceTree = "<group>"; };
 		TU0000020000000000000003 /* TutorialOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlay.swift; sourceTree = "<group>"; };
 		TU0000020000000000000004 /* TutorialCurriculumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialCurriculumView.swift; sourceTree = "<group>"; };
+		RK0000020000000000000001 /* RankingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingService.swift; sourceTree = "<group>"; };
+		AR0000020000000000000001 /* AdminRankingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminRankingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -276,6 +280,7 @@
 				CP0000020000000000000001 /* AdminCustomPicksView.swift */,
 				AF0000020000000000000001 /* AdminFeatureFlagsView.swift */,
 				AF0000020000000000000002 /* AdminFeedbackListView.swift */,
+				AR0000020000000000000001 /* AdminRankingsView.swift */,
 			);
 			path = Admin;
 			sourceTree = "<group>";
@@ -386,6 +391,7 @@
 				GH0000020000000000000001 /* Geohash.swift */,
 				RL0000020000000000000001 /* RateLimiter.swift */,
 				FF0000020000000000000001 /* FeatureFlagService.swift */,
+				RK0000020000000000000001 /* RankingService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -722,6 +728,8 @@
 				TU0000010000000000000002 /* TutorialService.swift in Sources */,
 				TU0000010000000000000003 /* TutorialOverlay.swift in Sources */,
 				TU0000010000000000000004 /* TutorialCurriculumView.swift in Sources */,
+				RK0000010000000000000001 /* RankingService.swift in Sources */,
+				AR0000010000000000000001 /* AdminRankingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

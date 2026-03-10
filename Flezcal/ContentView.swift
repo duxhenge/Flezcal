@@ -24,6 +24,9 @@ struct ContentView: View {
     /// Set by the .showAreaOnMap notification — MapTabView picks this up,
     /// centers the camera on the area, and runs fetchAndPreScreen.
     @State private var pendingMapCenter: CLLocationCoordinate2D? = nil
+    /// Set by the .showSpotsAtLocation notification — ListTabView picks this up
+    /// and sets its customLocation so the Spots tab searches from that area.
+    @State private var pendingSpotsLocation: CustomSearchLocation? = nil
     /// Shared Flezcal filter state — which pick pills are active.
     /// Synced between Map and Spots tabs so toggling a pill on one tab
     /// carries over when switching to the other.
@@ -62,7 +65,7 @@ struct ContentView: View {
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
-                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, websiteChecker: websiteChecker)
+                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, websiteChecker: websiteChecker)
                     .tabItem { Label("Spots", systemImage: "list.bullet") }
                     .tag(AppTab.spots)
 
@@ -166,6 +169,18 @@ struct ContentView: View {
                 pendingMapCenter = CLLocationCoordinate2D(latitude: lat, longitude: lon)
             }
             selectedTab = AppTab.explore
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSpotsAtLocation)) { notification in
+            if let info = notification.userInfo,
+               let lat = info["latitude"] as? Double,
+               let lon = info["longitude"] as? Double {
+                let name = info["name"] as? String ?? "Map Area"
+                pendingSpotsLocation = CustomSearchLocation(
+                    name: name,
+                    coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                )
+            }
+            selectedTab = AppTab.spots
         }
         .wormEasterEgg()
         .sheet(isPresented: $showWelcome) {

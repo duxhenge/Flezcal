@@ -42,7 +42,7 @@ Tap **"Let's go!"** to enter the app. This screen may reappear when new features
 
 After the welcome screen, you'll see the **Learn Flezcal** tutorials page. Four guided tutorials walk you through the app:
 
-1. **Setting Up Your Flezcals** -- Choose your picks, customize search terms, and create custom categories
+1. **Setting Up Your Flezcals** -- Choose your picks, customize search terms, and create trending categories
 2. **The Spots Tab** -- Browse, search, and filter verified spots and web search results
 3. **The Map** -- Understand pin types, filters, toggles, and searching new areas
 4. **Adding a Spot** -- Verify and add spots to the community database
@@ -62,7 +62,7 @@ You can sign in from the **Profile** tab or when you try to add a spot.
 
 ## Your Picks: Choosing What You're Looking For
 
-Your picks are the heart of the app. They determine what shows up on your map, which ghost pins appear, and what the web checker searches for. You can have up to **3 picks** at a time -- any combination of built-in and custom categories.
+Your picks are the heart of the app. They determine what shows up on your map, which ghost pins appear, and what the web checker searches for. You can have up to **3 picks** at a time -- any combination of Top 50 and trending categories.
 
 ### Viewing and Managing Picks
 
@@ -78,7 +78,7 @@ Below your active picks, empty slots show how many more you can add. Tap an empt
 
 ### Available Categories
 
-Flezcal includes 50 curated categories across three groups:
+Flezcal includes 50 curated Top 50 categories across three groups:
 
 **Food:** Mezcal, Handmade Tortillas, Tacos, Birria, Pozole, Ceviche, Mole, Pupusas, Ramen, Sushi, Omakase, Dim Sum, Pho, Bibimbap, Korean BBQ, Dumplings, Poke, Tapas, Paella, Iberico Ham, Wood-Fired Pizza, Oysters, Lobster Rolls, Tartare, Caviar
 
@@ -88,20 +88,19 @@ Flezcal includes 50 curated categories across three groups:
 
 To add or remove a category, tap it in the grid. Selected categories show a checkmark. A counter at the top shows how many slots you've used.
 
-### Creating a Custom Category
+### Creating a Trending Flezcal
 
-Can't find what you're looking for? Tap **"Create Your Own"** at the bottom of the category grid. Custom categories count toward your 3-pick limit, so you'll need to remove an existing pick if all slots are full.
+Can't find what you're looking for? Tap **"Create Your Own"** at the bottom of the category grid. Trending Flezcals count toward your 3-pick limit, so you'll need to remove an existing pick if all slots are full.
 
 1. **Name your category** -- be specific. "Pupusas" or "Empanadas" works great. Broad terms like "Italian" or "Seafood" are too generic and will be rejected.
-2. **Choose an emoji** from the provided selection.
-3. **Review the search terms** -- the app auto-generates terms based on your category name. You can add, remove, or modify these (see below).
-4. Tap **"Create & Add to My Flezcals"** to add it to your picks.
+2. **Review the search terms** -- the app auto-generates terms based on your category name. You can add, remove, or modify these (see below).
+3. Tap **"Create & Add to My Flezcals"** to add it to your picks.
 
-Custom categories appear with a purple color scheme to distinguish them from built-in categories.
+Trending Flezcals work just like Top 50 categories -- search for spots, add ratings, verify locations, and track offerings. They appear with a cyan color scheme and the worm icon. Popular trending Flezcals may be promoted to the Top 50 with unique icons.
 
 ### Adjusting Web Search Terms
 
-Every category has a set of search terms that the app uses when scanning venue websites. You can customize these for any pick -- built-in or custom.
+Every category has a set of search terms that the app uses when scanning venue websites. You can customize these for any pick -- Top 50 or trending.
 
 1. Go to **My Flezcals** tab
 2. Tap the **edit button** (slider icon) on any pick card
