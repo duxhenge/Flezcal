@@ -13,6 +13,7 @@ concurrency:
 env:
   SCHEME: Flezcal
   XCODEPROJ: Flezcal.xcodeproj
+  DERIVED_DATA: build/DerivedData
 
 jobs:
   # ─── Job 1: Secrets Leak Detection ───────────────────────────────
@@ -114,12 +115,12 @@ jobs:
           fi
           echo "✓ GoogleService-Info.plist injected."
 
-      # Resolve SPM dependencies with caching (includes Xcode version to avoid stale modules)
-      - name: Cache SPM packages
+      # Cache DerivedData (SPM checkouts + build products in one location)
+      - name: Cache DerivedData
         uses: actions/cache@v4
         with:
           path: |
-            build/SourcePackages
+            build/DerivedData/SourcePackages
           key: spm-${{ runner.os }}-xcode16.4-${{ hashFiles('Flezcal.xcodeproj/project.pbxproj') }}
           restore-keys: |
             spm-${{ runner.os }}-xcode16.4-
@@ -129,7 +130,7 @@ jobs:
           xcodebuild -resolvePackageDependencies \
             -project $XCODEPROJ \
             -scheme $SCHEME \
-            -clonedSourcePackagesDirPath build/SourcePackages
+            -derivedDataPath $DERIVED_DATA
 
       # Find a valid simulator destination
       - name: Resolve Simulator
@@ -151,23 +152,6 @@ jobs:
           echo "DEST=$DEVICE" >> $GITHUB_OUTPUT
           echo "Using simulator: $DEVICE"
 
-      # Symlink SPM checkouts so the Crashlytics run-script phase can find them.
-      # The "Upload dSYMs" script uses ${BUILD_DIR%/Build/*}/SourcePackages/...
-      # but -clonedSourcePackagesDirPath puts them under build/SourcePackages/.
-      - name: Link SPM checkouts for Crashlytics script
-        run: |
-          DERIVED=$(xcodebuild -project $XCODEPROJ -scheme $SCHEME -showBuildSettings 2>/dev/null \
-            | grep -m1 'BUILD_DIR' | awk '{print $3}')
-          DERIVED_ROOT="${DERIVED%/Build/*}"
-          mkdir -p "$DERIVED_ROOT/SourcePackages/checkouts"
-          if [ -d build/SourcePackages/checkouts/firebase-ios-sdk ]; then
-            ln -sfn "$(pwd)/build/SourcePackages/checkouts/firebase-ios-sdk" \
-              "$DERIVED_ROOT/SourcePackages/checkouts/firebase-ios-sdk"
-            echo "✓ Symlinked firebase-ios-sdk for Crashlytics script"
-          else
-            echo "⚠ firebase-ios-sdk not found in build/SourcePackages — Crashlytics script may fail"
-          fi
-
       # Build for testing (xcbeautify is pre-installed on macos-15 runners)
       - name: Build
         run: |
@@ -176,7 +160,7 @@ jobs:
             -project $XCODEPROJ \
             -scheme $SCHEME \
             -destination "${{ steps.sim.outputs.DEST }}" \
-            -clonedSourcePackagesDirPath build/SourcePackages \
+            -derivedDataPath $DERIVED_DATA \
             -skipPackagePluginValidation \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -200,7 +184,7 @@ jobs:
             -project $XCODEPROJ \
             -scheme $SCHEME \
             -destination "${{ steps.sim.outputs.DEST }}" \
-            -clonedSourcePackagesDirPath build/SourcePackages \
+            -derivedDataPath $DERIVED_DATA \
             -only-testing:FlezcalTests \
             -enableCodeCoverage YES \
             -resultBundlePath TestResults.xcresult \
