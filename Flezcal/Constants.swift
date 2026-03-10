@@ -77,12 +77,17 @@ enum FirestoreCollections {
     static let adminReminders    = "admin_reminders"
     static let adminNotes        = "admin_notes"
 
-    // Feature flags and beta feedback
+    // Feature flags, rankings, and beta feedback
     // app_config/feature_flags — read: any auth user, write: admin only
+    // app_config/flezcal_rankings — read: any auth user, write: admin only
     // beta_feedback — create: any auth user, read/update/delete: admin only
     static let appConfig         = "app_config"
-    static let featureFlags      = "feature_flags"  // document under app_config
+    static let featureFlags      = "feature_flags"      // document under app_config
+    static let flezcalRankings   = "flezcal_rankings"    // document under app_config
     static let betaFeedback      = "beta_feedback"
+
+    // Category pick tracking (per-category pick counts with per-user dedup)
+    static let categoryPicks     = "categoryPicks"
 }
 
 /// Feature flags for phased rollout.

@@ -181,28 +181,7 @@ extension CustomCategory {
             keywords = [lower]
         }
 
-        // Auto-generate map search terms: the specific name first (for Apple Maps
-        // relevance), then broad fallback terms that return many nearby venues.
-        // The website pre-screen will re-rank the broad results by scanning
-        // homepages for the custom keyword.  Without these fallbacks, niche terms
-        // like "peameal bacon" return zero Apple Maps hits and the user sees an
-        // empty list.
-        //
-        // Alcoholic beverages get "bar" and "liquor store" instead of "cafe"
-        // so the search finds bars and shops that carry the spirit/drink.
-        // Wine categories also get "wine shop"; beer categories get "brewery".
-        let searchTerms: [String]
-        if Self.isLikelyAlcoholic(lower) {
-            var terms = [lower, "bar", "liquor store", "restaurant"]
-            if Self.isLikelyWine(lower) {
-                terms.insert("wine shop", at: 2)
-            } else if Self.isLikelyBeer(lower) {
-                terms.insert("brewery", at: 2)
-            }
-            searchTerms = terms
-        } else {
-            searchTerms = [lower, "\(lower) restaurant", "restaurant", "cafe"]
-        }
+        let searchTerms = suggestedVenueTypes(for: lower)
 
         return CustomCategory(
             displayName: name,
@@ -212,6 +191,181 @@ extension CustomCategory {
             websiteKeywords: keywords,
             mapSearchTerms: searchTerms
         )
+    }
+
+    /// Generates smart map search terms based on the food/drink name.
+    /// Uses a curated dictionary of cuisine→venue-type mappings derived from
+    /// the 50 built-in categories, then falls back to alcohol detection,
+    /// then to `["name", "name restaurant"]` — never generic "restaurant"/"cafe".
+    static func suggestedVenueTypes(for name: String) -> [String] {
+        let lower = name.lowercased()
+
+        // 1. Check alcohol first (has its own venue logic)
+        if isLikelyAlcoholic(lower) {
+            var terms = [lower, "bar", "liquor store"]
+            if isLikelyWine(lower) {
+                terms.insert("wine shop", at: 2)
+            } else if isLikelyBeer(lower) {
+                terms.insert("brewery", at: 2)
+            }
+            return terms
+        }
+
+        // 2. Check cuisine dictionary for exact match
+        if let venueTypes = cuisineVenueTypes[lower] {
+            return [lower] + venueTypes
+        }
+
+        // 3. Check for substring matches in dictionary keys
+        for (cuisine, venueTypes) in cuisineVenueTypes {
+            if lower.contains(cuisine) || cuisine.contains(lower) {
+                return [lower] + venueTypes
+            }
+        }
+
+        // 4. Check broad cuisine categories
+        if let venueTypes = broadCuisineMatch(lower) {
+            return [lower] + venueTypes
+        }
+
+        // 5. Default: specific name + "name restaurant" — no generic fallbacks
+        return [lower, "\(lower) restaurant"]
+    }
+
+    /// Maps common food items to the venue types most likely to serve them.
+    /// Built from patterns in the 50 curated built-in categories.
+    private static let cuisineVenueTypes: [String: [String]] = [
+        // Mexican / Latin
+        "tamales": ["mexican restaurant", "tamale shop"],
+        "pupusas": ["salvadoran restaurant", "pupuseria"],
+        "empanadas": ["argentinian restaurant", "empanada shop"],
+        "churros": ["mexican restaurant", "churro shop"],
+        "tres leches": ["mexican restaurant", "bakery"],
+        "elote": ["mexican restaurant", "street food"],
+        "chilaquiles": ["mexican restaurant"],
+        "arepas": ["venezuelan restaurant", "colombian restaurant"],
+        "ceviche": ["peruvian restaurant", "seafood restaurant"],
+
+        // Japanese
+        "ramen": ["ramen shop", "japanese restaurant"],
+        "sushi": ["sushi restaurant", "japanese restaurant"],
+        "omakase": ["omakase restaurant", "sushi restaurant"],
+        "mochi": ["japanese bakery", "mochi shop"],
+        "tempura": ["japanese restaurant", "tempura restaurant"],
+        "udon": ["udon restaurant", "japanese restaurant"],
+        "yakitori": ["yakitori restaurant", "izakaya"],
+        "takoyaki": ["japanese street food", "takoyaki shop"],
+        "onigiri": ["onigiri shop", "japanese restaurant"],
+        "katsu": ["japanese restaurant", "tonkatsu restaurant"],
+        "matcha": ["tea house", "japanese cafe"],
+
+        // Korean
+        "bibimbap": ["korean restaurant"],
+        "korean bbq": ["korean bbq restaurant"],
+        "kimchi": ["korean restaurant"],
+        "tteokbokki": ["korean street food", "korean restaurant"],
+        "bulgogi": ["korean restaurant", "korean bbq restaurant"],
+
+        // Chinese / Dim Sum
+        "dim sum": ["dim sum restaurant", "chinese restaurant"],
+        "dumplings": ["dumpling restaurant", "chinese restaurant"],
+        "xiao long bao": ["dumpling restaurant", "shanghainese restaurant"],
+        "peking duck": ["chinese restaurant", "peking duck restaurant"],
+        "congee": ["chinese restaurant", "congee shop"],
+        "hot pot": ["hot pot restaurant"],
+        "bao": ["bao shop", "taiwanese restaurant"],
+
+        // Vietnamese / Thai / Southeast Asian
+        "pho": ["pho restaurant", "vietnamese restaurant"],
+        "banh mi": ["vietnamese restaurant", "banh mi shop"],
+        "pad thai": ["thai restaurant"],
+        "satay": ["thai restaurant", "malaysian restaurant"],
+        "laksa": ["malaysian restaurant", "singaporean restaurant"],
+
+        // Mediterranean / Middle Eastern
+        "tapas": ["tapas bar", "spanish restaurant"],
+        "paella": ["spanish restaurant", "paella restaurant"],
+        "baklava": ["turkish restaurant", "bakery"],
+        "falafel": ["middle eastern restaurant", "falafel shop"],
+        "shawarma": ["shawarma shop", "middle eastern restaurant"],
+        "hummus": ["middle eastern restaurant"],
+        "khachapuri": ["georgian restaurant"],
+
+        // Italian / French / European
+        "wood fired pizza": ["pizzeria"],
+        "pizza": ["pizzeria"],
+        "gelato": ["gelato shop", "gelateria"],
+        "croissants": ["french bakery", "patisserie"],
+        "creme brulee": ["french restaurant", "patisserie"],
+        "crepes": ["creperie", "french restaurant"],
+        "iberico ham": ["spanish restaurant", "tapas bar"],
+        "tartare": ["french restaurant", "bistro"],
+        "risotto": ["italian restaurant"],
+        "gnocchi": ["italian restaurant"],
+        "tiramisu": ["italian restaurant", "bakery"],
+        "pierogi": ["polish restaurant", "pierogi shop"],
+
+        // Seafood
+        "oysters": ["oyster bar", "seafood restaurant"],
+        "lobster rolls": ["lobster shack", "seafood restaurant"],
+        "caviar": ["fine dining", "caviar bar"],
+        "poke": ["poke shop", "hawaiian restaurant"],
+        "fish tacos": ["taqueria", "seafood restaurant"],
+        "clam chowder": ["seafood restaurant", "chowder house"],
+
+        // Sweets / Desserts
+        "flan": ["mexican restaurant", "bakery"],
+        "artisan chocolate": ["chocolate shop", "chocolatier"],
+        "macarons": ["french bakery", "patisserie"],
+        "cannoli": ["italian bakery", "pastry shop"],
+        "donuts": ["donut shop", "bakery"],
+        "waffles": ["waffle house", "breakfast restaurant"],
+        "ice cream": ["ice cream shop", "creamery"],
+        "cheesecake": ["bakery", "cheesecake shop"],
+
+        // Drinks (non-alcoholic)
+        "boba": ["boba shop", "bubble tea shop"],
+        "specialty coffee": ["coffee roaster", "specialty coffee shop"],
+        "kombucha": ["kombucha bar", "juice bar"],
+        "tea": ["tea house", "tea room"],
+
+        // Bakery / Bread
+        "sourdough": ["bakery", "artisan bakery"],
+        "bagels": ["bagel shop", "deli"],
+        "pretzels": ["pretzel shop", "bakery"],
+    ]
+
+    /// Checks for broader cuisine-family matches when exact lookup fails.
+    private static func broadCuisineMatch(_ name: String) -> [String]? {
+        let mexicanKeywords = ["taco", "burrito", "enchilada", "quesadilla", "torta",
+                               "carnitas", "barbacoa", "al pastor", "mole", "pozole"]
+        for keyword in mexicanKeywords where name.contains(keyword) {
+            return ["mexican restaurant", "taqueria"]
+        }
+
+        let japaneseKeywords = ["sashimi", "donburi", "gyoza", "edamame", "teriyaki", "miso"]
+        for keyword in japaneseKeywords where name.contains(keyword) {
+            return ["japanese restaurant"]
+        }
+
+        let italianKeywords = ["pasta", "ravioli", "lasagna", "pesto", "carbonara",
+                                "bolognese", "prosciutto", "bruschetta", "focaccia"]
+        for keyword in italianKeywords where name.contains(keyword) {
+            return ["italian restaurant", "trattoria"]
+        }
+
+        let indianKeywords = ["curry", "biryani", "naan", "tikka", "samosa",
+                               "masala", "tandoori", "dosa", "paneer", "chutney"]
+        for keyword in indianKeywords where name.contains(keyword) {
+            return ["indian restaurant"]
+        }
+
+        let thaiKeywords = ["tom yum", "green curry", "red curry", "som tum", "larb", "massaman"]
+        for keyword in thaiKeywords where name.contains(keyword) {
+            return ["thai restaurant"]
+        }
+
+        return nil
     }
 }
 

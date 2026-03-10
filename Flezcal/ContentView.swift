@@ -13,6 +13,7 @@ struct ContentView: View {
     @EnvironmentObject var authService: AuthService
     @StateObject private var welcomeService = WelcomeService()
     @StateObject private var picksService = UserPicksService()
+    @StateObject private var rankingService = RankingService()
     @StateObject private var tutorialService = TutorialService()
     @State private var showWelcome = false
     @State private var showTutorialCurriculum = false
@@ -111,6 +112,7 @@ struct ContentView: View {
             // Tutorial spotlight overlay — renders above everything when active
             TutorialOverlay(tutorialService: tutorialService)
         }
+        .environmentObject(rankingService)
         .onAppear {
             featureFlags.startListening()
             tutorialService.switchTab = { tab in selectedTab = tab }
@@ -206,6 +208,9 @@ struct ContentView: View {
                     tutorialService.markCurriculumShown()
                 }
             }
+            // Fetch category rankings (Top 50 / Trending tiers).
+            // Falls back to hardcoded defaults if offline or doc missing.
+            await rankingService.fetchRankings()
         }
         .onChange(of: authService.isSignedIn) { _, _ in
             // Pick tracking now fires only on deliberate user actions

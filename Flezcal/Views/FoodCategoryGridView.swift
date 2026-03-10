@@ -18,6 +18,7 @@ import SwiftUI
 struct FoodCategoryGridView: View {
     @EnvironmentObject var picksService: UserPicksService
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var rankingService: RankingService
     @Environment(\.dismiss) private var dismiss
 
     @State private var showCreateCustom = false
@@ -62,7 +63,7 @@ struct FoodCategoryGridView: View {
                 counterBadge
 
                 if FeatureFlags.broadSearchEnabled {
-                    // Selected built-in picks shown as a row at the top
+                    // Selected picks (built-in + custom, unified)
                     let selectedBuiltIn = picksService.picks.filter { !$0.id.hasPrefix("custom_") }
                     if !selectedBuiltIn.isEmpty {
                         selectedPicksGrid(selectedBuiltIn)
@@ -82,13 +83,16 @@ struct FoodCategoryGridView: View {
                             .padding(.horizontal)
                     }
 
-                    // Unselected built-in categories to choose from
+                    // Split unselected categories into Top 50 and Trending
                     let unselected = FoodCategory.allCategories.filter { cat in
                         !picksService.isSelected(cat)
                     }
-                    if !unselected.isEmpty {
+                    let unselectedTop50 = unselected.filter { rankingService.isTop50($0.id) }
+                    let unselectedTrending = unselected.filter { rankingService.isTrending($0.id) }
+
+                    if !unselectedTop50.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("All Categories")
+                            Text("Top 50")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
@@ -96,8 +100,27 @@ struct FoodCategoryGridView: View {
 
                             UnselectedGridContent(
                                 columns: columns,
-                                categories: unselected,
-                                picksService: picksService
+                                categories: unselectedTop50,
+                                picksService: picksService,
+                                tier: .top50
+                            )
+                            .padding(.horizontal)
+                        }
+                    }
+
+                    if !unselectedTrending.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Trending")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.cyan)
+                                .padding(.horizontal)
+
+                            UnselectedGridContent(
+                                columns: columns,
+                                categories: unselectedTrending,
+                                picksService: picksService,
+                                tier: .trending
                             )
                             .padding(.horizontal)
                         }
@@ -207,7 +230,8 @@ struct FoodCategoryGridView: View {
     private func selectedPicksGrid(_ selected: [FoodCategory]) -> some View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(selected) { cat in
-                FoodCategoryCell(category: cat, picksService: picksService)
+                FoodCategoryCell(category: cat, picksService: picksService,
+                                 tier: rankingService.tier(for: cat.id))
             }
         }
     }
@@ -220,6 +244,10 @@ struct FoodCategoryGridView: View {
                 .foregroundStyle(.secondary)
 
             ForEach(customPicks) { pick in
+                let isTrending = rankingService.isTrending(pick.id)
+                let fillColor = isTrending ? Color.cyan.opacity(0.08) : Color.purple.opacity(0.08)
+                let strokeColor = isTrending ? Color.cyan.opacity(0.3) : Color.purple.opacity(0.3)
+
                 HStack(spacing: 12) {
                     FoodCategoryIcon(category: pick, size: 26)
                     Text(pick.displayName)
@@ -244,10 +272,10 @@ struct FoodCategoryGridView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.purple.opacity(0.08))
+                        .fill(fillColor)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                                .stroke(strokeColor, lineWidth: 1)
                         )
                 )
             }
@@ -300,11 +328,12 @@ private struct UnselectedGridContent: View {
     let columns: [GridItem]
     let categories: [FoodCategory]
     @ObservedObject var picksService: UserPicksService
+    var tier: RankedCategory.Tier = .top50
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(categories) { cat in
-                FoodCategoryCell(category: cat, picksService: picksService)
+                FoodCategoryCell(category: cat, picksService: picksService, tier: tier)
             }
         }
     }
@@ -315,8 +344,11 @@ private struct UnselectedGridContent: View {
 private struct FoodCategoryCell: View {
     let category: FoodCategory
     @ObservedObject var picksService: UserPicksService
+    var tier: RankedCategory.Tier = .top50
 
     private var isSelected: Bool { picksService.isSelected(category) }
+    /// Trending categories use cyan accent instead of the category's own color.
+    private var accentColor: Color { tier == .trending ? .cyan : category.color }
 
     /// Non-launch categories are locked ("Coming Soon") until broadSearchEnabled.
     /// Launch categories are always freely selectable.
@@ -357,17 +389,19 @@ private struct FoodCategoryCell: View {
                 .frame(width: 64, height: 64)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(isSelected ? category.color.opacity(0.2) : Color(.systemGray6))
+                        .fill(isSelected
+                              ? accentColor.opacity(0.2)
+                              : (tier == .trending ? Color.cyan.opacity(0.08) : Color(.systemGray6)))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(isSelected ? category.color : Color.clear, lineWidth: 2)
+                        .stroke(isSelected ? accentColor : (tier == .trending ? Color.cyan.opacity(0.2) : Color.clear), lineWidth: 2)
                 )
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(category.color)
+                    .foregroundStyle(accentColor)
                     .background(Circle().fill(Color(.systemBackground)))
                     .offset(x: 6, y: -6)
                     .transition(.scale.combined(with: .opacity))
@@ -380,7 +414,7 @@ private struct FoodCategoryCell: View {
             Text(category.displayName)
                 .font(.caption2)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? category.color : (isDisabled ? Color.secondary : Color.primary))
+                .foregroundColor(isSelected ? accentColor : (isDisabled ? Color.secondary : Color.primary))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)

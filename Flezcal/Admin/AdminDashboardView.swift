@@ -36,6 +36,10 @@ struct AdminDashboardView: View {
                 AdminCategoriesView()
                     .tabItem { Label("Categories", systemImage: "tag") }
                     .tag(6)
+
+                AdminRankingsView()
+                    .tabItem { Label("Rankings", systemImage: "chart.line.uptrend.xyaxis") }
+                    .tag(7)
             }
             .tint(.orange)
             .navigationTitle("Admin")
