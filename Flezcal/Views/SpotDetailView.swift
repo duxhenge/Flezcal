@@ -345,7 +345,7 @@ struct SpotDetailView: View {
                                     showSignIn = true
                                 }
                             } label: {
-                                Label("Report as permanently closed", systemImage: "building.2.crop.circle.badge.xmark")
+                                Label("Report as permanently closed", systemImage: "building.2.crop.circle")
                                     .font(.caption)
                             }
                             .foregroundStyle(.secondary)

@@ -444,13 +444,6 @@ struct ConfirmSpotView: View {
         guard let coordinate = mapItem.placemark.location?.coordinate,
               let name = mapItem.name else { return }
         existingSpot = spotService.findExistingSpot(name: name, latitude: coordinate.latitude, longitude: coordinate.longitude)
-        #if DEBUG
-        if let existing = existingSpot {
-            print("[ConfirmSpot] checkForExistingSpot: found \(existing.name), categories: \(existing.categories.map(\.rawValue))")
-        } else {
-            print("[ConfirmSpot] checkForExistingSpot: no existing spot found for '\(name)'")
-        }
-        #endif
     }
 
     private func saveSpot() {
@@ -479,13 +472,6 @@ struct ConfirmSpotView: View {
         Task {
             if let existing = existingSpot {
                 var didSomething = false
-
-                #if DEBUG
-                print("[ConfirmSpot] Existing spot found: \(existing.name) (id: \(existing.id))")
-                print("[ConfirmSpot]   existing categories: \(existing.categories.map(\.rawValue))")
-                print("[ConfirmSpot]   adding category: \(category.rawValue)")
-                print("[ConfirmSpot]   already has it: \(existing.categories.contains(category))")
-                #endif
 
                 // Add the category (also unhides if the spot was soft-deleted)
                 let catSuccess = await spotService.addCategories(spotID: existing.id, newCategories: [category], addedBy: userID)
@@ -522,16 +508,10 @@ struct ConfirmSpotView: View {
                     showRatingFlow = true
                 } else {
                     // Category already existed, nothing changed — offer to rate it
-                    #if DEBUG
-                    print("[ConfirmSpot] didSomething=false → showing 'Already on Flezcal' alert")
-                    #endif
                     showAlreadyThere = true
                 }
             } else {
                 // Create new spot
-                #if DEBUG
-                print("[CustomFlezcal] Creating new spot '\(mapItem.name ?? "?")' with category: \(category.rawValue) (isCustom: \(category.isCustom))")
-                #endif
                 let spot = Spot(
                     name: mapItem.name ?? "Unknown",
                     address: mapItem.placemark.formattedAddress ?? "Unknown address",
@@ -549,9 +529,6 @@ struct ConfirmSpotView: View {
                     categoryAddedBy: [category.rawValue: userID],
                     websiteDetectedCategories: websiteDetectedCategories
                 )
-                #if DEBUG
-                print("[CustomFlezcal] Spot categories array: \(spot.categories.map(\.rawValue))")
-                #endif
 
                 let success = await spotService.addSpot(spot)
                 isSaving = false

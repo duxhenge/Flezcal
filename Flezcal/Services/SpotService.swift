@@ -556,15 +556,9 @@ class SpotService: ObservableObject {
     /// (cannot remove the last one). Also cleans up the `categoryAddedBy` attribution entry.
     func removeCategory(spotID: String, category: SpotCategory) async -> Bool {
         guard let index = spots.firstIndex(where: { $0.id == spotID }) else {
-            #if DEBUG
-            print("[SpotService] removeCategory: spot \(spotID) not found in local cache")
-            #endif
             return false
         }
         guard spots[index].categories.count > 1 else {
-            #if DEBUG
-            print("[SpotService] removeCategory: spot has only 1 category, cannot remove")
-            #endif
             return false
         }
 
@@ -573,9 +567,6 @@ class SpotService: ObservableObject {
 
         // Safety: don't leave an empty array
         guard !updated.isEmpty else {
-            #if DEBUG
-            print("[SpotService] removeCategory: removal would leave empty array")
-            #endif
             return false
         }
 
@@ -588,26 +579,13 @@ class SpotService: ObservableObject {
             attribution.removeValue(forKey: category.rawValue)
             data["categoryAddedBy"] = attribution.isEmpty ? FieldValue.delete() : attribution
 
-            #if DEBUG
-            print("[SpotService] removeCategory: writing to Firestore — removing \(category.rawValue) from \(spots[index].name)")
-            print("[SpotService]   categories before: \(spots[index].categories.map(\.rawValue))")
-            print("[SpotService]   categories after:  \(rawCategories)")
-            #endif
-
             try await db.collection(collectionName).document(spotID).updateData(data)
             spots[index].categories = updated
             spots[index].categoryAddedBy = attribution.isEmpty ? nil : attribution
-
-            #if DEBUG
-            print("[SpotService] removeCategory: ✅ Firestore + local cache updated")
-            #endif
             return true
         } catch {
             errorMessage = "Failed to remove category: \(error.localizedDescription)"
             CrashReporter.record(error, context: "SpotService.removeCategory")
-            #if DEBUG
-            print("[SpotService] removeCategory: ❌ Firestore write failed: \(error.localizedDescription)")
-            #endif
             return false
         }
     }
