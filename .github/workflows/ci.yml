@@ -115,13 +115,13 @@ jobs:
           fi
           echo "✓ GoogleService-Info.plist injected."
 
-      # Cache DerivedData (SPM checkouts + build products in one location)
-      - name: Cache DerivedData
+      # Cache SPM checkouts (separate from DerivedData build products)
+      - name: Cache SPM packages
         uses: actions/cache@v4
         with:
           path: |
-            build/DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-xcode16.4-${{ hashFiles('Flezcal.xcodeproj/project.pbxproj') }}
+            SourcePackages
+          key: spm-${{ runner.os }}-xcode16.4-${{ hashFiles('Flezcal.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
             spm-${{ runner.os }}-xcode16.4-
 
@@ -130,7 +130,7 @@ jobs:
           xcodebuild -resolvePackageDependencies \
             -project $XCODEPROJ \
             -scheme $SCHEME \
-            -derivedDataPath $DERIVED_DATA
+            -clonedSourcePackagesDirPath SourcePackages
 
       # Find a valid simulator destination
       - name: Resolve Simulator
@@ -152,7 +152,23 @@ jobs:
           echo "DEST=$DEVICE" >> $GITHUB_OUTPUT
           echo "Using simulator: $DEVICE"
 
+      # Symlink SPM checkouts so the Crashlytics run-script phase can find them.
+      # The script uses ${BUILD_DIR%/Build/*}/SourcePackages/... but
+      # -clonedSourcePackagesDirPath puts them under ./SourcePackages/.
+      - name: Link SPM checkouts for Crashlytics script
+        run: |
+          mkdir -p "$DERIVED_DATA/SourcePackages/checkouts"
+          if [ -d SourcePackages/checkouts/firebase-ios-sdk ]; then
+            ln -sfn "$(pwd)/SourcePackages/checkouts/firebase-ios-sdk" \
+              "$DERIVED_DATA/SourcePackages/checkouts/firebase-ios-sdk"
+            echo "✓ Symlinked firebase-ios-sdk for Crashlytics script"
+          else
+            echo "⚠ firebase-ios-sdk not found in SourcePackages — Crashlytics script may fail"
+          fi
+
       # Build for testing (xcbeautify is pre-installed on macos-15 runners)
+      # Use both -clonedSourcePackagesDirPath and -derivedDataPath so xcodebuild
+      # can find SPM clang module maps (e.g. GoogleUtilities_NSData) during build.
       - name: Build
         run: |
           set -o pipefail
@@ -160,8 +176,10 @@ jobs:
             -project $XCODEPROJ \
             -scheme $SCHEME \
             -destination "${{ steps.sim.outputs.DEST }}" \
+            -clonedSourcePackagesDirPath SourcePackages \
             -derivedDataPath $DERIVED_DATA \
             -skipPackagePluginValidation \
+            -disableAutomaticPackageResolution \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -184,6 +202,7 @@ jobs:
             -project $XCODEPROJ \
             -scheme $SCHEME \
             -destination "${{ steps.sim.outputs.DEST }}" \
+            -clonedSourcePackagesDirPath SourcePackages \
             -derivedDataPath $DERIVED_DATA \
             -only-testing:FlezcalTests \
             -enableCodeCoverage YES \
