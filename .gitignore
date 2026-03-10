@@ -26,3 +26,4 @@ service-account-key.json
 seed-welcome*.py
 seed-welcome*.js
 .firebase/
+.wrangler/
