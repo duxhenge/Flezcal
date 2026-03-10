@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Grid-based single-select Flezcal picker. Matches the visual style of
-/// `FoodCategoryGridView` but selects ONE category and returns it via
+/// Grid-based single-select Flezcal picker. Uses the same `FoodCategoryCell`
+/// visual style as MyPicksTabView but selects ONE category and returns it via
 /// `onSelect` instead of toggling user picks.
 ///
 /// Includes a search bar to filter by name or keywords, displays user's
-/// picks first, then trending, then all Top 50, and offers a "Create
-/// Trending Flezcal" option when no match is found.
+/// picks first, then all Top 50, and offers a "Create Trending Flezcal"
+/// option when no match is found. Trending categories are discoverable
+/// via the search bar (text entry / autofill).
 ///
 /// Used by AddFlezcalFlow (SpotDetailView) and SuggestedSpotSheet.
 struct FlezcalPickerView: View {
@@ -125,23 +126,7 @@ struct FlezcalPickerView: View {
             .padding(.horizontal)
         }
 
-        // Trending section
-        if !otherTrending.isEmpty {
-            Text("Trending")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.cyan)
-                .padding(.horizontal)
-
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(otherTrending) { cat in
-                    pickerCell(for: cat)
-                }
-            }
-            .padding(.horizontal)
-        }
-
-        // Top 50
+        // Top 50 (shown before trending — these are the primary categories)
         if !otherTop50.isEmpty {
             Text("Top 50")
                 .font(.subheadline)
@@ -157,7 +142,7 @@ struct FlezcalPickerView: View {
             .padding(.horizontal)
         }
 
-        // Create trending button at bottom
+        // Create trending text input at bottom (no trending grid — type to find or create)
         if onCreateTrending != nil {
             createTrendingButton
                 .padding(.horizontal)

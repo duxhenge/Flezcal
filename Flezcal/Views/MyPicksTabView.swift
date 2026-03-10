@@ -1,220 +1,281 @@
 import SwiftUI
 
-/// "My Flezcals" tab — shows the user's current food/drink categories as large cards,
-/// with a button to open the selection grid.
-///
-/// All picks (including the 3 launch defaults) are freely selectable and removable,
-/// as long as at least 1 pick remains active. Custom picks also show an edit button.
+/// "My Flezcals" tab — shows the category selection grid directly,
+/// with selected picks at the top (editable), then unselected Top 50 and
+/// Trending categories below. Users can tap to select/deselect, edit
+/// search terms, create trending Flezcals, and set search radius.
 struct MyPicksTabView: View {
     @EnvironmentObject var picksService: UserPicksService
     @EnvironmentObject var authService: AuthService
-    @State private var showGrid = false
+    @EnvironmentObject var rankingService: RankingService
+    @State private var showCreateCustom = false
+    @State private var showSignInPrompt = false
     @State private var editingCategory: FoodCategory? = nil
-    @State private var showMinPickAlert = false
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+    ]
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
                     // Subtitle
-                    subtitleText
+                    Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
                         .tutorialTarget("pickSubtitle")
-                        .padding(.horizontal, 32)
-                        .padding(.top, 8)
 
-                    // Pick cards
-                    VStack(spacing: 14) {
-                        ForEach(picksService.picks) { category in
-                            let isCustom = category.id.hasPrefix("custom_")
-                            let canRemove = picksService.picks.count > 1
-                            PickCard(
-                                category: category,
-                                isEditable: true,
-                                canRemove: canRemove,
-                                onEdit: { editingCategory = category },
-                                onRemove: {
-                                    if !canRemove {
-                                        showMinPickAlert = true
-                                        return
-                                    }
-                                    withAnimation(.spring()) {
-                                        if isCustom {
-                                            _ = picksService.removeCustomPick(category)
-                                        } else {
-                                            _ = picksService.toggle(category)
-                                        }
-                                    }
-                                }
-                            )
-                            .tutorialTarget("pickCard_\(category.id)")
-                        }
+                    // Counter badge
+                    counterBadge
 
-                        // Empty slots — tappable to open the selection grid
-                        let remaining = UserPicksService.maxPicks - picksService.picks.count
-                        if remaining > 0 {
-                            ForEach(0..<remaining, id: \.self) { _ in
-                                Button { showGrid = true } label: {
-                                    EmptyPickSlot(label: "Add a Flezcal")
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
+                    if FeatureFlags.broadSearchEnabled {
+                        broadSearchContent
+                    } else {
+                        launchModeContent
                     }
-                    .padding(.horizontal)
 
-
-
-                    // Button
-                    Button {
-                        showGrid = true
-                    } label: {
-                        Label(
-                            "Customize My Flezcals",
-                            systemImage: "slider.horizontal.3"
-                        )
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .tutorialTarget("customizeButton")
-                    .padding(.horizontal)
-                }
-                .padding(.bottom, 32)
+}
+                .padding(.vertical)
             }
             .navigationTitle("My Flezcals")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showGrid) {
-                FoodCategoryGridView()
+            .sheet(isPresented: $showCreateCustom) {
+                CreateCustomCategoryView()
                     .environmentObject(picksService)
                     .environmentObject(authService)
-                    .presentationDetents([.large])
             }
             .sheet(item: $editingCategory) { category in
                 EditCustomCategoryView(category: category)
                     .environmentObject(picksService)
                     .presentationDetents([.large])
             }
-            .alert("Minimum 1 Flezcal", isPresented: $showMinPickAlert) {
+            .alert("Sign In Required", isPresented: $showSignInPrompt) {
                 Button("OK", role: .cancel) { }
+            } message: {
+                Text("Sign in from the Profile tab to create trending Flezcals.")
             }
         }
     }
 
-    private var subtitleText: some View {
-        (Text("Your Flezcals are your cravings and the heart of this app. Tap ") +
-         Text(Image(systemName: "slider.horizontal.3")) +
-         Text(" on any Flezcal to customize its search terms."))
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-    }
-}
+    // MARK: - Broad Search (Phase 4) Content
 
-// MARK: - Pick card (filled slot)
+    @ViewBuilder
+    private var broadSearchContent: some View {
+        // All selected picks together (built-in + trending) in one grid
+        if !picksService.picks.isEmpty {
+            selectedPicksGrid(picksService.picks)
+                .padding(.horizontal)
+        }
 
-private struct PickCard: View {
-    let category: FoodCategory
-    var isEditable: Bool = false
-    let canRemove: Bool
-    let onEdit: (() -> Void)?
-    let onRemove: () -> Void
+        // Create custom button
+        if authService.isSignedIn && picksService.canCreateCustom {
+            createCustomButton
+                .padding(.horizontal)
+        }
 
-    var body: some View {
-        HStack(spacing: 16) {
-            // Category icon circle
-            FoodCategoryIcon(category: category, size: 44)
-                .frame(width: 68, height: 68)
-                .background(category.color.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+        // Unselected Top 50 categories (trending found via Create Your Own / text entry)
+        let unselectedTop50 = FoodCategory.allCategories.filter { cat in
+            !picksService.isSelected(cat) && rankingService.isTop50(cat.id)
+        }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(category.displayName)
-                    .font(.title3)
-                    .fontWeight(.bold)
-
-                Text(category.websiteKeywords.prefix(3).joined(separator: " · "))
-                    .font(.caption)
+        if !unselectedTop50.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Top 50")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+                    .padding(.horizontal)
 
-            Spacer()
-
-            // Right-side actions
-            if isEditable, let onEdit {
-                Button {
-                    onEdit()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.body)
-                        .foregroundStyle(category.color)
-                }
-                .buttonStyle(.plain)
-                .tutorialTarget("editButton_\(category.id)")
-                .accessibilityLabel("Edit search terms for \(category.displayName)")
-            }
-
-            // Remove button — always tappable; onRemove handles the minimum-pick guard
-            Button {
-                onRemove()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(canRemove ? .secondary : .quaternary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(category.displayName)")
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(category.color.opacity(0.07))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(category.color.opacity(0.25), lineWidth: 1)
+                UnselectedGridContent(
+                    columns: columns,
+                    categories: unselectedTop50,
+                    picksService: picksService,
+                    tier: .top50
                 )
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(category.displayName), selected\(isEditable ? ", editable" : "")")
+                .padding(.horizontal)
+            }
+        }
     }
-}
 
-// MARK: - Empty slot
+    // MARK: - Launch Mode Content
 
-private struct EmptyPickSlot: View {
-    let label: String
+    @ViewBuilder
+    private var launchModeContent: some View {
+        // Launch categories grid
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(FoodCategory.launchCategories) { cat in
+                FoodCategoryCell(category: cat, picksService: picksService)
+            }
+        }
+        .padding(.horizontal)
 
-    var body: some View {
-        HStack(spacing: 16) {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray5))
-                .frame(width: 68, height: 68)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.title2)
-                        .foregroundStyle(.tertiary)
-                )
+        // Custom picks section
+        let customPicks = picksService.customPicks
+        if !customPicks.isEmpty {
+            customPicksSection(customPicks)
+                .padding(.horizontal)
+        }
 
-            Text(label)
-                .font(.body)
-                .foregroundStyle(.tertiary)
+        // Always show create button — prompts sign-in if needed
+        if picksService.canCreateCustom {
+            createCustomButton
+                .padding(.horizontal)
+        }
 
+        // Coming soon section
+        VStack(spacing: 6) {
+            Divider()
+                .padding(.vertical, 4)
+            Text("More categories coming soon based on user feedback!")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal)
+
+        // Future categories (grayed out)
+        let futureCats = FoodCategory.allCategories.filter { !FoodCategory.isLaunchCategory($0) }
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(futureCats) { cat in
+                FoodCategoryCell(category: cat, picksService: picksService)
+            }
+        }
+        .opacity(0.4)
+        .padding(.horizontal)
+    }
+
+    // MARK: - Counter Badge
+
+    private var counterBadge: some View {
+        HStack {
+            Spacer()
+            let atMax = picksService.picks.count >= UserPicksService.maxPicks
+            Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
+                .foregroundStyle(atMax ? Color.orange : Color.secondary)
+                .clipShape(Capsule())
             Spacer()
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(.systemGray4), lineWidth: 1)
-                        .opacity(0.5)
+    }
+
+    // MARK: - Selected Picks Grid (with edit buttons)
+
+    private func selectedPicksGrid(_ selected: [FoodCategory]) -> some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(selected) { cat in
+                FoodCategoryCell(category: cat, picksService: picksService,
+                                 tier: rankingService.tier(for: cat.id),
+                                 onEdit: { editingCategory = cat })
+            }
+        }
+    }
+
+    // MARK: - Custom Picks Section
+
+    private func customPicksSection(_ customPicks: [FoodCategory]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Your Trending Picks")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+
+            ForEach(customPicks) { pick in
+                let fillColor = Color.cyan.opacity(0.08)
+                let strokeColor = Color.cyan.opacity(0.3)
+
+                HStack(spacing: 12) {
+                    FoodCategoryIcon(category: pick, size: 26)
+                    Text(pick.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Spacer()
+
+                    // Edit button
+                    Button {
+                        editingCategory = pick
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.body)
+                            .foregroundStyle(.cyan)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit search terms for \(pick.displayName)")
+
+                    // Remove button
+                    Button {
+                        withAnimation(.spring()) {
+                            _ = picksService.removeCustomPick(pick)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(picksService.picks.count <= 1)
+                    .accessibilityLabel("Remove \(pick.displayName)")
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(fillColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(strokeColor, lineWidth: 1)
+                        )
                 )
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
+            }
+        }
+    }
+
+    // MARK: - Create Custom Button
+
+    private var createCustomButton: some View {
+        Button {
+            if authService.isSignedIn {
+                showCreateCustom = true
+            } else {
+                showSignInPrompt = true
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create Your Own")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Can't find your category? Create a custom one.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(picksService.customPickCount)/\(CustomCategoryService.maxCustomPicks)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.cyan.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.cyan.opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -271,4 +332,5 @@ struct SearchRadiusPicker: View {
     MyPicksTabView()
         .environmentObject(UserPicksService())
         .environmentObject(AuthService())
+        .environmentObject(RankingService())
 }

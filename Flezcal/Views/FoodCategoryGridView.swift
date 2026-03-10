@@ -1,329 +1,15 @@
 import SwiftUI
 
-/// Full-screen grid where the user selects up to `UserPicksService.maxPicks` categories.
-/// Presented as a sheet from MyPicksTabView.
-///
-/// When `FeatureFlags.broadSearchEnabled` is false (launch mode):
-/// - The 3 launch categories (mezcal, flan, tortillas) show a lock icon — always active.
-/// - The other 18 categories are greyed out with "Coming Soon".
-/// - One custom pick slot is available via "Create Your Own".
-///
-/// When `FeatureFlags.broadSearchEnabled` is true (Phase 4):
-/// - All 21 categories are freely selectable (up to 3).
-/// - 3 custom pick slots are available.
-///
-/// NOTE: ForEach is intentionally avoided in some spots due to a SwiftUICore/SwiftUI
-/// module ambiguity that causes "ambiguous use of init" errors in Xcode 16 whole-module
-/// compilation. The category list is rendered via a helper wrapper instead.
-struct FoodCategoryGridView: View {
-    @EnvironmentObject var picksService: UserPicksService
-    @EnvironmentObject var authService: AuthService
-    @EnvironmentObject var rankingService: RankingService
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var showCreateCustom = false
-    @State private var showSignInPrompt = false
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-    ]
-
-    var body: some View {
-        NavigationStack {
-            scrollContent
-                .navigationTitle("My Flezcals")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                            .fontWeight(.semibold)
-                    }
-                }
-                .sheet(isPresented: $showCreateCustom) {
-                    CreateCustomCategoryView()
-                        .environmentObject(picksService)
-                        .environmentObject(authService)
-                }
-                .alert("Sign In Required", isPresented: $showSignInPrompt) {
-                    Button("OK", role: .cancel) { }
-                } message: {
-                    Text("Sign in from the Profile tab to create trending Flezcals.")
-                }
-        }
-    }
-
-    private var scrollContent: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: HorizontalAlignment.leading, spacing: 20) {
-                subtitleText
-                    .padding(.horizontal)
-
-                counterBadge
-
-                if FeatureFlags.broadSearchEnabled {
-                    // Selected picks (built-in + custom, unified)
-                    let selectedBuiltIn = picksService.picks.filter { !$0.id.hasPrefix("custom_") }
-                    if !selectedBuiltIn.isEmpty {
-                        selectedPicksGrid(selectedBuiltIn)
-                            .padding(.horizontal)
-                    }
-
-                    // Custom picks section
-                    let customPicks = picksService.customPicks
-                    if !customPicks.isEmpty {
-                        customPicksSection(customPicks)
-                            .padding(.horizontal)
-                    }
-
-                    // Create custom button
-                    if authService.isSignedIn && picksService.canCreateCustom {
-                        createCustomButton
-                            .padding(.horizontal)
-                    }
-
-                    // Split unselected categories into Top 50 and Trending
-                    let unselected = FoodCategory.allCategories.filter { cat in
-                        !picksService.isSelected(cat)
-                    }
-                    let unselectedTop50 = unselected.filter { rankingService.isTop50($0.id) }
-                    let unselectedTrending = unselected.filter { rankingService.isTrending($0.id) }
-
-                    if !unselectedTop50.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Top 50")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal)
-
-                            UnselectedGridContent(
-                                columns: columns,
-                                categories: unselectedTop50,
-                                picksService: picksService,
-                                tier: .top50
-                            )
-                            .padding(.horizontal)
-                        }
-                    }
-
-                    if !unselectedTrending.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Trending")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.cyan)
-                                .padding(.horizontal)
-
-                            UnselectedGridContent(
-                                columns: columns,
-                                categories: unselectedTrending,
-                                picksService: picksService,
-                                tier: .trending
-                            )
-                            .padding(.horizontal)
-                        }
-                    }
-                } else {
-                    // Launch mode layout
-                    launchGrid
-                        .padding(.horizontal)
-
-                    let customPicks = picksService.customPicks
-                    if !customPicks.isEmpty {
-                        customPicksSection(customPicks)
-                            .padding(.horizontal)
-                    }
-
-                    // Always show create button — prompts sign-in if needed
-                    if picksService.canCreateCustom {
-                        createCustomButton
-                            .padding(.horizontal)
-                    }
-
-                    comingSoonSection
-                        .padding(.horizontal)
-
-                    futureGrid
-                        .padding(.horizontal)
-                }
-            }
-            .padding(.vertical)
-        }
-    }
-
-    private var subtitleText: some View {
-        Group {
-            if FeatureFlags.broadSearchEnabled {
-                Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
-            } else {
-                Text("Select up to \(UserPicksService.maxPicks) categories, or create your own trending Flezcal!")
-            }
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-    }
-
-    private var counterBadge: some View {
-        HStack {
-            Spacer()
-            if FeatureFlags.broadSearchEnabled {
-                let atMax = picksService.picks.count == UserPicksService.maxPicks
-                Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
-                    .foregroundStyle(atMax ? Color.orange : Color.secondary)
-                    .clipShape(Capsule())
-            } else {
-                let atMax = picksService.picks.count >= UserPicksService.maxPicks
-                Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
-                    .foregroundStyle(atMax ? Color.orange : Color.secondary)
-                    .clipShape(Capsule())
-            }
-            Spacer()
-        }
-    }
-
-    /// Top grid showing only launch categories (mezcal, flan, tortillas).
-    private var launchGrid: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(FoodCategory.launchCategories) { cat in
-                FoodCategoryCell(category: cat, picksService: picksService)
-            }
-        }
-    }
-
-    /// "Coming soon" message between active and future categories.
-    private var comingSoonSection: some View {
-        VStack(spacing: 6) {
-            Divider()
-                .padding(.vertical, 4)
-            Text("More categories coming soon based on user feedback!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    /// Grayed-out grid of non-launch categories (future items).
-    private var futureGrid: some View {
-        let futureCats = FoodCategory.allCategories.filter { !FoodCategory.isLaunchCategory($0) }
-        return LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(futureCats) { cat in
-                FoodCategoryCell(category: cat, picksService: picksService)
-            }
-        }
-        .opacity(0.4)
-    }
-
-    /// Selected built-in picks shown at the top with checkmarks (tappable to deselect).
-    private func selectedPicksGrid(_ selected: [FoodCategory]) -> some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(selected) { cat in
-                FoodCategoryCell(category: cat, picksService: picksService,
-                                 tier: rankingService.tier(for: cat.id))
-            }
-        }
-    }
-
-    private func customPicksSection(_ customPicks: [FoodCategory]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Your Trending Picks")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-
-            ForEach(customPicks) { pick in
-                let fillColor = Color.cyan.opacity(0.08)
-                let strokeColor = Color.cyan.opacity(0.3)
-
-                HStack(spacing: 12) {
-                    FoodCategoryIcon(category: pick, size: 26)
-                    Text(pick.displayName)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Spacer()
-
-                    // Remove button
-                    Button {
-                        withAnimation(.spring()) {
-                            _ = picksService.removeCustomPick(pick)
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(picksService.picks.count <= 1)
-                    .accessibilityLabel("Remove \(pick.displayName)")
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(fillColor)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(strokeColor, lineWidth: 1)
-                        )
-                )
-            }
-        }
-    }
-
-    private var createCustomButton: some View {
-        Button {
-            if authService.isSignedIn {
-                showCreateCustom = true
-            } else {
-                showSignInPrompt = true
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.cyan)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Create Your Own")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text("Can't find your category? Create a custom one.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("\(picksService.customPickCount)/\(CustomCategoryService.maxCustomPicks)")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.cyan.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.cyan.opacity(0.2), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
+// MARK: - Shared Grid Components
+//
+// Reusable grid cells and wrappers used by MyPicksTabView (multi-select)
+// and FlezcalPickerView (single-select). Kept in a shared file to avoid
+// SwiftUICore/SwiftUI module ambiguity that causes "ambiguous use of init"
+// errors in Xcode 16 whole-module compilation.
 
 /// Grid of unselected built-in categories. Kept as a separate view to avoid
 /// SwiftUICore/SwiftUI module ambiguity in the parent's body.
-private struct UnselectedGridContent: View {
+struct UnselectedGridContent: View {
     let columns: [GridItem]
     let categories: [FoodCategory]
     @ObservedObject var picksService: UserPicksService
@@ -340,10 +26,12 @@ private struct UnselectedGridContent: View {
 
 // MARK: - Individual category cell
 
-private struct FoodCategoryCell: View {
+struct FoodCategoryCell: View {
     let category: FoodCategory
     @ObservedObject var picksService: UserPicksService
     var tier: RankedCategory.Tier = .top50
+    /// Optional callback for editing search terms on selected picks.
+    var onEdit: (() -> Void)? = nil
 
     private var isSelected: Bool { picksService.isSelected(category) }
     /// Trending categories use cyan accent instead of the category's own color.
@@ -404,6 +92,22 @@ private struct FoodCategoryCell: View {
                     .background(Circle().fill(Color(.systemBackground)))
                     .offset(x: 6, y: -6)
                     .transition(.scale.combined(with: .opacity))
+            }
+
+            if isSelected, onEdit != nil {
+                Button {
+                    onEdit?()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 12))
+                        .foregroundStyle(accentColor)
+                        .padding(4)
+                        .background(Circle().fill(Color(.systemBackground)))
+                }
+                .buttonStyle(.plain)
+                .offset(x: 6, y: 50)
+                .transition(.scale.combined(with: .opacity))
+                .accessibilityLabel("Edit \(category.displayName)")
             }
         }
     }

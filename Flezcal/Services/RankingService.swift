@@ -2,7 +2,7 @@ import Foundation
 @preconcurrency import FirebaseFirestore
 
 /// Fetches and caches category rankings from Firestore `app_config/flezcal_rankings`.
-/// Provides tier lookups (Top 50 vs Trending) consumed by FoodCategoryGridView.
+/// Provides tier lookups (Top 50 vs Trending) consumed by MyPicksTabView and FlezcalPickerView.
 ///
 /// **Offline fallback:** If the document doesn't exist or fetch fails, all 50 built-in
 /// category IDs are Top 50 and everything else is Trending. This ensures the app works
