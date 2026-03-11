@@ -331,9 +331,13 @@ struct CreateCustomCategoryView: View {
 
     // MARK: - Similar Category Suggestions
 
-    /// Finds existing hardcoded and popular custom categories that are similar
-    /// to the user's input. Matches against websiteKeywords and display names
+    /// Finds existing hardcoded and trending categories that are similar
+    /// to the user's input. Matches against display names and websiteKeywords
     /// to catch related terms (e.g. "tonkotsu" → Ramen, "neipa" → New England IPA).
+    ///
+    /// Trending categories use prefix matching (same as `validate()`) so typing
+    /// "bris" surfaces "Brisket" immediately. Exact matches are included so the
+    /// user can tap to select the existing category instead of re-creating it.
     private func updateSimilarSuggestions(for input: String) {
         let lower = input.trimmingCharacters(in: .whitespaces).lowercased()
         guard lower.count >= 3 else {
@@ -342,12 +346,14 @@ struct CreateCustomCategoryView: View {
             return
         }
 
-        // Check hardcoded categories — match on websiteKeywords or partial displayName
+        // Check hardcoded Top 50 categories — match on displayName or websiteKeywords.
+        // Require at least 4 characters for keyword matching to avoid false positives
+        // (e.g. "bri" matching "brick oven" → Wood-Fired Pizza).
         var matches: [FoodCategory] = []
         for cat in FoodCategory.allCategories where !picksService.isSelected(cat) {
-            let nameMatch = cat.displayName.lowercased().contains(lower)
-                         || lower.contains(cat.displayName.lowercased())
-            let keywordMatch = cat.websiteKeywords.contains { kw in
+            let catName = cat.displayName.lowercased()
+            let nameMatch = catName.contains(lower) || lower.contains(catName)
+            let keywordMatch = lower.count >= 4 && cat.websiteKeywords.contains { kw in
                 kw.lowercased().contains(lower) || lower.contains(kw.lowercased())
             }
             if nameMatch || keywordMatch {
@@ -356,12 +362,17 @@ struct CreateCustomCategoryView: View {
         }
         similarCategories = Array(matches.prefix(3))
 
-        // Check popular custom categories other users created
+        // Check existing trending categories — prefix matching (mirrors validate())
+        // so "bris" finds "brisket". No pickCount threshold: even a category with
+        // 1 pick should be offered rather than creating a duplicate.
         var customMatches: [CustomCategory] = []
-        for cat in customService.customCategories where cat.pickCount >= 2 {
-            let nameMatch = cat.normalizedName.contains(lower)
-                         || lower.contains(cat.normalizedName)
-            if nameMatch && cat.normalizedName != lower {
+        for cat in customService.customCategories {
+            let catName = cat.normalizedName
+            let nameMatch = catName.contains(lower)
+                         || lower.contains(catName)
+                         || lower.hasPrefix(catName)
+                         || catName.hasPrefix(lower)
+            if nameMatch {
                 customMatches.append(cat)
             }
         }

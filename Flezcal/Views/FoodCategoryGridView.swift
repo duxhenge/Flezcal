@@ -84,6 +84,24 @@ struct FoodCategoryCell: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(isSelected ? accentColor : (tier == .trending ? Color.cyan.opacity(0.2) : Color.clear), lineWidth: 2)
                 )
+                .overlay(alignment: .bottomTrailing) {
+                    if isSelected, onEdit != nil {
+                        Button {
+                            onEdit?()
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 12))
+                                .foregroundStyle(accentColor)
+                                .padding(4)
+                                .background(Circle().fill(Color(.systemBackground)))
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 6, y: 6)
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityLabel("Edit \(category.displayName)")
+                        .tutorialTarget(picksService.picks.first == category ? "editButton_first" : "")
+                    }
+                }
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
@@ -92,22 +110,6 @@ struct FoodCategoryCell: View {
                     .background(Circle().fill(Color(.systemBackground)))
                     .offset(x: 6, y: -6)
                     .transition(.scale.combined(with: .opacity))
-            }
-
-            if isSelected, onEdit != nil {
-                Button {
-                    onEdit?()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 12))
-                        .foregroundStyle(accentColor)
-                        .padding(4)
-                        .background(Circle().fill(Color(.systemBackground)))
-                }
-                .buttonStyle(.plain)
-                .offset(x: 6, y: 50)
-                .transition(.scale.combined(with: .opacity))
-                .accessibilityLabel("Edit \(category.displayName)")
             }
         }
     }

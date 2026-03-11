@@ -18,9 +18,6 @@ struct SpotDetailView: View {
     @State private var showAddCategory = false
     @State private var isConfirmingVisit = false
     @State private var showVisitConfirmed = false
-    @State private var showVisitRatingFlow = false
-    @State private var showVisitThankYou = false
-    @State private var visitThankYouMessage = ""
 
     // Community verification
     @StateObject private var verificationService = VerificationService()
@@ -629,64 +626,9 @@ struct SpotDetailView: View {
             }
         }
         .alert("Spot Confirmed!", isPresented: $showVisitConfirmed) {
-            if !liveSpot.categories.isEmpty {
-                Button("Rate It") {
-                    showVisitRatingFlow = true
-                }
-                Button("Done", role: .cancel) {}
-            } else {
-                Button("Thanks!", role: .cancel) {}
-            }
-        } message: {
-            if !liveSpot.categories.isEmpty {
-                Text("You've confirmed \(spot.name)! Would you like to rate it?")
-            } else {
-                Text("You've marked \(spot.name) as visited. This helps the whole community!")
-            }
-        }
-        .sheet(isPresented: $showVisitRatingFlow, onDismiss: {
-            // Swipe-to-dismiss or Skip: just close — no thank-you unless they rated
-        }) {
-            if let firstCat = liveSpot.categories.first {
-                NavigationStack {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            Text("Rate the \(firstCat.displayName) here")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .padding(.top)
-
-                            RatingFlowView(
-                                categoryName: firstCat.displayName,
-                                existingRating: nil,
-                                onSubmit: { rating in
-                                    submitVisitRating(rating, for: firstCat)
-                                },
-                                onSkip: {
-                                    showVisitRatingFlow = false
-                                },
-                                onRemove: nil
-                            )
-                            .padding(.horizontal)
-                        }
-                    }
-                    .navigationTitle("Rate This Flezcal")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Skip") {
-                                showVisitRatingFlow = false
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium, .large])
-            }
-        }
-        .alert("Thank You!", isPresented: $showVisitThankYou) {
             Button("Done", role: .cancel) {}
         } message: {
-            Text(visitThankYouMessage)
+            Text("You've confirmed \(spot.name). This helps the whole community!")
         }
     }
 
@@ -796,28 +738,6 @@ struct SpotDetailView: View {
         }
     }
 
-    /// Submits a rating after confirm-visit, then shows thank-you.
-    private func submitVisitRating(_ rating: Int, for cat: SpotCategory) {
-        guard let userID = authService.userID else {
-            showVisitRatingFlow = false
-            return
-        }
-        Task {
-            let verificationService = VerificationService()
-            _ = await verificationService.submitRating(
-                spotID: spot.id,
-                userID: userID,
-                category: cat,
-                rating: rating,
-                spotService: spotService
-            )
-            await MainActor.run {
-                showVisitRatingFlow = false
-                visitThankYouMessage = "Your rating has been saved. Thanks for helping the community!"
-                showVisitThankYou = true
-            }
-        }
-    }
 }
 
 // MARK: - Spot Badge Chip
@@ -997,11 +917,8 @@ private struct AddFlezcalFlow: View {
 
     @State private var selectedFlezcal: FoodCategory? = nil
     @State private var isSaving = false
-    @State private var showRatingFlow = false
-    @State private var showThankYou = false
-    @State private var thankYouMessage = ""
     @State private var savedCategory: SpotCategory? = nil
-    /// Spot already had this category — skip straight to rating offer
+    /// Spot already had this category
     @State private var showAlreadyThere = false
     /// Category awaiting user confirmation before saving
     @State private var pendingCategory: FoodCategory? = nil
@@ -1037,56 +954,11 @@ private struct AddFlezcalFlow: View {
         .sheet(isPresented: $showCreateTrending) {
             CreateCustomCategoryView()
         }
-        .sheet(isPresented: $showRatingFlow, onDismiss: {
-            // Swipe-to-dismiss or Skip: just finish — no thank-you unless they rated
-            if !showThankYou {
-                dismiss()
-            }
-        }) {
-            if let cat = savedCategory {
-                NavigationStack {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            Text("Rate the \(cat.displayName) here")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .padding(.top)
-
-                            RatingFlowView(
-                                categoryName: cat.displayName,
-                                existingRating: nil,
-                                onSubmit: { rating in
-                                    submitRating(rating, for: cat)
-                                },
-                                onSkip: {
-                                    showRatingFlow = false
-                                },
-                                onRemove: nil
-                            )
-                            .padding(.horizontal)
-                        }
-                    }
-                    .navigationTitle("Rate This Flezcal")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Skip") {
-                                showRatingFlow = false
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium, .large])
-            }
-        }
         .alert("Already Added", isPresented: $showAlreadyThere) {
-            Button("Rate It") {
-                showRatingFlow = true
-            }
             Button("Done") { dismiss() }
         } message: {
             if let cat = savedCategory {
-                Text("\(spot.name) already has \(cat.displayName). Would you like to rate it?")
+                Text("\(spot.name) already has \(cat.displayName).")
             }
         }
         .alert("Add Flezcal", isPresented: $showCategoryConfirmation) {
@@ -1104,11 +976,6 @@ private struct AddFlezcalFlow: View {
             if let category = pendingCategory {
                 Text("Add \(category.emoji) \(category.displayName) to \(spot.name)?")
             }
-        }
-        .alert("Thank You!", isPresented: $showThankYou) {
-            Button("Done") { dismiss() }
-        } message: {
-            Text(thankYouMessage)
         }
         .overlay {
             if isSaving {
@@ -1158,33 +1025,12 @@ private struct AddFlezcalFlow: View {
                 } else if success {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    showRatingFlow = true
+                    dismiss()
                 }
             }
         }
     }
 
-    private func submitRating(_ rating: Int, for cat: SpotCategory) {
-        guard let userID = authService.userID else {
-            showRatingFlow = false
-            return
-        }
-        Task {
-            let verificationService = VerificationService()
-            _ = await verificationService.submitRating(
-                spotID: spot.id,
-                userID: userID,
-                category: cat,
-                rating: rating,
-                spotService: spotService
-            )
-            await MainActor.run {
-                showRatingFlow = false
-                thankYouMessage = "Your rating has been saved. Thanks for helping the community!"
-                showThankYou = true
-            }
-        }
-    }
 }
 
 // MARK: - Owner Verified Badge

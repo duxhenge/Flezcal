@@ -33,13 +33,12 @@ class UserPicksService: ObservableObject {
     /// Number of custom picks the user has created this session.
     @Published private(set) var customPickCount: Int = 0
 
-    /// User's chosen search radius in degrees. Controls how wide the Apple Maps
-    /// search area is for both Explore and Map tabs. Default 0.5° ≈ 35 miles.
-    @Published var searchRadiusDegrees: Double = 0.5
+    /// Search radius in degrees. Fixed at 0.5° ≈ 35 miles. The closest-N
+    /// results from MKLocalSearch naturally define the effective radius.
+    let searchRadiusDegrees: Double = 0.5
 
     private let defaultsKey = "userFoodCategoryPicks"
     private let customPicksKey = "userCustomPicks"
-    private let searchRadiusKey = "userSearchRadiusDegrees"
     /// IDs of built-in categories whose mapSearchTerms the user intentionally
     /// customized via EditSpotSearchView. These are NOT refreshed from the
     /// static definition on load — the user's edits take precedence.
@@ -48,8 +47,9 @@ class UserPicksService: ObservableObject {
     init() {
         picks = loadPicks()
         customPickCount = loadCustomPickCount()
-        searchRadiusDegrees = loadSearchRadius()
         FoodCategory.registerUserPicks(picks)
+        // Clean up legacy radius preference
+        UserDefaults.standard.removeObject(forKey: "userSearchRadiusDegrees")
         // No Firestore sync on launch — only deliberate user actions
         // (toggle/addCustomPick) trigger pick tracking.
     }
@@ -140,38 +140,6 @@ class UserPicksService: ObservableObject {
         Set(UserDefaults.standard.stringArray(forKey: customizedTermsKey) ?? [])
     }
 
-    // MARK: - Search Radius
-
-    /// Discrete radius options. Degrees are internal; miles and km are user-facing.
-    static let radiusOptions: [(miles: Int, km: Int, degrees: Double)] = [
-        (10,  16,  0.15),
-        (25,  40,  0.35),
-        (35,  56,  0.5),   // default
-        (50,  80,  0.7),
-        (75,  121, 1.1),
-    ]
-
-    /// Sets the search radius and persists to UserDefaults.
-    func setSearchRadius(_ degrees: Double) {
-        searchRadiusDegrees = degrees
-        UserDefaults.standard.set(degrees, forKey: searchRadiusKey)
-    }
-
-    /// Returns the approximate miles label for a given radius in degrees.
-    static func radiusInMiles(_ degrees: Double) -> Int {
-        radiusOptions.min(by: { abs($0.degrees - degrees) < abs($1.degrees - degrees) })?.miles ?? 35
-    }
-
-    /// Returns the approximate km label for a given radius in degrees.
-    static func radiusInKm(_ degrees: Double) -> Int {
-        radiusOptions.min(by: { abs($0.degrees - degrees) < abs($1.degrees - degrees) })?.km ?? 56
-    }
-
-    private func loadSearchRadius() -> Double {
-        let saved = UserDefaults.standard.double(forKey: searchRadiusKey)
-        // 0.0 means never set — use default
-        return saved > 0 ? saved : 0.5
-    }
 
     /// Whether adding more picks is currently allowed.
     var canAddMore: Bool { picks.count < Self.maxPicks }

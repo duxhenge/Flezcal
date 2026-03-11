@@ -7,6 +7,8 @@ enum TutorialID: String, CaseIterable, Codable {
     case spotsTab
     case mapExplore
     case addSpot
+    case ratingVerifying
+    case leaderboard
 }
 
 // MARK: - Tutorial Step
@@ -128,53 +130,46 @@ struct Tutorial: Identifiable {
 // MARK: - All Tutorials
 
 extension Tutorial {
-    static let allTutorials: [Tutorial] = [setupFlezcals, spotsTab, mapExplore, addSpot]
+    static let allTutorials: [Tutorial] = [
+        setupFlezcals, spotsTab, mapExplore,   // Getting Started
+        addSpot, ratingVerifying,               // Contributing
+        leaderboard                             // Growing
+    ]
 
     // MARK: Tutorial 1 — Setting Up Your Flezcals
 
     static let setupFlezcals = Tutorial(
         id: .setupFlezcals,
         title: "Setting Up Your Flezcals",
-        subtitle: "Make this app yours. Pick the foods and drinks you actually care about.",
+        subtitle: "Pick the foods and drinks you care about.",
         icon: "heart.circle.fill",
         color: .orange,
         steps: [
             .textOnly(
-                title: "Sign In",
-                body: "Join our passionate community. Share your best food and drink experiences and where you found them. "
-                    + "Signing in lets you add spots, rate them, verify what others have found, and climb the leaderboard. "
-                    + "Sign in with Apple is the fastest way. You're free to browse without an account, but the real fun starts when you contribute."
+                title: "Sign In to Get Started",
+                body: "Sign in with Apple to add spots, rate them, and join the leaderboard."
             ),
             .spotlight(
                 "pickSubtitle",
-                title: "This Is Your Home Base",
-                body: "Flezcals are your cravings. Share your very best experiences. "
-                    + "Let the community help you find them. Web searches are available "
-                    + "but its community input that helps the most.",
+                title: "Your Home Base",
+                body: "Flezcals are your cravings. The community helps you find the best.",
                 arrowEdge: .bottom,
                 requiredTab: AppTab.myPicks,
                 shape: .rect(cornerRadius: 12)
             ),
             .spotlight(
-                "editButton_mezcal",
-                title: "Fine-Tune Your Search",
-                body: "Tap here to add improved search terms for your Flezcals.",
+                "editButton_first",
+                title: "Fine-Tune Search Terms",
+                body: "Tap to customize the search terms for any Flezcal.",
                 arrowEdge: .top,
                 shape: .circle
             ),
             .spotlight(
                 "customizeButton",
-                title: "Make It Yours",
-                body: "There are 50+ categories to choose from — Top 50 and trending — and you can have up to 3 active at once. "
-                    + "Your picks shape everything: the map, the search results, the ghost pins.",
+                title: "Swap or Add Categories",
+                body: "60+ categories available. Pick up to 3 active Flezcals.",
                 arrowEdge: .bottom,
                 shape: .rect(cornerRadius: 16)
-            ),
-            .textOnly(
-                title: "Or Create Something New",
-                body: "Don't see your thing? Tap \"Create Your Own\" to create a trending Flezcal. "
-                    + "Name it, refine your search terms, and start searching. Popular trending Flezcals "
-                    + "may be promoted to the Top 50 with unique icons."
             ),
         ],
         estimatedMinutes: 1
@@ -185,48 +180,40 @@ extension Tutorial {
     static let spotsTab = Tutorial(
         id: .spotsTab,
         title: "The Spots Tab",
-        subtitle: "Browse, search, and filter verified spots and web search results in one place.",
+        subtitle: "Search, filter, and browse spots anywhere.",
         icon: "list.bullet",
         color: .cyan,
         steps: [
             .screenshot(
-                "tutorial_spots_overview",
-                title: "Create a List of Spots to Consider",
-                body: "Search where you are or anywhere in the world. Search for spots the search terms "
-                    + "don't find and add them. Our spot list is better than a web search.",
-                requiredTab: AppTab.spots,
-                cropRegion: CGRect(x: 0, y: 0.03, width: 1, height: 0.5)
-            ),
-            .screenshot(
-                "tutorial_spots_filters",
-                title: "Filter by Category",
-                body: "Use filters to see or hide your selected Flezcals.",
-                cropRegion: CGRect(x: 0, y: 0.0, width: 1, height: 0.5)
-            ),
-            .screenshot(
-                "tutorial_spots_toggles",
-                title: "Choose Your Sources",
-                body: "Use toggles to see any or all of Verified, Likely, and Nearby spots.",
-                cropRegion: CGRect(x: 0, y: 0.05, width: 1, height: 0.5)
-            ),
-            .screenshot(
                 "tutorial_spots_search",
-                title: "Search Any City",
-                body: "Tap the location bar to search a different city. Type a name, pick from the suggestions, "
-                    + "and the app scans that area for your Flezcals. Great for planning trips.",
-                cropRegion: CGRect(x: 0, y: 0.0, width: 1, height: 0.35)
+                title: "Search Here or Any City",
+                body: "Tap the location bar to search your area or pick a different city.",
+                requiredTab: AppTab.spots,
+                cropRegion: CGRect(x: 0, y: 0.04, width: 1, height: 0.22)
             ),
             .screenshot(
                 "tutorial_spots_customize",
-                title: "Customize Your Search",
-                body: "Tap \"Customize Spot Search\" to fine-tune your search terms and adjust the search radius.",
-                cropRegion: CGRect(x: 0, y: 0.02, width: 1, height: 0.42)
+                title: "Customize Your Search Terms",
+                body: "Tap \"Customize Spot Search\" to refine terms for each Flezcal.",
+                cropRegion: CGRect(x: 0, y: 0.15, width: 1, height: 0.18)
+            ),
+            .screenshot(
+                "tutorial_spots_overview",
+                title: "Browse Your Spot List",
+                body: "Spots appear from community data and web searches.",
+                cropRegion: CGRect(x: 0, y: 0.18, width: 1, height: 0.55)
+            ),
+            .screenshot(
+                "tutorial_spots_toggles",
+                title: "Toggle Verified, Likely, Nearby",
+                body: "Control which source types appear in your list.",
+                cropRegion: CGRect(x: 0, y: 0.17, width: 1, height: 0.20)
             ),
             .screenshot(
                 "tutorial_spots_wider",
-                title: "Search Wider Area",
-                body: "Click \"Search Wider Area\" after the initial search for more potential venues.",
-                cropRegion: CGRect(x: 0, y: 0.68, width: 1, height: 0.27)
+                title: "Expand Your Search",
+                body: "Tap \"Do a Deeper Scan?\" to check more venues nearby.",
+                cropRegion: CGRect(x: 0, y: 0.7, width: 1, height: 0.25)
             ),
         ],
         estimatedMinutes: 1
@@ -237,67 +224,45 @@ extension Tutorial {
     static let mapExplore = Tutorial(
         id: .mapExplore,
         title: "The Map",
-        subtitle: "Your Flezcals, live on a map. Let the app do the hunting.",
+        subtitle: "Your Flezcals, live on a map.",
         icon: "map.fill",
         color: .green,
         steps: [
             .spotlight(
                 "mapView",
                 title: "Your Discovery Map",
-                body: "This is where the magic of community input will grow your experience. "
-                    + "The best information comes from spots with Flezcals verified by people like you."
-                    + "\n\nThe app can also search for your Flezcals among unverified spots "
-                    + "when limited community input is available. Search anywhere in the world.",
+                body: "Pins appear automatically for your active Flezcals.",
                 arrowEdge: .top,
                 requiredTab: AppTab.explore,
                 shape: .rect(cornerRadius: 0)
             ),
             .screenshot(
                 "tutorial_pin_colors",
-                title: "What the Colors Mean",
-                body: "Solid pins are Verified spots, the most valuable information we have."
-                    + "\n\nGreen pins with checkmarks are Likely web search matches "
-                    + "that are found with your keywords on websites."
-                    + "\n\nYellow ghost pins are Nearby spots that may need a deeper website search. "
-                    + "Click on one if it seems like a likely spot for your Flezcal.",
-                cropRegion: CGRect(x: 0, y: 0.05, width: 1, height: 0.6)
+                title: "Read the Pin Colors",
+                body: "Solid = Verified. Green check = Likely. Yellow = Nearby.",
+                cropRegion: CGRect(x: 0, y: 0.08, width: 1, height: 0.55)
             ),
             .spotlight(
                 "filterPills",
-                title: "Zero In",
-                body: "Looking for just one Flezcal? Tap to filter the map.",
+                title: "Filter to One Flezcal",
+                body: "Tap a pill to isolate one category on the map.",
                 arrowEdge: .top,
                 shape: .rect(cornerRadius: 20)
-            ),
-            .spotlight(
-                "pinToggles",
-                title: "Control What You See",
-                body: "Three toggles: Verified, Likely, and Nearby."
-                    + "\n\nTurn them on or off to focus on what matters."
-                    + "\n\nThe counts tell you how many of each are around you.",
-                arrowEdge: .top,
-                shape: .rect(cornerRadius: 12)
             ),
             .screenshot(
                 "tutorial_ghost_pin_sheet",
                 title: "Tap Any Pin",
-                body: "Curious about a spot? Tap it. The app runs a deep website scan and tells you exactly which of your Flezcals it found.",
-                cropRegion: CGRect(x: 0, y: 0.08, width: 1, height: 0.38)
+                body: "The app scans the website and shows which Flezcals match.",
+                cropRegion: CGRect(x: 0, y: 0.38, width: 1, height: 0.45)
             ),
             .screenshot(
                 "tutorial_search_button",
-                title: "Explore New Territory",
-                body: "Pan the map anywhere and tap \"Search This Area\". Road trip or vacation planning starts here.",
-                cropRegion: CGRect(x: 0, y: 0.78, width: 1, height: 0.15)
-            ),
-            .screenshot(
-                "tutorial_deeper_scan",
-                title: "Go Deeper",
-                body: "After the first scan, tap \"Search Wider Area\" to check even more venues. Hidden gems that were further away get promoted to your map.",
-                cropRegion: CGRect(x: 0, y: 0.78, width: 1, height: 0.15)
+                title: "Search New Areas",
+                body: "Pan the map, then tap \"Search This Area\" to explore.",
+                cropRegion: CGRect(x: 0, y: 0.6, width: 1, height: 0.35)
             ),
         ],
-        estimatedMinutes: 2
+        estimatedMinutes: 1
     )
 
     // MARK: Tutorial 4 — Adding a Spot
@@ -305,51 +270,105 @@ extension Tutorial {
     static let addSpot = Tutorial(
         id: .addSpot,
         title: "Adding a Spot",
-        subtitle: "You found something great. Now share it so others can find it too.",
+        subtitle: "Found something great? Share it with the community.",
         icon: "mappin.circle.fill",
         color: .blue,
         steps: [
             .screenshot(
                 "tutorial_spot_sheet",
-                title: "Adding Spots",
-                body: "A green checkmark is a potential new Flezcal spot for you to try out and verify.",
-                cropRegion: CGRect(x: 0, y: 0.08, width: 1, height: 0.35)
+                title: "Spot a Green Checkmark",
+                body: "Green means a web search found a match for your Flezcal.",
+                cropRegion: CGRect(x: 0, y: 0.38, width: 1, height: 0.35)
             ),
             .screenshot(
                 "tutorial_category_chips",
-                title: "Read the Chips",
-                body: "Solid color is already verified by the community."
-                    + "\n\nGreen ✓ = your search term found something."
-                    + "\n\nYellow ? = Still a possibility. If the name looks promising check it out.",
-                cropRegion: CGRect(x: 0, y: 0.25, width: 1, height: 0.2)
+                title: "Check the Category Matches",
+                body: "Solid = verified. Green check = likely match from a web scan.",
+                cropRegion: CGRect(x: 0, y: 0.35, width: 1, height: 0.35)
             ),
             .screenshot(
                 "tutorial_add_button",
-                title: "Claim It",
-                body: "Tap here to add this spot to Flezcal. You're building the guide that helps everyone find the good stuff.",
-                cropRegion: CGRect(x: 0.05, y: 0.82, width: 0.9, height: 0.12)
+                title: "Tap Add to Verify It",
+                body: "You're building the guide that helps everyone.",
+                cropRegion: CGRect(x: 0, y: 0.7, width: 1, height: 0.25)
             ),
             .screenshot(
                 "tutorial_pick_category",
-                title: "Verifying a New Spot",
-                body: "Pick which Flezcal this spot offers.\n\nAdditional Flezcals can be added one at a time.",
-                cropRegion: CGRect(x: 0, y: 0.02, width: 1, height: 0.55)
+                title: "Pick the Flezcal Category",
+                body: "Choose which Flezcal this spot offers.",
+                cropRegion: CGRect(x: 0, y: 0.04, width: 1, height: 0.45)
             ),
             .screenshot(
                 "tutorial_confirm_spot",
-                title: "Share What You Know",
-                body: "Add specific offerings: brands, flavors, styles. The details you share are what make someone else's visit better.",
-                cropRegion: CGRect(x: 0, y: 0.48, width: 1, height: 0.42)
-            ),
-            .screenshot(
-                "tutorial_rate_spot",
-                title: "Rate It",
-                body: "We have high standards to identify the best!"
-                    + "\n\nYour rating helps the best spots rise to the top."
-                    + "\n\nOnly rate what you've actually tried.",
-                cropRegion: CGRect(x: 0, y: 0.28, width: 1, height: 0.65)
+                title: "Add Offerings and Details",
+                body: "Next up: rate and verify in the Rating & Verifying tutorial.",
+                cropRegion: CGRect(x: 0, y: 0.35, width: 1, height: 0.5)
             ),
         ],
-        estimatedMinutes: 2
+        estimatedMinutes: 1
+    )
+
+    // MARK: Tutorial 5 — Rating & Verifying
+
+    static let ratingVerifying = Tutorial(
+        id: .ratingVerifying,
+        title: "Rating & Verifying",
+        subtitle: "Rate what you've tried. Help the best spots rise.",
+        icon: "flame.fill",
+        color: .purple,
+        steps: [
+            .screenshot(
+                "tutorial_rate_prompt",
+                title: "Find the Rate Button",
+                body: "On any spot, tap \"Add your rating\" under a Flezcal.",
+                requiredTab: AppTab.spots,
+                cropRegion: CGRect(x: 0, y: 0.28, width: 1, height: 0.3)
+            ),
+            .screenshot(
+                "tutorial_rating_picker",
+                title: "Pick Your Flan Rating",
+                body: "1-5 flans, from Confirmed Spot up to World Class.",
+                cropRegion: CGRect(x: 0, y: 0.37, width: 1, height: 0.35)
+            ),
+            .screenshot(
+                "tutorial_rating_confirm",
+                title: "Confirm Your Rating",
+                body: "Review your choice. Only rate what you've actually tried.",
+                cropRegion: CGRect(x: 0, y: 0.33, width: 1, height: 0.32)
+            ),
+            .screenshot(
+                "tutorial_verify_button",
+                title: "Report Inaccurate Pins",
+                body: "Tap \"Not accurate, remove pin\" to clean up bad results.",
+                cropRegion: CGRect(x: 0, y: 0.55, width: 1, height: 0.35)
+            ),
+        ],
+        estimatedMinutes: 1
+    )
+
+    // MARK: Tutorial 6 — The Leaderboard
+
+    static let leaderboard = Tutorial(
+        id: .leaderboard,
+        title: "The Leaderboard",
+        subtitle: "See how your contributions stack up.",
+        icon: "trophy.fill",
+        color: .yellow,
+        steps: [
+            .screenshot(
+                "tutorial_leaderboard_rank",
+                title: "Check Your Rank",
+                body: "See where you stand among the top contributors.",
+                requiredTab: AppTab.leaderboard,
+                cropRegion: CGRect(x: 0, y: 0.07, width: 1, height: 0.45)
+            ),
+            .screenshot(
+                "tutorial_leaderboard_scoring",
+                title: "Understand the Scoring",
+                body: "Spot +10, Rating +5, Find +3, Brand +1, Confirm +1.",
+                cropRegion: CGRect(x: 0, y: 0.84, width: 1, height: 0.16)
+            ),
+        ],
+        estimatedMinutes: 1
     )
 }

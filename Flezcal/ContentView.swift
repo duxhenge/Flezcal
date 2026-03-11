@@ -24,9 +24,15 @@ struct ContentView: View {
     /// Set by the .showAreaOnMap notification — MapTabView picks this up,
     /// centers the camera on the area, and runs fetchAndPreScreen.
     @State private var pendingMapCenter: CLLocationCoordinate2D? = nil
+    /// Set by the .showAreaOnMap notification when the Spots tab includes its
+    /// search results. MapTabView injects these directly instead of fetching fresh.
+    @State private var pendingMapResults: [SuggestedSpot]? = nil
     /// Set by the .showSpotsAtLocation notification — ListTabView picks this up
     /// and sets its customLocation so the Spots tab searches from that area.
     @State private var pendingSpotsLocation: CustomSearchLocation? = nil
+    /// Set by the .showSpotsAtLocation notification when the Map tab includes its
+    /// search results. ListTabView injects these directly instead of fetching fresh.
+    @State private var pendingSpotsResults: [SuggestedSpot]? = nil
     /// Shared Flezcal filter state — which pick pills are active.
     /// Synced between Map and Spots tabs so toggling a pill on one tab
     /// carries over when switching to the other.
@@ -35,6 +41,12 @@ struct ContentView: View {
     /// Community Map mode — shows all verified spots across all 50 categories,
     /// hides ghost pins. Shared between Map and Spots tabs.
     @State private var showCommunityMap = false
+    /// Live results from the Spots tab — kept in sync by ListTabView's onChange.
+    /// Auto-injected into the Map tab when the user switches tabs so both tabs
+    /// show the same data ("one search, both tabs").
+    @State private var latestExploreResults: [SuggestedSpot] = []
+    /// Search center from the Spots tab — used for auto-injection into Map tab.
+    @State private var latestExploreCenter: CLLocationCoordinate2D? = nil
     @State private var showDisplayNamePrompt = false
     @State private var promptedName = ""
 
@@ -58,6 +70,7 @@ struct ContentView: View {
             TabView(selection: $selectedTab) {
                 MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
                           pendingMapCenter: $pendingMapCenter,
+                          pendingMapResults: $pendingMapResults,
                           activePickIDs: $activePickIDs,
                           showCommunityMap: $showCommunityMap,
                           websiteChecker: websiteChecker)
@@ -65,7 +78,7 @@ struct ContentView: View {
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
-                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, websiteChecker: websiteChecker)
+                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, pendingSpotsResults: $pendingSpotsResults, latestExploreResults: $latestExploreResults, latestExploreCenter: $latestExploreCenter, websiteChecker: websiteChecker)
                     .tabItem { Label("Spots", systemImage: "list.bullet") }
                     .tag(AppTab.spots)
 
@@ -130,6 +143,18 @@ struct ContentView: View {
             // When picks change (added/removed/swapped), reset all to active
             activePickIDs = Set(newPicks.map(\.id))
         }
+        .onChange(of: selectedTab) { oldTab, newTab in
+            // Auto-sync Spots tab results → Map tab when switching to Map.
+            // This ensures both tabs show the same data without requiring
+            // the user to tap "Show on Map" — fulfills "one search, both tabs".
+            if newTab == AppTab.explore && !latestExploreResults.isEmpty {
+                let center = latestExploreCenter
+                    ?? locationManager.userLocation
+                    ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
+                pendingMapCenter = center
+                pendingMapResults = latestExploreResults
+            }
+        }
         .overlayPreferenceValue(TutorialTargetKey.self) { anchors in
             GeometryReader { geo in
                 Color.clear
@@ -167,6 +192,7 @@ struct ContentView: View {
                let lat = info["latitude"] as? Double,
                let lon = info["longitude"] as? Double {
                 pendingMapCenter = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                pendingMapResults = info["suggestions"] as? [SuggestedSpot]
             }
             selectedTab = AppTab.explore
         }
@@ -179,6 +205,7 @@ struct ContentView: View {
                     name: name,
                     coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)
                 )
+                pendingSpotsResults = info["suggestions"] as? [SuggestedSpot]
             }
             selectedTab = AppTab.spots
         }

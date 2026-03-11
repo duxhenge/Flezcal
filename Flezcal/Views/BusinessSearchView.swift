@@ -136,11 +136,7 @@ struct ConfirmSpotView: View {
     @State private var showSignIn = false
     /// Tracks that the user tapped "save" before signing in — auto-proceed after.
     @State private var pendingSaveAfterSignIn = false
-    /// Post-save rating flow
-    @State private var showRatingFlow = false
-    @State private var showThankYou = false
-    @State private var thankYouMessage = ""
-    /// Spot already had this category — skip straight to rating offer
+    /// Spot already had this category
     @State private var showAlreadyThere = false
 
     var body: some View {
@@ -349,23 +345,12 @@ struct ConfirmSpotView: View {
                 }
             }
             .alert("Already on \(AppConstants.appName)", isPresented: $showAlreadyThere) {
-                Button("Rate It") {
-                    showRatingFlow = true
-                }
                 Button("Done") {
                     dismiss()
                     onSaved()
                 }
             } message: {
-                Text("\(mapItem.name ?? "This spot") already has \(category.displayName). Would you like to rate it?")
-            }
-            .alert("Thank You!", isPresented: $showThankYou) {
-                Button("Done") {
-                    dismiss()
-                    onSaved()
-                }
-            } message: {
-                Text(thankYouMessage)
+                Text("\(mapItem.name ?? "This spot") already has \(category.displayName).")
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
@@ -394,48 +379,6 @@ struct ConfirmSpotView: View {
                     }
                     .transition(.opacity)
                 }
-            }
-            // Post-save rating flow — appears after success overlay
-            .sheet(isPresented: $showRatingFlow, onDismiss: {
-                // Swipe-to-dismiss or Skip: just finish — no thank-you unless they rated
-                if !showThankYou {
-                    dismiss()
-                    onSaved()
-                }
-            }) {
-                NavigationStack {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            Text("Rate the \(category.displayName) here")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .padding(.top)
-
-                            RatingFlowView(
-                                categoryName: category.displayName,
-                                existingRating: nil,
-                                onSubmit: { rating in
-                                    submitPostSaveRating(rating)
-                                },
-                                onSkip: {
-                                    showRatingFlow = false
-                                },
-                                onRemove: nil
-                            )
-                            .padding(.horizontal)
-                        }
-                    }
-                    .navigationTitle("Rate This Flezcal")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Skip") {
-                                showRatingFlow = false
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium, .large])
             }
         }
     }
@@ -504,8 +447,8 @@ struct ConfirmSpotView: View {
                 if didSomething {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    // Go to rating prompt
-                    showRatingFlow = true
+                    dismiss()
+                    onSaved()
                 } else {
                     // Category already existed, nothing changed — offer to rate it
                     showAlreadyThere = true
@@ -557,11 +500,12 @@ struct ConfirmSpotView: View {
                         }
                     }
 
-                    // Dismiss overlay after 1.4s then show rating prompt
+                    // Dismiss overlay after 1.4s then close
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                         withAnimation { showSuccessOverlay = false }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showRatingFlow = true
+                            dismiss()
+                            onSaved()
                         }
                     }
                 } else {
@@ -573,28 +517,6 @@ struct ConfirmSpotView: View {
         }
     }
 
-    private func submitPostSaveRating(_ rating: Int) {
-        guard let spot = savedSpot,
-              let userID = authService.userID else {
-            showRatingFlow = false
-            return
-        }
-        Task {
-            let verificationService = VerificationService()
-            _ = await verificationService.submitRating(
-                spotID: spot.id,
-                userID: userID,
-                category: category,
-                rating: rating,
-                spotService: spotService
-            )
-            await MainActor.run {
-                showRatingFlow = false
-                thankYouMessage = "Your rating has been saved. Thanks for helping the community!"
-                showThankYou = true
-            }
-        }
-    }
 }
 
 // MARK: - Confirm Pin View

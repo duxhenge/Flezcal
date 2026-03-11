@@ -196,6 +196,29 @@ actor WebsiteCheckService {
         // from "no URL to scan" — the latter keeps preScreenMatches = nil (yellow pin).
         var results: [String: Set<String>] = [:]
 
+        // ── Pass 0: Name-based matching ──────────────────────────
+        // If the venue name contains a pick's keyword, it's an automatic green pin.
+        // Uses word-boundary regex (\b) to avoid partial matches (e.g. "flan" in "flank").
+        // Uses full mapSearchTerms phrases — never split multi-word terms, since
+        // generic words like "bakery", "bar", "restaurant" would match everything.
+        for suggestion in suggestions {
+            let name = suggestion.name.lowercased()
+            for pick in picks {
+                let terms = pick.websiteKeywords + pick.mapSearchTerms
+                let uniqueTerms = Set(terms.map { $0.lowercased() }).filter { $0.count >= 3 }
+                for term in uniqueTerms {
+                    let pattern = "\\b\(NSRegularExpression.escapedPattern(for: term))\\b"
+                    if name.range(of: pattern, options: .regularExpression) != nil {
+                        results[suggestion.id, default: Set()].insert(pick.id)
+                        #if DEBUG
+                        print("[PreScreen] Name match: \"\(suggestion.name)\" contains \"\(term)\" → \(pick.id)")
+                        #endif
+                        break  // One match per pick is enough
+                    }
+                }
+            }
+        }
+
         // Separate into cached (instant) and needs-fetch
         var toFetch: [(id: String, url: URL)] = []
 
@@ -215,8 +238,8 @@ actor WebsiteCheckService {
                 // Related (relatedKeyword) matches are too weak — e.g. "agave" on a
                 // breakfast menu would falsely promote a non-mezcal venue.
                 let relevant = cached.confirmed.intersection(pickIDs)
-                // Always include in results (even if empty) to mark as scanned
-                results[suggestion.id] = relevant
+                // Union with any name-based matches (Pass 0) rather than overwriting
+                results[suggestion.id] = (results[suggestion.id] ?? Set()).union(relevant)
             } else {
                 toFetch.append((id: suggestion.id, url: url))
             }
@@ -235,7 +258,8 @@ actor WebsiteCheckService {
             for (id, url, scanResult) in fetched {
                 htmlCache[url.absoluteString] = scanResult
                 let relevant = scanResult.confirmed.intersection(pickIDs)
-                results[id] = relevant
+                // Union with any name-based matches (Pass 0) rather than overwriting
+                results[id] = (results[id] ?? Set()).union(relevant)
                 #if DEBUG
                 if !scanResult.confirmed.isEmpty || !scanResult.related.isEmpty {
                     print("[PreScreen] \(id): confirmed=\(scanResult.confirmed) related=\(scanResult.related) pickIDs=\(pickIDs) → relevant=\(relevant)")
@@ -272,55 +296,6 @@ actor WebsiteCheckService {
     /// Pre-screen venues for Explore result re-ranking.
     /// Accepts pre-extracted (index, url) pairs so that non-Sendable MKMapItem
     /// doesn't cross the actor boundary.
-    func batchPreScreenMapItems(
-        _ items: [(index: Int, url: URL)],
-        picks: [FoodCategory]
-    ) async -> Set<Int> {
-        let pickIDs = Set(picks.map(\.id))
-        var matchedIndices = Set<Int>()
-
-        // Separate cached vs needs-fetch
-        var toFetch: [(id: Int, url: URL)] = []
-
-        for item in items {
-            guard !isSocialMediaURL(item.url) else { continue }
-            // Normalize to https:// so cache keys match the full check
-            // (resolveURL applies upgradeToHTTPS before looking up the cache).
-            let normalized = upgradeToHTTPS(item.url)
-            let key = normalized.absoluteString
-            if let cached = htmlCache[key] {
-                if !cached.confirmed.intersection(pickIDs).isEmpty {
-                    matchedIndices.insert(item.index)
-                }
-            } else {
-                toFetch.append((id: item.index, url: normalized))
-            }
-        }
-
-        // Fetch uncached homepages concurrently (max 6 at a time).
-        // Keeps connection count manageable to avoid timeout pile-ups.
-        if !toFetch.isEmpty {
-            let fetched = await fetchAndScanHomepages(toFetch, categories: picks)
-
-            for (index, url, scanResult) in fetched {
-                htmlCache[url.absoluteString] = scanResult
-                if !scanResult.confirmed.intersection(pickIDs).isEmpty {
-                    matchedIndices.insert(index)
-                }
-                #if DEBUG
-                if !scanResult.confirmed.isEmpty || !scanResult.related.isEmpty {
-                    print("[PreScreen-Explore] index \(index): confirmed=\(scanResult.confirmed) related=\(scanResult.related) pickIDs=\(pickIDs)")
-                }
-                #endif
-            }
-        }
-
-        #if DEBUG
-        print("[PreScreen] Explore: scanned \(toFetch.count) homepages, \(matchedIndices.count) matches")
-        #endif
-        return matchedIndices
-    }
-
     /// Check a single tapped venue — uses Brave Search as fallback when
     /// Apple Maps has no URL. Only call this for single user-initiated taps,
     /// never in a batch loop.

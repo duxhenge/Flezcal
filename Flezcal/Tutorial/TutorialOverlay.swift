@@ -43,6 +43,10 @@ extension View {
 struct TutorialOverlay: View {
     @ObservedObject var tutorialService: TutorialService
 
+    private var tutorialColor: Color {
+        tutorialService.activeTutorial?.color ?? .orange
+    }
+
     var body: some View {
         if tutorialService.isActive, let step = tutorialService.currentStep {
             ZStack {
@@ -64,7 +68,7 @@ struct TutorialOverlay: View {
                         Spacer()
                         ProgressView()
                             .tint(.white)
-                        Text("Loading…")
+                        Text("Loading\u{2026}")
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.7))
                             .padding(.top, 8)
@@ -91,8 +95,9 @@ struct TutorialOverlay: View {
         // Step card positioned relative to the target
         TutorialStepCard(
             step: step,
-            stepNumber: tutorialService.currentStepIndex + 1,
+            stepIndex: tutorialService.currentStepIndex,
             totalSteps: tutorialService.stepCount,
+            tutorialColor: tutorialColor,
             targetFrame: targetFrame,
             onBack: { tutorialService.previousStep() },
             onNext: { tutorialService.nextStep() },
@@ -112,8 +117,9 @@ struct TutorialOverlay: View {
         // Centered card with screenshot
         ScreenshotStepCard(
             step: step,
-            stepNumber: tutorialService.currentStepIndex + 1,
+            stepIndex: tutorialService.currentStepIndex,
             totalSteps: tutorialService.stepCount,
+            tutorialColor: tutorialColor,
             onBack: { tutorialService.previousStep() },
             onNext: { tutorialService.nextStep() },
             onSkip: { tutorialService.skip() }
@@ -160,8 +166,9 @@ private struct SpotlightBackground: View {
 
 private struct TutorialStepCard: View {
     let step: TutorialStep
-    let stepNumber: Int
+    let stepIndex: Int
     let totalSteps: Int
+    let tutorialColor: Color
     let targetFrame: CGRect
     let onBack: () -> Void
     let onNext: () -> Void
@@ -179,7 +186,7 @@ private struct TutorialStepCard: View {
         GeometryReader { geo in
             let screenWidth = geo.size.width
             let screenHeight = geo.size.height
-            let cardWidth: CGFloat = min(320, screenWidth - 32)
+            let cardWidth: CGFloat = min(340, screenWidth - 32)
 
             // Space available above and below the spotlight cutout (including padding)
             let spotlightTop = targetFrame.minY - spotlightPadding
@@ -252,21 +259,27 @@ private struct TutorialStepCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Step \(stepNumber) of \(totalSteps)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Colored accent strip
+            RoundedRectangle(cornerRadius: 2)
+                .fill(tutorialColor)
+                .frame(height: 4)
+                .frame(maxWidth: .infinity)
+
+            // Progress dots
+            ProgressDots(current: stepIndex, total: totalSteps, color: tutorialColor)
+                .frame(maxWidth: .infinity)
 
             Text(step.title)
                 .font(.headline)
                 .fontWeight(.bold)
 
             Text(step.body)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
-                if stepNumber > 1 {
+                if stepIndex > 0 {
                     Button {
                         onBack()
                     } label: {
@@ -274,7 +287,7 @@ private struct TutorialStepCard: View {
                             .fontWeight(.semibold)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
-                            .background(Color.orange)
+                            .background(tutorialColor)
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
                     }
@@ -291,11 +304,11 @@ private struct TutorialStepCard: View {
                 Button {
                     onNext()
                 } label: {
-                    Text(stepNumber == totalSteps ? "Done" : "Next")
+                    Text(stepIndex == totalSteps - 1 ? "Done" : "Next")
                         .fontWeight(.semibold)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color.orange)
+                        .background(tutorialColor)
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
@@ -330,17 +343,24 @@ private struct TutorialStepCard: View {
 
 private struct ScreenshotStepCard: View {
     let step: TutorialStep
-    let stepNumber: Int
+    let stepIndex: Int
     let totalSteps: Int
+    let tutorialColor: Color
     let onBack: () -> Void
     let onNext: () -> Void
     let onSkip: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Step \(stepNumber) of \(totalSteps)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Colored accent strip
+            RoundedRectangle(cornerRadius: 2)
+                .fill(tutorialColor)
+                .frame(height: 4)
+                .frame(maxWidth: .infinity)
+
+            // Progress dots
+            ProgressDots(current: stepIndex, total: totalSteps, color: tutorialColor)
+                .frame(maxWidth: .infinity)
 
             Text(step.title)
                 .font(.headline)
@@ -355,7 +375,7 @@ private struct ScreenshotStepCard: View {
                     Image(uiImage: uiImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 280)
+                        .frame(maxHeight: 340)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
@@ -365,12 +385,12 @@ private struct ScreenshotStepCard: View {
             }
 
             Text(step.body)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
-                if stepNumber > 1 {
+                if stepIndex > 0 {
                     Button {
                         onBack()
                     } label: {
@@ -378,7 +398,7 @@ private struct ScreenshotStepCard: View {
                             .fontWeight(.semibold)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
-                            .background(Color.orange)
+                            .background(tutorialColor)
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
                     }
@@ -395,18 +415,18 @@ private struct ScreenshotStepCard: View {
                 Button {
                     onNext()
                 } label: {
-                    Text(stepNumber == totalSteps ? "Done" : "Next")
+                    Text(stepIndex == totalSteps - 1 ? "Done" : "Next")
                         .fontWeight(.semibold)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color.orange)
+                        .background(tutorialColor)
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
             }
         }
         .padding(20)
-        .frame(maxWidth: 340)
+        .frame(maxWidth: 360)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(.systemBackground))
@@ -418,24 +438,29 @@ private struct ScreenshotStepCard: View {
 // MARK: - Cropped Screenshot
 
 /// Crops a UIImage to the specified unit-coordinate region (0–1) and displays it
-/// so it always fills the available frame height (280pt), regardless of aspect ratio.
+/// at full width within the card, with height determined by the crop's aspect ratio
+/// (capped at 340pt). This ensures the cropped region is always shown at readable size
+/// without zooming in beyond the original pixel density.
 private struct CroppedScreenshot: View {
     let uiImage: UIImage
     /// Unit-coordinate rect (0–1). Example: CGRect(x: 0, y: 0.03, width: 1, height: 0.25)
     let cropRegion: CGRect
 
-    private let displayHeight: CGFloat = 280
+    private let maxDisplayWidth: CGFloat = 320
+    private let maxDisplayHeight: CGFloat = 340
 
     var body: some View {
         if let cropped = croppedImage() {
             let imgAspect = CGFloat(cropped.cgImage?.width ?? 1) / CGFloat(cropped.cgImage?.height ?? 1)
-            // Width that fills the height at native aspect ratio
+            // Fill width first, then cap height
+            let fittedHeight = maxDisplayWidth / imgAspect
+            let displayHeight = min(fittedHeight, maxDisplayHeight)
             let displayWidth = displayHeight * imgAspect
 
             Image(uiImage: cropped)
                 .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: min(displayWidth, 320), height: displayHeight)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: min(displayWidth, maxDisplayWidth), height: displayHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -458,6 +483,26 @@ private struct CroppedScreenshot: View {
 
         guard let croppedCG = cgImage.cropping(to: pixelRect) else { return nil }
         return UIImage(cgImage: croppedCG, scale: uiImage.scale, orientation: uiImage.imageOrientation)
+    }
+}
+
+// MARK: - Progress Dots
+
+private struct ProgressDots: View {
+    let current: Int   // 0-indexed
+    let total: Int
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<total, id: \.self) { index in
+                Circle()
+                    .fill(index == current ? color : color.opacity(0.25))
+                    .frame(width: index == current ? 8 : 6,
+                           height: index == current ? 8 : 6)
+                    .animation(.easeInOut(duration: 0.2), value: current)
+            }
+        }
     }
 }
 

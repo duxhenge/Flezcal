@@ -276,55 +276,7 @@ struct MyPicksTabView: View {
             )
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Search Radius Picker
-
-/// Horizontal pill picker for the user's search distance preference.
-/// Shows discrete options (10, 25, 35, 50, 75 mi) with the selected
-/// option highlighted in orange. Matches the Capsule pill style used
-/// by PicksFilterBar for visual consistency.
-struct SearchRadiusPicker: View {
-    @EnvironmentObject var picksService: UserPicksService
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Search Distance")
-                .font(.headline)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(UserPicksService.radiusOptions, id: \.miles) { option in
-                        let isSelected = abs(picksService.searchRadiusDegrees - option.degrees) < 0.01
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                picksService.setSearchRadius(option.degrees)
-                            }
-                        } label: {
-                            Text("\(option.miles) mi / \(option.km) km")
-                                .font(.subheadline)
-                                .fontWeight(isSelected ? .semibold : .regular)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule().fill(isSelected ? Color.orange : Color(.systemBackground))
-                                )
-                                .foregroundStyle(isSelected ? .white : .primary)
-                                .overlay(
-                                    Capsule().stroke(Color.secondary.opacity(0.3),
-                                                      lineWidth: isSelected ? 0 : 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            Text("How far to search for spots from your location")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        .tutorialTarget("customizeButton")
     }
 }
 

@@ -164,7 +164,7 @@ struct SuggestedSpotSheet: View {
                 if signedIn && pendingAddAfterSignIn {
                     pendingAddAfterSignIn = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        showFlezcalPicker = true
+                        startAddFlow()
                     }
                 }
             }
@@ -375,12 +375,25 @@ struct SuggestedSpotSheet: View {
         .foregroundStyle(.secondary)
     }
 
+    /// Starts the add-to-flezcal flow. If the website check confirmed exactly
+    /// one category, skips the picker and goes straight to ConfirmSpotView.
+    private func startAddFlow() {
+        if let result = displayResult,
+           result.confirmed.count == 1,
+           let confirmedCat = result.confirmed.first {
+            selectedFlezcal = confirmedCat
+            showConfirmSpot = true
+        } else {
+            showFlezcalPicker = true
+        }
+    }
+
     @ViewBuilder
     private var actionButtons: some View {
         VStack(spacing: 12) {
             Button {
                 if authService.isSignedIn {
-                    showFlezcalPicker = true
+                    startAddFlow()
                 } else {
                     pendingAddAfterSignIn = true
                     showSignIn = true

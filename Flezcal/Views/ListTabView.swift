@@ -23,14 +23,12 @@ private struct SearchTaskID: Equatable, Hashable {
     let activeFilterIDs: Set<String>   // IDs of active pick pills — triggers re-search on toggle
     let customLocation: CustomSearchLocation?
     let mapTermsVersion: Int        // Incremented when user edits mapSearchTerms — triggers re-search
-    let searchRadius: Double        // Triggers re-search when user changes search distance
     let refreshVersion: Int         // Incremented by manual refresh — triggers re-search
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.query == rhs.query && lhs.activeFilterIDs == rhs.activeFilterIDs
         && lhs.customLocation == rhs.customLocation
         && lhs.mapTermsVersion == rhs.mapTermsVersion
-        && lhs.searchRadius == rhs.searchRadius
         && lhs.refreshVersion == rhs.refreshVersion
     }
 
@@ -41,7 +39,6 @@ private struct SearchTaskID: Equatable, Hashable {
         hasher.combine(customLocation?.coordinate.latitude)
         hasher.combine(customLocation?.coordinate.longitude)
         hasher.combine(mapTermsVersion)
-        hasher.combine(searchRadius)
         hasher.combine(refreshVersion)
     }
 }
@@ -52,14 +49,14 @@ private struct SearchTaskID: Equatable, Hashable {
 /// potential spots interleaved by distance.
 private enum UnifiedListItem: Identifiable {
     case verified(Spot)
-    case potentialMatched(MKMapItem)
+    case potentialMatched(SuggestedSpot)
 
     var id: String {
         switch self {
         case .verified(let spot):
             return "v_\(spot.id)"
-        case .potentialMatched(let mapItem):
-            return "p_\(mapItem.name?.lowercased() ?? UUID().uuidString)"
+        case .potentialMatched(let suggestion):
+            return "p_\(suggestion.id)"
         }
     }
 
@@ -70,9 +67,8 @@ private enum UnifiedListItem: Identifiable {
         switch self {
         case .verified(let spot):
             return ref.distance(from: CLLocation(latitude: spot.latitude, longitude: spot.longitude))
-        case .potentialMatched(let mapItem):
-            let coord = mapItem.placemark.coordinate
-            return ref.distance(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
+        case .potentialMatched(let suggestion):
+            return ref.distance(from: CLLocation(latitude: suggestion.coordinate.latitude, longitude: suggestion.coordinate.longitude))
         }
     }
 }
@@ -333,13 +329,11 @@ private struct ExplorePanel: View {
     let onSelectExistingSpot: (Spot) -> Void
     /// Incremented when user edits mapSearchTerms — triggers re-search via SearchTaskID.
     let mapTermsVersion: Int
-    /// User's chosen search radius in degrees — triggers re-search via SearchTaskID.
-    let searchRadiusDegrees: Double
     /// Incremented by the parent to trigger a manual re-search.
     let refreshVersion: Int
-    /// Green-matched map items exposed to the parent for the unified top section.
+    /// Green-matched suggestions exposed to the parent for the unified top section.
     /// Updated after Wave 1/2 pre-screen completes.
-    @Binding var matchedMapItems: [MKMapItem]
+    @Binding var matchedSuggestions: [SuggestedSpot]
     /// Number of unmatched (yellow) results — exposed to the parent for the
     /// Unchecked filter pill count. Updated alongside matchedMapItems.
     @Binding var uncheckedCount: Int
@@ -355,6 +349,10 @@ private struct ExplorePanel: View {
     /// Whether the search engine or pre-screen is actively working.
     /// Exposed to parent so it can show a spinner in the header.
     @Binding var isSearchActive: Bool
+    /// All explore results (green + yellow) exposed to parent for cross-tab transfer.
+    @Binding var allExploreResults: [SuggestedSpot]
+    /// Injected results from another tab — when non-nil, replaces the search results.
+    @Binding var injectedResults: [SuggestedSpot]?
     @StateObject private var searchService = LocationSearchService()
 
     // Sheet state lives here so changes never re-render ListTabView
@@ -363,59 +361,61 @@ private struct ExplorePanel: View {
     @State private var websiteCheckTask: Task<Void, Never>? = nil
     let websiteChecker: WebsiteCheckService
 
-    /// Indices of search results whose homepage matched category keywords.
-    /// nil = pre-screen not yet run. Empty = ran, no matches.
-    /// Used to re-rank: matched venues sort to the top of the list.
-    @State private var preScreenMatchedIndices: Set<Int>? = nil
+    /// Search results as SuggestedSpot with preScreenMatches baked in.
+    /// Displayed set (closest 25, or all after Wave 2).
+    @State private var exploreResults: [SuggestedSpot] = []
+    /// Full pool before trimming — used for Wave 2 deeper scan.
+    @State private var exploreFullPool: [SuggestedSpot] = []
 
     /// True while the batch pre-screen is actively scanning homepages.
-    /// Used to show a scanning indicator and an optimistic "checking menus…" message.
     @State private var isPreScreening = false
 
     /// Deeper scan state — Wave 2 is deferred until the user taps "Do a Deeper Scan?"
-    @State private var deeperScanURLs: [(index: Int, url: URL)] = []
+    @State private var deeperScanPool: [SuggestedSpot] = []
     @State private var deeperScanPicks: [FoodCategory] = []
-    @State private var wave1MatchedIndices: Set<Int> = []
-    /// Number of results that have been pre-screened. Starts at 25 (Wave 1),
-    /// expands to total results after Wave 2 runs. Controls how many yellow
-    /// rows are visible and what counts as "unchecked".
-    @State private var preScreenedPoolSize: Int = 25
+    @State private var wave1Results: [String: Set<String>] = [:]
 
     /// The coordinate to use for searches. Custom location if set, otherwise GPS.
     private var effectiveLocation: CLLocationCoordinate2D? {
         customLocation?.coordinate ?? currentLocation()
     }
 
-    /// Number of pre-screen matched results (confirmed via homepage scan).
+    /// Number of pre-screen matched results whose matched categories overlap
+    /// with the active picks — consistent with splitResults and MapTabView's
+    /// visibleGhostPins filtering.
     private var matchedCount: Int {
-        preScreenMatchedIndices?.count ?? 0
+        let activeIDs = Set(activeFilterPicks.map(\.id))
+        return exploreResults.filter { spot in
+            guard let matches = spot.preScreenMatches, !matches.isEmpty else { return false }
+            return !matches.isDisjoint(with: activeIDs)
+        }.count
     }
 
-    /// Apple Maps results split into matched (pre-screen confirmed) and unmatched.
-    /// Tier 1 (top): Pre-screen matched venues, sorted by distance.
-    /// Tier 2 (bottom): Unmatched venues from the pre-screened pool (first 25),
-    ///   sorted by distance. Results beyond 25 are hidden until Wave 2 runs.
-    private var splitResults: (matched: [MKMapItem], other: [MKMapItem]) {
-        let results = searchService.searchResults
+    /// Results split into matched (pre-screen confirmed) and unmatched.
+    /// Green-matched venues go to the parent for the unified top section.
+    /// Yellow/unchecked venues render here as "Other Nearby".
+    ///
+    /// A venue is "matched" (green) only if its preScreenMatches overlap
+    /// with the currently active pick IDs — same logic as MapTabView's
+    /// visibleGhostPins, so both tabs show identical green results.
+    private var splitResults: (matched: [SuggestedSpot], other: [SuggestedSpot]) {
         let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
-        let matchedIndices = preScreenMatchedIndices ?? []
-        // Only show results from the pre-screened pool. Starts at 25 (Wave 1),
-        // expands after "Do a Deeper Scan" runs Wave 2.
+        let activeIDs = Set(activeFilterPicks.map(\.id))
 
-        var top: [MKMapItem] = []
-        var rest: [MKMapItem] = []
+        var top: [SuggestedSpot] = []
+        var rest: [SuggestedSpot] = []
 
-        for (index, item) in results.prefix(preScreenedPoolSize).enumerated() {
+        for spot in exploreResults {
             // Skip venues that already exist as verified spots in Firestore.
-            if let name = item.name,
-               let coord = item.placemark.location?.coordinate,
-               findExistingSpot(name, coord.latitude, coord.longitude) != nil {
+            if findExistingSpot(spot.name, spot.coordinate.latitude, spot.coordinate.longitude) != nil {
                 continue
             }
-            if isFilterSearch && matchedIndices.contains(index) {
-                top.append(item)
+            if isFilterSearch,
+               let matches = spot.preScreenMatches, !matches.isEmpty,
+               !matches.isDisjoint(with: activeIDs) {
+                top.append(spot)
             } else {
-                rest.append(item)
+                rest.append(spot)
             }
         }
         return (matched: top, other: rest)
@@ -428,11 +428,11 @@ private struct ExplorePanel: View {
             // flashing "No results" on every keystroke.  Only show the
             // empty / no-results states once the search has settled.
             Group {
-                if searchService.searchResults.isEmpty && searchService.isSearching {
+                if exploreResults.isEmpty && searchService.isSearching {
                     ProgressView("Searching…")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
-                } else if searchService.searchResults.isEmpty && !searchService.isSearching {
+                } else if exploreResults.isEmpty && !searchService.isSearching {
                     VStack(spacing: 12) {
                         Image(systemName: "mappin.slash")
                             .font(.system(size: 40))
@@ -475,7 +475,7 @@ private struct ExplorePanel: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
-                            } else if preScreenMatchedIndices != nil && matchedCount == 0 {
+                            } else if !isPreScreening && matchedCount == 0 && !exploreResults.isEmpty {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) {
                                         Image(systemName: "magnifyingglass")
@@ -559,8 +559,8 @@ private struct ExplorePanel: View {
                                 .padding(.bottom, 4)
                             }
 
-                            ForEach(split.other, id: \.self) { mapItem in
-                                exploreRow(mapItem, isMatched: false)
+                            ForEach(split.other) { suggestion in
+                                exploreRow(suggestion, isMatched: false)
                                 Divider().padding(.leading, 72)
                             }
                         }
@@ -589,116 +589,131 @@ private struct ExplorePanel: View {
             activeFilterIDs: Set(activeFilterPicks.map(\.id)),
             customLocation: customLocation,
             mapTermsVersion: mapTermsVersion,
-            searchRadius: searchRadiusDegrees,
             refreshVersion: refreshVersion
         )) {
             // No active picks — clear results and stop
             guard !activeFilterPicks.isEmpty else {
-                searchService.clearResults()
-                preScreenMatchedIndices = nil
+                exploreResults = []
+                exploreFullPool = []
                 isPreScreening = false
-                matchedMapItems = []
+                matchedSuggestions = []
                 uncheckedCount = 0
                 return
             }
 
+            // ── Injected results from another tab (Map → Spots) ──
+            // When the Map tab sends its suggestions, use them directly
+            // instead of running a fresh search. Pre-screen data is already
+            // baked into the SuggestedSpot.preScreenMatches field.
+            if let results = injectedResults, !results.isEmpty {
+                injectedResults = nil  // consume immediately
+                exploreFullPool = results
+                exploreResults = Array(results.prefix(25))
+                isPreScreening = false
+                showDeeperScanPrompt = results.count > 25
+                if results.count > 25 {
+                    deeperScanPool = Array(results.dropFirst(25))
+                    deeperScanPicks = activePicks
+                }
+                updateMatchedItems()
+                #if DEBUG
+                print("[Explore] Injected \(results.count) results from Map tab — skipping search")
+                #endif
+                return
+            }
+
             let userTypedText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+            let picks = activePicks
+            let center = effectiveLocation ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
             #if DEBUG
-            print("[Explore] .task fired — searchText='\(searchText)' activePicks=\(activeFilterPicks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil") userTyped=\(userTypedText)")
+            print("[Explore] .task fired — searchText='\(searchText)' activePicks=\(picks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil") userTyped=\(userTypedText)")
             #endif
 
             if userTypedText {
                 // User typed a venue name — single query, debounced
                 let query = searchText
                 guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-                    searchService.clearResults()
+                    exploreResults = []
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(400))
-                guard !Task.isCancelled else {
-                    #if DEBUG
-                    print("[Explore] cancelled during debounce")
-                    #endif
-                    return
-                }
+                guard !Task.isCancelled else { return }
                 await searchService.search(query: query, userLocation: effectiveLocation)
+                // Convert MKMapItem results to SuggestedSpot (no pre-screen for text search)
+                let foodCat = primaryFoodCategory
+                exploreResults = searchService.searchResults.map {
+                    SuggestedSpot(mapItem: $0, suggestedCategory: foodCat)
+                }
+                exploreFullPool = []
             } else {
-                // Filter-based auto-search — combine terms from all active picks.
-                // Uses each pick's mapSearchTerms to ensure niche venues
-                // (mezcal bars, flan bakeries) appear in results.
-                var allTerms: [String] = []
-                var seen = Set<String>()
-                for pick in activeFilterPicks {
+                // Filter-based auto-search via taggedMultiSearch
+                var seenQueries = Set<String>()
+                var taggedQueries: [(query: String, tag: String)] = []
+                for pick in picks {
                     for term in pick.mapSearchTerms {
                         let key = term.lowercased()
-                        if seen.insert(key).inserted {
-                            allTerms.append(term)
+                        if seenQueries.insert(key).inserted {
+                            taggedQueries.append((query: term, tag: pick.id))
                         }
                     }
                 }
-                if allTerms.isEmpty { allTerms = ["restaurant"] }
-                await searchService.multiSearch(
-                    queries: allTerms,
-                    userLocation: effectiveLocation,
-                    radius: searchRadiusDegrees
+                if taggedQueries.isEmpty {
+                    taggedQueries = [("restaurant", picks.first?.id ?? "")]
+                }
+                let taggedResults = await searchService.taggedMultiSearch(
+                    queries: taggedQueries,
+                    center: center
                 )
+                guard !Task.isCancelled else { return }
+
+                // Convert to SuggestedSpots with category tracking
+                let picksByID = Dictionary(uniqueKeysWithValues: picks.map { ($0.id, $0) })
+                var pool: [SuggestedSpot] = []
+                for result in taggedResults {
+                    guard result.item.name != nil else { continue }
+                    let category = picksByID[result.tag] ?? picks[0]
+                    pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
+                }
+                exploreFullPool = pool
+                exploreResults = Array(pool.prefix(25))
             }
 
             // Pre-screen: scan homepages to re-rank results (matched venues first).
             // Only for filter-based auto-searches — user-typed queries skip re-ranking.
-            guard !Task.isCancelled else {
-                #if DEBUG
-                print("[Explore] cancelled after search")
-                #endif
+            guard !Task.isCancelled, !userTypedText, !exploreResults.isEmpty else {
+                updateMatchedItems()
                 return
             }
-            preScreenMatchedIndices = nil
-            isPreScreening = false
-            let items = searchService.searchResults
-            let picks = activePicks
-            #if DEBUG
-            print("[Explore] pre-screen gate: items=\(items.count) userTyped=\(userTypedText) picks=\(picks.map(\.displayName))")
-            #endif
-            guard !items.isEmpty, !userTypedText else { return }
             isPreScreening = true
             showDeeperScanPrompt = false
-            deeperScanURLs = []
-            preScreenedPoolSize = 25  // Reset to Wave 1 cap for new search
-            // Extract (index, url) pairs on @MainActor before crossing into the
-            // WebsiteCheckService actor — MKMapItem is non-Sendable.
-            let itemURLs: [(index: Int, url: URL)] = items.enumerated().compactMap { index, item in
-                guard let url = item.url else { return nil }
-                return (index: index, url: url)
-            }
 
-            // Wave 1: scan the first 25 results so green badges appear fast.
-            // Wave 2 (remaining) is deferred until the user taps "Do a Deeper Scan?".
-            let wave1Count = min(25, itemURLs.count)
-            let wave1 = Array(itemURLs.prefix(wave1Count))
-            let wave2 = Array(itemURLs.dropFirst(wave1Count))
+            // Wave 1: scan the closest 25 venues so green badges appear fast.
+            let wave1 = Array(exploreFullPool.prefix(25))
+            let wave2 = Array(exploreFullPool.dropFirst(25))
 
             #if DEBUG
             print("[Explore] starting wave 1 pre-screen: \(wave1.count) items")
             #endif
 
-            // ── Wave 1: top results ──
-            let matched = await websiteChecker.batchPreScreenMapItems(wave1, picks: picks)
+            let w1Results = await websiteChecker.batchPreScreen(suggestions: wave1, picks: picks)
             guard !Task.isCancelled else {
                 isPreScreening = false
                 return
             }
-            preScreenMatchedIndices = matched
+            // Bake pre-screen results into the data
+            applyPreScreenToExplore(w1Results)
             updateMatchedItems()
             #if DEBUG
-            print("[Explore] wave 1 done: \(matched.count) matches out of \(wave1.count). \(wave2.count) deferred.")
+            let w1Green = w1Results.values.filter { !$0.isEmpty }.count
+            print("[Explore] wave 1 done: \(w1Green) matches out of \(wave1.count). \(wave2.count) deferred.")
             #endif
 
             isPreScreening = false
 
             // Store Wave 2 for the "Do a Deeper Scan?" button.
             if !wave2.isEmpty {
-                wave1MatchedIndices = matched
-                deeperScanURLs = wave2
+                wave1Results = w1Results
+                deeperScanPool = wave2
                 deeperScanPicks = picks
                 showDeeperScanPrompt = true
             }
@@ -721,41 +736,60 @@ private struct ExplorePanel: View {
             websiteCheckTask?.cancel()
             websiteCheckTask = nil
             multiCheckResult = nil
-            preScreenMatchedIndices = nil
             isPreScreening = false
             showDeeperScanPrompt = false
-            matchedMapItems = []
+            matchedSuggestions = []
             uncheckedCount = 0
             isSearchActive = false
         }
     }
 
     /// Wave 2: runs only when the user taps "Do a Deeper Scan?".
-    /// Scans the remaining URLs beyond the closest 25 and merges results.
+    /// Scans the remaining pool beyond the closest 25 and merges results.
     private func runDeeperScan() {
         showDeeperScanPrompt = false
         isPreScreening = true
 
-        let urls = deeperScanURLs
+        let pool = deeperScanPool
         let picks = deeperScanPicks
-        let w1Matched = wave1MatchedIndices
+        let w1 = wave1Results
 
         Task {
-            let wave2Matched = await websiteChecker.batchPreScreenMapItems(urls, picks: picks)
+            let w2Results = await websiteChecker.batchPreScreen(suggestions: pool, picks: picks)
             guard !Task.isCancelled else {
                 isPreScreening = false
                 return
             }
-            preScreenMatchedIndices = w1Matched.union(wave2Matched)
-            // Expand the visible pool to include all results now that Wave 2 is done
-            preScreenedPoolSize = searchService.searchResults.count
+            // Merge Wave 2 into Wave 1 results and re-apply
+            var allResults = w1
+            for (key, value) in w2Results { allResults[key] = value }
+            applyPreScreenToExplore(allResults)
+            // Expand display to full pool now that Wave 2 is done
+            exploreResults = exploreFullPool
             updateMatchedItems()
             #if DEBUG
-            print("[Explore] Deeper scan done: \(wave2Matched.count) matches out of \(urls.count)")
+            let w2Green = w2Results.values.filter { !$0.isEmpty }.count
+            print("[Explore] Deeper scan done: \(w2Green) matches out of \(pool.count)")
             #endif
             isPreScreening = false
-            deeperScanURLs = []
+            deeperScanPool = []
         }
+    }
+
+    /// Bakes pre-screen results into `exploreFullPool` and updates `exploreResults`.
+    /// Same pattern as SuggestionService.applyPreScreenResults — rebuilds arrays
+    /// with `preScreenMatches` set on each SuggestedSpot.
+    private func applyPreScreenToExplore(_ results: [String: Set<String>]) {
+        exploreFullPool = exploreFullPool.map { suggestion in
+            var updated = suggestion
+            if let matched = results[suggestion.id] {
+                updated.preScreenMatches = matched
+            }
+            return updated
+        }
+        // Rebuild displayed set from updated pool
+        let displayCount = exploreResults.count
+        exploreResults = Array(exploreFullPool.prefix(displayCount))
     }
 
     /// Resolve the primary FoodCategory for a search result.
@@ -769,38 +803,31 @@ private struct ExplorePanel: View {
         activeFilterPicks
     }
 
-    /// Updates the parent's matchedMapItems and uncheckedCount bindings.
+    /// Updates the parent's matchedSuggestions and uncheckedCount bindings.
     /// Called after Wave 1, Wave 2, and on disappear.
     private func updateMatchedItems() {
-        let results = searchService.searchResults
-        let indices = preScreenMatchedIndices ?? []
+        allExploreResults = exploreResults
         let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
         guard isFilterSearch else {
-            matchedMapItems = []
-            // For user-typed searches, cap unchecked to the pre-screened pool
-            uncheckedCount = min(results.count, preScreenedPoolSize)
+            matchedSuggestions = []
+            uncheckedCount = exploreResults.count
             return
         }
-        matchedMapItems = indices.sorted().compactMap { idx in
-            idx < results.count ? results[idx] : nil
-        }
-        // Only count results from the pre-screened pool as unchecked.
-        // Results beyond this haven't been scanned yet — they appear
-        // after "Do a Deeper Scan" expands the pool.
-        let poolSize = min(results.count, preScreenedPoolSize)
-        uncheckedCount = poolSize - matchedMapItems.count
+        let split = splitResults
+        matchedSuggestions = split.matched
+        uncheckedCount = split.other.count
     }
 
     /// A single row in the Explore results list — venue info + green checkmark
     /// for pre-screen matches + "Show on Map" button.
     @ViewBuilder
-    private func exploreRow(_ mapItem: MKMapItem, isMatched: Bool) -> some View {
+    private func exploreRow(_ suggestion: SuggestedSpot, isMatched: Bool) -> some View {
         HStack(spacing: 0) {
             Button {
-                selectResult(mapItem)
+                selectResult(suggestion)
             } label: {
                 ExploreResultRowView(
-                    mapItem: mapItem,
+                    mapItem: suggestion.mapItem,
                     userLocation: effectiveLocation,
                     isMatched: isMatched
                 )
@@ -808,7 +835,7 @@ private struct ExplorePanel: View {
 
             // "Show on Map" shortcut — jumps to Map tab with ghost pin
             Button {
-                showOnMap(mapItem)
+                showOnMap(suggestion)
             } label: {
                 Image(systemName: "map")
                     .font(.system(size: 16))
@@ -833,12 +860,10 @@ private struct ExplorePanel: View {
         return activePicks
     }
 
-    private func selectResult(_ mapItem: MKMapItem) {
+    private func selectResult(_ suggestion: SuggestedSpot) {
         // Check if this venue already exists in Firestore — if so, go straight
         // to SpotDetailView (same workflow as tapping a spot in the list).
-        if let coord = mapItem.placemark.location?.coordinate,
-           let name = mapItem.name,
-           let existing = findExistingSpot(name, coord.latitude, coord.longitude) {
+        if let existing = findExistingSpot(suggestion.name, suggestion.coordinate.latitude, suggestion.coordinate.longitude) {
             onSelectExistingSpot(existing)
             return
         }
@@ -846,12 +871,12 @@ private struct ExplorePanel: View {
         // New venue — open SuggestedSpotSheet with website check
         websiteCheckTask?.cancel()
         multiCheckResult = nil
-        let foodCat = primaryFoodCategory
-        selectedSuggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
+        selectedSuggestion = suggestion
         let picks = searchScopedPicks
+        let primaryPick = suggestion.suggestedCategory
         websiteCheckTask = Task {
             let result = await websiteChecker.checkAllPicks(
-                mapItem, picks: picks, primaryPick: foodCat
+                suggestion.mapItem, picks: picks, primaryPick: primaryPick
             )
             guard !Task.isCancelled else { return }
             multiCheckResult = result
@@ -859,9 +884,7 @@ private struct ExplorePanel: View {
     }
 
     /// Jump to the Map tab centered on this venue with a ghost pin + website check.
-    private func showOnMap(_ mapItem: MKMapItem) {
-        let foodCat = primaryFoodCategory
-        let suggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
+    private func showOnMap(_ suggestion: SuggestedSpot) {
         NotificationCenter.default.post(
             name: .showOnMap,
             object: nil,
@@ -894,14 +917,26 @@ struct ListTabView: View {
     @Binding var showCommunityMap: Bool
     /// Set by the Map tab's list button — consumed on appear to set customLocation.
     @Binding var pendingSpotsLocation: CustomSearchLocation?
+    /// Pre-built results from the Map tab — when non-nil, injected directly
+    /// into ExplorePanel instead of running a fresh search.
+    @Binding var pendingSpotsResults: [SuggestedSpot]?
+    /// Live results from the Spots tab — exposed to ContentView so it can
+    /// auto-inject them into the Map tab when the user switches tabs.
+    /// This ensures both tabs show the same data ("one search, both tabs").
+    @Binding var latestExploreResults: [SuggestedSpot]
+    /// Effective search center — exposed to ContentView for tab-switch sync.
+    @Binding var latestExploreCenter: CLLocationCoordinate2D?
 
-    init(locationManager: LocationManager, picksService: UserPicksService, activePickIDs: Binding<Set<String>>, showCommunityMap: Binding<Bool>, pendingSpotsLocation: Binding<CustomSearchLocation?>, websiteChecker: WebsiteCheckService) {
+    init(locationManager: LocationManager, picksService: UserPicksService, activePickIDs: Binding<Set<String>>, showCommunityMap: Binding<Bool>, pendingSpotsLocation: Binding<CustomSearchLocation?>, pendingSpotsResults: Binding<[SuggestedSpot]?>, latestExploreResults: Binding<[SuggestedSpot]>, latestExploreCenter: Binding<CLLocationCoordinate2D?>, websiteChecker: WebsiteCheckService) {
         self.locationManager = locationManager
         self.currentLocation = { [locationManager] in locationManager.userLocation }
         self.picksService = picksService
         self._activePickIDs = activePickIDs
         self._showCommunityMap = showCommunityMap
         self._pendingSpotsLocation = pendingSpotsLocation
+        self._pendingSpotsResults = pendingSpotsResults
+        self._latestExploreResults = latestExploreResults
+        self._latestExploreCenter = latestExploreCenter
         self.websiteChecker = websiteChecker
     }
     @State private var selectedSpot: Spot?
@@ -914,7 +949,11 @@ struct ListTabView: View {
     @State private var showUnchecked = true
 
     // Green-matched potential spots from ExplorePanel (for unified top section)
-    @State private var matchedMapItems: [MKMapItem] = []
+    @State private var matchedSuggestions: [SuggestedSpot] = []
+    // All explore results (green + yellow) from ExplorePanel — for cross-tab transfer
+    @State private var allExploreResults: [SuggestedSpot] = []
+    // Injected results from Map tab — consumed by ExplorePanel
+    @State private var injectedExploreResults: [SuggestedSpot]? = nil
     // Unmatched (yellow) result count from ExplorePanel (for Unchecked filter pill)
     @State private var uncheckedCount: Int = 0
     // "Do a Deeper Scan?" button state — driven by ExplorePanel, displayed by parent
@@ -1018,8 +1057,8 @@ struct ListTabView: View {
 
         let results: [Spot]
         if searchText.isEmpty {
-            // Match the user's chosen search radius (degrees → meters).
-            let maxDistance: CLLocationDistance = picksService.searchRadiusDegrees * 111_000
+            // 0.5° ≈ 55.5 km / 34.5 mi — consistent with SuggestionService
+            let maxDistance: CLLocationDistance = 0.5 * 111_000
             results = textFiltered.filter { spot in
                 centerCL.distance(from: CLLocation(latitude: spot.latitude, longitude: spot.longitude)) <= maxDistance
             }
@@ -1037,24 +1076,56 @@ struct ListTabView: View {
 
     // MARK: Unified top section
 
+    /// Verified spots capped to the geographic scope of the explore search results.
+    /// When explore results exist, verified spots beyond 1.5× the farthest search
+    /// result are excluded — prevents a long tail of distant spots extending far
+    /// beyond the search area. When no explore results exist, returns the full set.
+    private var scopedVerifiedSpots: [Spot] {
+        var spots = filteredAndSortedSpots
+
+        // Cap to search area when explore results are available
+        if showExploreSearch, !allExploreResults.isEmpty,
+           let center = effectiveLocation {
+            let ref = CLLocation(latitude: center.latitude, longitude: center.longitude)
+            let maxSearchDist = allExploreResults.map { suggestion in
+                ref.distance(from: CLLocation(
+                    latitude: suggestion.coordinate.latitude,
+                    longitude: suggestion.coordinate.longitude
+                ))
+            }.max() ?? 0
+
+            if maxSearchDist > 0 {
+                let cap = maxSearchDist * 1.5
+                spots = spots.filter { spot in
+                    ref.distance(from: CLLocation(
+                        latitude: spot.latitude,
+                        longitude: spot.longitude
+                    )) <= cap
+                }
+            }
+        }
+
+        return spots
+    }
+
     /// Merged list of verified spots + green-matched potential spots, sorted by distance.
     /// De-duplicates: if a venue exists in both Firestore and Apple Maps results, only
     /// the verified spot is included.
     private var unifiedTopSection: [UnifiedListItem] {
         var items: [UnifiedListItem] = []
 
-        // Verified spots (if toggle is on)
+        // Verified spots (if toggle is on), capped to search area
         if showVerified {
-            items += filteredAndSortedSpots.map { .verified($0) }
+            items += scopedVerifiedSpots.map { .verified($0) }
         }
 
         // Green-matched potential spots (if toggle is on)
         if showPossible {
-            let deduped = matchedMapItems.filter { mapItem in
-                guard let name = mapItem.name,
-                      let coord = mapItem.placemark.location?.coordinate else { return true }
-                return spotService.findExistingSpot(
-                    name: name, latitude: coord.latitude, longitude: coord.longitude
+            let deduped = matchedSuggestions.filter { suggestion in
+                spotService.findExistingSpot(
+                    name: suggestion.name,
+                    latitude: suggestion.coordinate.latitude,
+                    longitude: suggestion.coordinate.longitude
                 ) == nil
             }
             items += deduped.map { .potentialMatched($0) }
@@ -1069,13 +1140,13 @@ struct ListTabView: View {
     // MARK: Potential-spot tap handling
 
     /// Opens SuggestedSpotSheet for a green-matched potential spot (rendered in the unified section).
-    private func selectPotentialResult(_ mapItem: MKMapItem) {
+    private func selectPotentialResult(_ suggestion: SuggestedSpot) {
         // Check if venue already exists in Firestore
-        if let coord = mapItem.placemark.location?.coordinate,
-           let name = mapItem.name,
-           let existing = spotService.findExistingSpot(
-               name: name, latitude: coord.latitude, longitude: coord.longitude
-           ) {
+        if let existing = spotService.findExistingSpot(
+            name: suggestion.name,
+            latitude: suggestion.coordinate.latitude,
+            longitude: suggestion.coordinate.longitude
+        ) {
             selectedSpot = existing
             return
         }
@@ -1083,12 +1154,11 @@ struct ListTabView: View {
         // New venue — open SuggestedSpotSheet with website check
         websiteCheckTask?.cancel()
         multiCheckResult = nil
-        let foodCat = activePicks.first ?? FoodCategory.mezcal
-        selectedSuggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
+        selectedSuggestion = suggestion
         let picks = activePicks
         websiteCheckTask = Task {
             let result = await websiteChecker.checkAllPicks(
-                mapItem, picks: picks, primaryPick: foodCat
+                suggestion.mapItem, picks: picks, primaryPick: suggestion.suggestedCategory
             )
             guard !Task.isCancelled else { return }
             multiCheckResult = result
@@ -1096,9 +1166,7 @@ struct ListTabView: View {
     }
 
     /// Posts notification to show a potential spot on the Map tab.
-    private func showPotentialOnMap(_ mapItem: MKMapItem) {
-        let foodCat = activePicks.first ?? FoodCategory.mezcal
-        let suggestion = SuggestedSpot(mapItem: mapItem, suggestedCategory: foodCat)
+    private func showPotentialOnMap(_ suggestion: SuggestedSpot) {
         NotificationCenter.default.post(
             name: .showOnMap,
             object: nil,
@@ -1137,17 +1205,23 @@ struct ListTabView: View {
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    // "Show on Map" — switches to Map tab centered on the search area
+                    // "Show on Map" — switches to Map tab with the same search results
                     if showExploreSearch {
                         Button {
                             let center = customLocation?.coordinate
                                 ?? locationManager.userLocation
                                 ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
+                            var info: [String: Any] = [
+                                "latitude": center.latitude,
+                                "longitude": center.longitude
+                            ]
+                            if !allExploreResults.isEmpty {
+                                info["suggestions"] = allExploreResults
+                            }
                             NotificationCenter.default.post(
                                 name: .showAreaOnMap,
                                 object: nil,
-                                userInfo: ["latitude": center.latitude,
-                                           "longitude": center.longitude]
+                                userInfo: info
                             )
                         } label: {
                             Image(systemName: "map.fill")
@@ -1235,14 +1309,15 @@ struct ListTabView: View {
                                         selectedSpot = spot
                                     },
                                     mapTermsVersion: mapTermsVersion,
-                                    searchRadiusDegrees: picksService.searchRadiusDegrees,
                                     refreshVersion: refreshVersion,
-                                    matchedMapItems: $matchedMapItems,
+                                    matchedSuggestions: $matchedSuggestions,
                                     uncheckedCount: $uncheckedCount,
                                     showUnchecked: showUnchecked,
                                     showDeeperScanPrompt: $showDeeperScanPrompt,
                                     triggerDeeperScan: $triggerDeeperScan,
                                     isSearchActive: $isSearchActive,
+                                    allExploreResults: $allExploreResults,
+                                    injectedResults: $injectedExploreResults,
                                     websiteChecker: websiteChecker
                                 )
                             }
@@ -1354,7 +1429,20 @@ struct ListTabView: View {
             .onChange(of: pendingSpotsLocation) { _, newLocation in
                 guard let location = newLocation else { return }
                 pendingSpotsLocation = nil  // consume immediately
+                let incomingResults = pendingSpotsResults
+                pendingSpotsResults = nil
                 customLocation = location
+
+                if let results = incomingResults, !results.isEmpty {
+                    // Injected from Map tab — pass to ExplorePanel
+                    injectedExploreResults = results
+                }
+            }
+            .onChange(of: allExploreResults) { _, newResults in
+                // Sync Spots tab results to ContentView for cross-tab injection.
+                // This keeps Map and Spots tabs showing the same data.
+                latestExploreResults = newResults
+                latestExploreCenter = effectiveLocation
             }
         }
     }
@@ -1363,11 +1451,11 @@ struct ListTabView: View {
 
     /// Number of de-duped green-matched potential spots (excludes venues already verified).
     private var possibleCount: Int {
-        matchedMapItems.filter { mapItem in
-            guard let name = mapItem.name,
-                  let coord = mapItem.placemark.location?.coordinate else { return true }
-            return spotService.findExistingSpot(
-                name: name, latitude: coord.latitude, longitude: coord.longitude
+        matchedSuggestions.filter { suggestion in
+            spotService.findExistingSpot(
+                name: suggestion.name,
+                latitude: suggestion.coordinate.latitude,
+                longitude: suggestion.coordinate.longitude
             ) == nil
         }.count
     }
@@ -1382,7 +1470,7 @@ struct ListTabView: View {
             )
 
             PinToggleButton(
-                count: filteredAndSortedSpots.count,
+                count: scopedVerifiedSpots.count,
                 label: "Verified",
                 color: .green,
                 isOn: $showVerified
@@ -1475,13 +1563,13 @@ struct ListTabView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
 
-                case .potentialMatched(let mapItem):
+                case .potentialMatched(let suggestion):
                     HStack(spacing: 0) {
                         Button {
-                            selectPotentialResult(mapItem)
+                            selectPotentialResult(suggestion)
                         } label: {
                             ExploreResultRowView(
-                                mapItem: mapItem,
+                                mapItem: suggestion.mapItem,
                                 userLocation: effectiveLocation,
                                 isMatched: true
                             )
@@ -1489,7 +1577,7 @@ struct ListTabView: View {
                         .buttonStyle(.plain)
 
                         Button {
-                            showPotentialOnMap(mapItem)
+                            showPotentialOnMap(suggestion)
                         } label: {
                             Image(systemName: "map")
                                 .font(.system(size: 16))
@@ -1669,6 +1757,6 @@ struct ListTabView: View {
 }
 
 #Preview {
-    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), showCommunityMap: .constant(false), pendingSpotsLocation: .constant(nil), websiteChecker: WebsiteCheckService())
+    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), showCommunityMap: .constant(false), pendingSpotsLocation: .constant(nil), pendingSpotsResults: .constant(nil), latestExploreResults: .constant([]), latestExploreCenter: .constant(nil), websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
 }

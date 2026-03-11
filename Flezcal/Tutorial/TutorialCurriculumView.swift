@@ -1,10 +1,30 @@
 import SwiftUI
 
-/// Sheet showing the tutorial curriculum — a list of available tutorials with
-/// progress tracking and start/replay buttons.
+/// Sheet showing the tutorial curriculum — tutorials grouped by experience level
+/// with progress tracking and start/replay buttons.
 struct TutorialCurriculumView: View {
     @ObservedObject var tutorialService: TutorialService
     @Environment(\.dismiss) private var dismiss
+
+    private var tutorialGroups: [TutorialGroup] {
+        [
+            TutorialGroup(
+                title: "Getting Started",
+                subtitle: "Learn the basics",
+                tutorials: [.setupFlezcals, .spotsTab, .mapExplore]
+            ),
+            TutorialGroup(
+                title: "Contributing",
+                subtitle: "Share your finds",
+                tutorials: [.addSpot, .ratingVerifying]
+            ),
+            TutorialGroup(
+                title: "Growing",
+                subtitle: "Track your impact",
+                tutorials: [.leaderboard]
+            ),
+        ]
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,19 +59,33 @@ struct TutorialCurriculumView: View {
                             .foregroundStyle(.green)
                     }
 
-                    // Tutorial cards
-                    VStack(spacing: 14) {
-                        ForEach(Tutorial.allTutorials) { tutorial in
-                            TutorialCurriculumCard(
-                                tutorial: tutorial,
-                                isCompleted: tutorialService.isCompleted(tutorial.id),
-                                onStart: {
-                                    dismiss()
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                        tutorialService.start(tutorial)
+                    // Grouped tutorial cards
+                    ForEach(tutorialGroups, id: \.title) { group in
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Section header
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(group.title)
+                                    .font(.headline)
+                                    .fontWeight(.bold)
+                                Text(group.subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 4)
+
+                            // Tutorial cards in this group
+                            ForEach(group.tutorials) { tutorial in
+                                TutorialCurriculumCard(
+                                    tutorial: tutorial,
+                                    isCompleted: tutorialService.isCompleted(tutorial.id),
+                                    onStart: {
+                                        dismiss()
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                            tutorialService.start(tutorial)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal)
@@ -67,6 +101,14 @@ struct TutorialCurriculumView: View {
             }
         }
     }
+}
+
+// MARK: - Tutorial Group
+
+private struct TutorialGroup {
+    let title: String
+    let subtitle: String
+    let tutorials: [Tutorial]
 }
 
 // MARK: - Tutorial Card
@@ -118,7 +160,7 @@ private struct TutorialCurriculumCard: View {
             Button {
                 onStart()
             } label: {
-                Text("Start")
+                Text(isCompleted ? "Replay" : "Start")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .padding(.horizontal, 16)

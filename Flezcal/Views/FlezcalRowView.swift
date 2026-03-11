@@ -6,11 +6,8 @@ import SwiftUI
 /// ```
 ///              🫓 Tortillas                   ← Row 1: emoji + full name, centered
 ///   4.2🍮 (7 ratings)        3 confirmed      ← Row 2: aggregate rating | confirm count
-///   ┌─────────────────────────────────────┐
-///   │ ⭐ I've tried it — rate it          │   ← Row 3 (no engagement): three choices
-///   │ 👀 Just browsing                    │
-///   │ ✕  No longer available here         │
-///   └─────────────────────────────────────┘
+///          ⭐ Tried it? Rate it               ← Row 3 (no engagement): single-line prompt
+///              Not here?                      ← Tertiary report link
 ///       Your rating: Road Trip (4🍮) ✏️       ← Row 3 (if rated): tappable to edit
 /// ```
 struct FlezcalRowView: View {
@@ -31,8 +28,6 @@ struct FlezcalRowView: View {
     @State private var actionError: String? = nil
     /// Tracks what the user tried to do before sign-in so we can auto-proceed.
     @State private var pendingAction: PendingAction? = nil
-    /// User tapped "Just browsing" — hides the prompt for this session.
-    @State private var dismissedPrompt = false
 
     private enum PendingAction {
         case rate, markUnavailable
@@ -121,29 +116,19 @@ struct FlezcalRowView: View {
                 }
             }
 
-            // ── Row 3: Action buttons / user engagement state ────
+            // ── Row 3: Engagement state ────
             if authService.isSignedIn {
                 if userVote == false {
-                    // State D: User marked as unavailable
                     unavailableReportedRow
                 } else if let rating = userRating, let level = RatingLevel.from(rating) {
-                    // State B: User has rated — show editable rating
                     userRatingRow(rating: rating, level: level)
                 } else if userVote == true {
-                    // State C: User voted up (legacy) but hasn't rated
                     addYourRatingPrompt
-                } else if dismissedPrompt {
-                    // User tapped "Just browsing" — show compact prompt
-                    compactRatePrompt
                 } else {
-                    // State A: No engagement yet — show three choices
-                    actionButtonsRow
+                    compactRatePrompt
                 }
-            } else if dismissedPrompt {
-                compactRatePrompt
             } else {
-                // Not signed in — show three choices (will trigger sign-in)
-                actionButtonsRow
+                compactRatePrompt
             }
 
             // ── Inline rating picker (expandable) ───────────────────
@@ -198,65 +183,6 @@ struct FlezcalRowView: View {
 
     // MARK: - Row Subviews
 
-    /// State A: Three choices — tried it (rate), just browsing (dismiss), no longer available
-    private var actionButtonsRow: some View {
-        VStack(spacing: 6) {
-            // Primary: I've tried it — opens rating picker
-            Button {
-                openRatingPicker()
-            } label: {
-                Label("I've tried the \(category.displayName.lowercased()) here — rate it",
-                      systemImage: "star.circle")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            .disabled(isSubmitting)
-            .accessibilityHint("Double tap to rate the \(category.displayName) at this spot")
-
-            // Secondary: Just browsing — collapses the prompt
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    dismissedPrompt = true
-                }
-            } label: {
-                Label("Just browsing",
-                      systemImage: "eye")
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-            }
-            .buttonStyle(.bordered)
-            .tint(.secondary)
-
-            // Tertiary: No longer available
-            Button {
-                if authService.isSignedIn {
-                    markUnavailable()
-                } else {
-                    pendingAction = .markUnavailable
-                    showSignIn = true
-                }
-            } label: {
-                Label("\(category.displayName) is no longer available here",
-                      systemImage: "xmark.circle")
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-            }
-            .buttonStyle(.bordered)
-            .tint(.secondary)
-            .disabled(isSubmitting)
-            .accessibilityHint("Double tap to report this spot no longer has \(category.displayName)")
-        }
-    }
-
     /// State B: User has a rating — show it with edit affordance
     private func userRatingRow(rating: Int, level: RatingLevel) -> some View {
         Button {
@@ -284,21 +210,38 @@ struct FlezcalRowView: View {
         .accessibilityHint("Double tap to change your rating")
     }
 
-    /// Compact prompt shown after user tapped "Just browsing"
+    /// Default prompt — lightweight single-line rate + tertiary "not here" link
     private var compactRatePrompt: some View {
-        Button {
-            openRatingPicker()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "star.circle")
-                    .font(.caption)
-                Text("Tried it? Rate it")
-                    .font(.caption)
+        VStack(spacing: 2) {
+            Button {
+                openRatingPicker()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "star.circle")
+                        .font(.caption)
+                    Text("Tried it? Rate it")
+                        .font(.caption)
+                }
+                .foregroundStyle(.orange)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            .foregroundStyle(.orange)
-            .frame(maxWidth: .infinity, alignment: .center)
+            .buttonStyle(.plain)
+
+            Button {
+                if authService.isSignedIn {
+                    markUnavailable()
+                } else {
+                    pendingAction = .markUnavailable
+                    showSignIn = true
+                }
+            } label: {
+                Text("Not here?")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(isSubmitting)
         }
-        .buttonStyle(.plain)
     }
 
     /// State C: User voted up (legacy) but hasn't rated yet
