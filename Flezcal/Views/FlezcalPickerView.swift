@@ -126,7 +126,14 @@ struct FlezcalPickerView: View {
             .padding(.horizontal)
         }
 
-        // Top 50 (shown before trending — these are the primary categories)
+        // Create trending — between user picks and Top 50 for easy access
+        if onCreateTrending != nil {
+            createTrendingButton
+                .padding(.horizontal)
+                .padding(.top, 4)
+        }
+
+        // Top 50
         if !otherTop50.isEmpty {
             Text("Top 50")
                 .font(.subheadline)
@@ -140,13 +147,6 @@ struct FlezcalPickerView: View {
                 }
             }
             .padding(.horizontal)
-        }
-
-        // Create trending text input at bottom (no trending grid — type to find or create)
-        if onCreateTrending != nil {
-            createTrendingButton
-                .padding(.horizontal)
-                .padding(.top, 8)
         }
     }
 

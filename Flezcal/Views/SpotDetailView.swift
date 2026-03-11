@@ -926,6 +926,10 @@ private struct AddFlezcalFlow: View {
     /// Trending Flezcals from Firestore
     @StateObject private var customService = CustomCategoryService()
     @State private var showCreateTrending = false
+    /// Shows the rating prompt after successfully adding a category.
+    @State private var showRatingPrompt = false
+    /// Loaded when rating prompt shows — used to submit the rating.
+    @StateObject private var verificationService = VerificationService()
 
     /// Live version of the spot — reflects in-session mutations.
     private var liveSpot: Spot {
@@ -938,53 +942,109 @@ private struct AddFlezcalFlow: View {
     }
 
     var body: some View {
-        FlezcalPickerView(
-            userPicks: picksService.picks,
-            allCategories: FoodCategory.allCategories,
-            disabledCategoryIDs: disabledIDs,
-            onSelect: { category in
-                pendingCategory = category
-                showCategoryConfirmation = true
-            },
-            onCancel: { dismiss() },
-            trendingCategories: customService.customCategories.map { $0.toFoodCategory() },
-            onCreateTrending: { showCreateTrending = true }
-        )
-        .task { await customService.fetchAll() }
-        .sheet(isPresented: $showCreateTrending) {
-            CreateCustomCategoryView()
-        }
-        .alert("Already Added", isPresented: $showAlreadyThere) {
-            Button("Done") { dismiss() }
-        } message: {
-            if let cat = savedCategory {
-                Text("\(spot.name) already has \(cat.displayName).")
+        if showRatingPrompt, let spotCat = savedCategory {
+            addFlezcalRatingPrompt(category: spotCat)
+        } else {
+            FlezcalPickerView(
+                userPicks: picksService.picks,
+                allCategories: FoodCategory.allCategories,
+                disabledCategoryIDs: disabledIDs,
+                onSelect: { category in
+                    pendingCategory = category
+                    showCategoryConfirmation = true
+                },
+                onCancel: { dismiss() },
+                trendingCategories: customService.customCategories.map { $0.toFoodCategory() },
+                onCreateTrending: { showCreateTrending = true }
+            )
+            .task { await customService.fetchAll() }
+            .sheet(isPresented: $showCreateTrending) {
+                CreateCustomCategoryView()
             }
-        }
-        .alert("Add Flezcal", isPresented: $showCategoryConfirmation) {
-            Button("Add") {
-                if let category = pendingCategory {
-                    selectedFlezcal = category
-                    saveCategory(category)
+            .alert("Already Added", isPresented: $showAlreadyThere) {
+                Button("Done") { dismiss() }
+            } message: {
+                if let cat = savedCategory {
+                    Text("\(spot.name) already has \(cat.displayName).")
                 }
-                pendingCategory = nil
             }
-            Button("Cancel", role: .cancel) {
-                pendingCategory = nil
+            .alert("Add Flezcal", isPresented: $showCategoryConfirmation) {
+                Button("Add") {
+                    if let category = pendingCategory {
+                        selectedFlezcal = category
+                        saveCategory(category)
+                    }
+                    pendingCategory = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingCategory = nil
+                }
+            } message: {
+                if let category = pendingCategory {
+                    Text("Add \(category.emoji) \(category.displayName) to \(spot.name)?")
+                }
             }
-        } message: {
-            if let category = pendingCategory {
-                Text("Add \(category.emoji) \(category.displayName) to \(spot.name)?")
+            .overlay {
+                if isSaving {
+                    ZStack {
+                        Color.black.opacity(0.2).ignoresSafeArea()
+                        ProgressView("Adding Flezcal...")
+                            .padding(24)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
             }
         }
-        .overlay {
-            if isSaving {
-                ZStack {
-                    Color.black.opacity(0.2).ignoresSafeArea()
-                    ProgressView("Adding Flezcal...")
-                        .padding(24)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func addFlezcalRatingPrompt(category: SpotCategory) -> some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                VStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.green)
+                    Text(spot.name)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                    Text("\(category.displayName) added")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 24)
+
+                RatingFlowView(
+                    categoryName: category.displayName,
+                    existingRating: nil,
+                    onSubmit: { rating in
+                        guard let userID = authService.userID else {
+                            dismiss()
+                            return
+                        }
+                        Task {
+                            await verificationService.fetchVerifications(for: spot.id)
+                            let _ = await verificationService.submitRating(
+                                spotID: spot.id, userID: userID,
+                                category: category, rating: rating,
+                                spotService: spotService
+                            )
+                            dismiss()
+                        }
+                    },
+                    onSkip: { dismiss() },
+                    onRemove: nil
+                )
+                .padding(.horizontal)
+
+                Spacer()
+            }
+            .navigationTitle("Rate This Spot")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Skip") { dismiss() }
                 }
             }
         }
@@ -1025,7 +1085,7 @@ private struct AddFlezcalFlow: View {
                 } else if success {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    dismiss()
+                    withAnimation { showRatingPrompt = true }
                 }
             }
         }

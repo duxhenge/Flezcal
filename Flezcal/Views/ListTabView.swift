@@ -16,24 +16,24 @@ struct CustomSearchLocation: Equatable {
     }
 }
 
-/// Combined task identity for `.task(id:)` — re-fires search when either
-/// the query text OR the custom location changes.
+/// Combined task identity for `.task(id:)` — re-fires search when the
+/// location, active picks, or search terms change.
+/// NOTE: searchText is NOT included — text typing is a client-side filter
+/// on existing results, not a new MKLocalSearch. One Search, Two Views.
 private struct SearchTaskID: Equatable, Hashable {
-    let query: String
     let activeFilterIDs: Set<String>   // IDs of active pick pills — triggers re-search on toggle
     let customLocation: CustomSearchLocation?
     let mapTermsVersion: Int        // Incremented when user edits mapSearchTerms — triggers re-search
     let refreshVersion: Int         // Incremented by manual refresh — triggers re-search
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.query == rhs.query && lhs.activeFilterIDs == rhs.activeFilterIDs
+        lhs.activeFilterIDs == rhs.activeFilterIDs
         && lhs.customLocation == rhs.customLocation
         && lhs.mapTermsVersion == rhs.mapTermsVersion
         && lhs.refreshVersion == rhs.refreshVersion
     }
 
     func hash(into hasher: inout Hasher) {
-        hasher.combine(query)
         hasher.combine(activeFilterIDs)
         hasher.combine(customLocation?.name)
         hasher.combine(customLocation?.coordinate.latitude)
@@ -286,28 +286,21 @@ struct ExploreResultRowView: View {
 //
 // ⚠️  SEARCH STABILITY CONTRACT — read before modifying this view  ⚠️
 //
-// ExplorePanel is intentionally a separate struct from ListTabView for two
-// reasons that are BOTH required for search to work correctly:
+// ExplorePanel is intentionally a separate struct from ListTabView:
 //
-// REASON 1 — SpotService isolation:
-//   ListTabView observes SpotService via @EnvironmentObject. Every time spots
-//   load or update, ListTabView re-renders, which would cancel any in-flight
-//   .task(id: searchText) if that task lived on ListTabView. By isolating the
-//   search task inside ExplorePanel (which does NOT observe SpotService),
-//   spot updates cannot disrupt the search.
+// SpotService isolation: ListTabView observes SpotService via @EnvironmentObject.
+// Every time spots load or update, ListTabView re-renders, which would cancel
+// any in-flight .task(id:) if that task lived on ListTabView. By isolating the
+// search task inside ExplorePanel (which does NOT observe SpotService),
+// spot updates cannot disrupt the search.
 //
-// REASON 2 — @Binding keeps @StateObject alive:
-//   searchText MUST be passed as @Binding, NOT as a plain `let` value.
-//   If passed as `let`, SwiftUI sees a new ExplorePanel struct on every
-//   keystroke (because the value changed), destroys the old one, and creates
-//   a fresh @StateObject — wiping out in-flight searches. With @Binding,
-//   SwiftUI treats the panel as the same view identity across re-renders,
-//   so LocationSearchService stays alive for the lifetime of Explore mode.
+// searchText is a @Binding for client-side venue name filtering. It is NOT
+// part of SearchTaskID — typing does not trigger a new MKLocalSearch.
+// One Search, Two Views: all searches use taggedMultiSearch with active picks.
 //
-// NEVER change these without understanding both reasons above:
+// NEVER change these:
 //   - Do NOT add @EnvironmentObject SpotService or @ObservedObject LocationManager here
 //   - Do NOT change `@Binding var searchText` back to `let searchText: String`
-//   - Do NOT move .task(id: searchText) back to ListTabView or NavigationStack
 
 private struct ExplorePanel: View {
     @Binding var searchText: String       // ⚠️ Must be @Binding — see contract above
@@ -399,8 +392,8 @@ private struct ExplorePanel: View {
     /// with the currently active pick IDs — same logic as MapTabView's
     /// visibleGhostPins, so both tabs show identical green results.
     private var splitResults: (matched: [SuggestedSpot], other: [SuggestedSpot]) {
-        let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
         let activeIDs = Set(activeFilterPicks.map(\.id))
+        let nameFilter = searchText.trimmingCharacters(in: .whitespaces).lowercased()
 
         var top: [SuggestedSpot] = []
         var rest: [SuggestedSpot] = []
@@ -410,8 +403,11 @@ private struct ExplorePanel: View {
             if findExistingSpot(spot.name, spot.coordinate.latitude, spot.coordinate.longitude) != nil {
                 continue
             }
-            if isFilterSearch,
-               let matches = spot.preScreenMatches, !matches.isEmpty,
+            // Client-side venue name filter — searchText narrows visible results
+            if !nameFilter.isEmpty && !spot.name.lowercased().contains(nameFilter) {
+                continue
+            }
+            if let matches = spot.preScreenMatches, !matches.isEmpty,
                !matches.isDisjoint(with: activeIDs) {
                 top.append(spot)
             } else {
@@ -428,20 +424,18 @@ private struct ExplorePanel: View {
             // flashing "No results" on every keystroke.  Only show the
             // empty / no-results states once the search has settled.
             Group {
-                if exploreResults.isEmpty && searchService.isSearching {
+                if exploreResults.isEmpty && isSearchActive {
                     ProgressView("Searching…")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
-                } else if exploreResults.isEmpty && !searchService.isSearching {
+                } else if exploreResults.isEmpty && !isSearchActive {
                     VStack(spacing: 12) {
                         Image(systemName: "mappin.slash")
                             .font(.system(size: 40))
                             .foregroundStyle(.secondary)
                         Text("No results found")
                             .font(.headline)
-                        Text(searchText.isEmpty
-                             ? "Try searching for a specific venue."
-                             : "Try a different name or location.")
+                        Text("Try a different location or adjust your Flezcals.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -451,18 +445,17 @@ private struct ExplorePanel: View {
                     .padding(.vertical, 40)
                 } else {
                     // Results list — stays visible while a new search is in flight
-                    let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
                     let split = splitResults
                     let displayCount = split.matched.count + split.other.count
 
                     LazyVStack(spacing: 0) {
-                        // ── Status banner (auto-searches only) ──
-                        if isFilterSearch {
-                            // When a single category is active, use its name (e.g. "mezcal").
-                            // When multiple picks are active, use "Flezcal" as the noun.
-                            let singleCategory = activeFilterPicks.count == 1 ? activeFilterPicks[0].displayName.lowercased() : nil
-                            let isMultiSearch = singleCategory == nil
+                        // ── Status banner ──
+                        // When a single category is active, use its name (e.g. "mezcal").
+                        // When multiple picks are active, use "Flezcal" as the noun.
+                        let singleCategory = activeFilterPicks.count == 1 ? activeFilterPicks[0].displayName.lowercased() : nil
+                        let isMultiSearch = singleCategory == nil
 
+                        Group {
                             if isPreScreening {
                                 HStack(spacing: 8) {
                                     ProgressView()
@@ -515,21 +508,6 @@ private struct ExplorePanel: View {
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                             }
-                        }
-
-                        // ── User-typed search: plain count header ──
-                        if !isFilterSearch {
-                            HStack {
-                                Text("\(displayCount) result\(displayCount == 1 ? "" : "s") from Apple Maps")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if searchService.isSearching {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
                         }
 
                         // Green-matched rows are rendered by the parent in the
@@ -585,7 +563,6 @@ private struct ExplorePanel: View {
             )
         }
         .task(id: SearchTaskID(
-            query: searchText,
             activeFilterIDs: Set(activeFilterPicks.map(\.id)),
             customLocation: customLocation,
             mapTermsVersion: mapTermsVersion,
@@ -622,77 +599,57 @@ private struct ExplorePanel: View {
                 return
             }
 
-            let userTypedText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+            // One Search, Two Views: always use taggedMultiSearch with active picks.
+            // searchText is a client-side venue name filter, NOT a search query.
             let picks = activePicks
             let center = effectiveLocation ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
             #if DEBUG
-            print("[Explore] .task fired — searchText='\(searchText)' activePicks=\(picks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil") userTyped=\(userTypedText)")
+            print("[Explore] .task fired — activePicks=\(picks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil")")
             #endif
 
-            // Clear stale results for filter-based searches so the "Searching…"
-            // spinner shows immediately. Without this, changing location leaves
-            // old results visible for 5-10 seconds with no loading indicator.
-            // Text-search skips this to avoid flickering on every keystroke.
-            if !userTypedText {
-                exploreResults = []
-                exploreFullPool = []
-                matchedSuggestions = []
-                uncheckedCount = 0
-                showDeeperScanPrompt = false
-            }
+            // Clear stale results so the "Searching…" spinner shows immediately.
+            isSearchActive = true
+            exploreResults = []
+            exploreFullPool = []
+            matchedSuggestions = []
+            uncheckedCount = 0
+            showDeeperScanPrompt = false
 
-            if userTypedText {
-                // User typed a venue name — single query, debounced
-                let query = searchText
-                guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-                    exploreResults = []
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(400))
-                guard !Task.isCancelled else { return }
-                await searchService.search(query: query, userLocation: effectiveLocation)
-                // Convert MKMapItem results to SuggestedSpot (no pre-screen for text search)
-                let foodCat = primaryFoodCategory
-                exploreResults = searchService.searchResults.map {
-                    SuggestedSpot(mapItem: $0, suggestedCategory: foodCat)
-                }
-                exploreFullPool = []
-            } else {
-                // Filter-based auto-search via taggedMultiSearch
-                var seenQueries = Set<String>()
-                var taggedQueries: [(query: String, tag: String)] = []
-                for pick in picks {
-                    for term in pick.mapSearchTerms {
-                        let key = term.lowercased()
-                        if seenQueries.insert(key).inserted {
-                            taggedQueries.append((query: term, tag: pick.id))
-                        }
+            // Build tagged queries from all active picks' mapSearchTerms —
+            // identical to Map tab's SuggestionService.fetchSuggestions().
+            var seenQueries = Set<String>()
+            var taggedQueries: [(query: String, tag: String)] = []
+            for pick in picks {
+                for term in pick.mapSearchTerms {
+                    let key = term.lowercased()
+                    if seenQueries.insert(key).inserted {
+                        taggedQueries.append((query: term, tag: pick.id))
                     }
                 }
-                if taggedQueries.isEmpty {
-                    taggedQueries = [("restaurant", picks.first?.id ?? "")]
-                }
-                let taggedResults = await searchService.taggedMultiSearch(
-                    queries: taggedQueries,
-                    center: center
-                )
-                guard !Task.isCancelled else { return }
-
-                // Convert to SuggestedSpots with category tracking
-                let picksByID = Dictionary(uniqueKeysWithValues: picks.map { ($0.id, $0) })
-                var pool: [SuggestedSpot] = []
-                for result in taggedResults {
-                    guard result.item.name != nil else { continue }
-                    let category = picksByID[result.tag] ?? picks[0]
-                    pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
-                }
-                exploreFullPool = pool
-                exploreResults = Array(pool.prefix(25))
             }
+            if taggedQueries.isEmpty {
+                taggedQueries = [("restaurant", picks.first?.id ?? "")]
+            }
+            let taggedResults = await searchService.taggedMultiSearch(
+                queries: taggedQueries,
+                center: center
+            )
+            guard !Task.isCancelled else { return }
+
+            // Convert to SuggestedSpots with category tracking
+            let picksByID = Dictionary(uniqueKeysWithValues: picks.map { ($0.id, $0) })
+            var pool: [SuggestedSpot] = []
+            for result in taggedResults {
+                guard result.item.name != nil else { continue }
+                let category = picksByID[result.tag] ?? picks[0]
+                pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
+            }
+            exploreFullPool = pool
+            exploreResults = Array(pool.prefix(25))
 
             // Pre-screen: scan homepages to re-rank results (matched venues first).
-            // Only for filter-based auto-searches — user-typed queries skip re-ranking.
-            guard !Task.isCancelled, !userTypedText, !exploreResults.isEmpty else {
+            guard !Task.isCancelled, !exploreResults.isEmpty else {
+                isSearchActive = false
                 updateMatchedItems()
                 return
             }
@@ -736,11 +693,8 @@ private struct ExplorePanel: View {
                 runDeeperScan()
             }
         }
-        .onChange(of: searchService.isSearching) { _, val in
-            isSearchActive = val || isPreScreening
-        }
         .onChange(of: isPreScreening) { _, val in
-            isSearchActive = searchService.isSearching || val
+            if !val { isSearchActive = false }
         }
         .onDisappear {
             // Cancel any in-flight website check so it doesn't write
@@ -819,12 +773,6 @@ private struct ExplorePanel: View {
     /// Called after Wave 1, Wave 2, and on disappear.
     private func updateMatchedItems() {
         allExploreResults = exploreResults
-        let isFilterSearch = searchText.trimmingCharacters(in: .whitespaces).isEmpty
-        guard isFilterSearch else {
-            matchedSuggestions = []
-            uncheckedCount = exploreResults.count
-            return
-        }
         let split = splitResults
         matchedSuggestions = split.matched
         uncheckedCount = split.other.count
@@ -861,15 +809,11 @@ private struct ExplorePanel: View {
         .padding(.vertical, 8)
     }
 
-    /// Picks to use for the current search context.
-    /// When the user typed custom text, scope to just the primary category —
-    /// showing "we found flan!" is confusing when they searched for "tartare".
-    /// When using filter-based auto-search, include all active picks.
+    /// Picks to use for the current search context — always all active picks.
+    /// One Search, Two Views: search bar text is a client-side name filter,
+    /// not a change in search scope.
     private var searchScopedPicks: [FoodCategory] {
-        if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-            return [primaryFoodCategory]
-        }
-        return activePicks
+        activePicks
     }
 
     private func selectResult(_ suggestion: SuggestedSpot) {
@@ -1018,15 +962,7 @@ struct ListTabView: View {
 
     /// Search placeholder that reflects the active filter.
     private var explorePlaceholder: String {
-        let active = activePicks
-        if active.count == 1 {
-            return "Search for \(active[0].displayName.lowercased()) spots…"
-        }
-        let names = active.prefix(3).map { $0.displayName.lowercased() }
-        if names.count <= 2 {
-            return "Search for \(names.joined(separator: " & ")) spots…"
-        }
-        return "Search for all your picks…"
+        "Filter by venue name…"
     }
 
     // MARK: Community data
@@ -1316,9 +1252,7 @@ struct ListTabView: View {
                                     Text("No verified spots yet")
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                    Text(searchText.isEmpty
-                                         ? "Be the first to add a \(activePicks.first?.displayName.lowercased() ?? "flan or mezcal") spot!"
-                                         : "Try a different search term.")
+                                    Text("Be the first to add a \(activePicks.first?.displayName.lowercased() ?? "flan or mezcal") spot!")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .multilineTextAlignment(.center)

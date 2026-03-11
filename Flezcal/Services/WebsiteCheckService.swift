@@ -822,11 +822,15 @@ actor WebsiteCheckService {
         }
     }
 
-    /// Scans raw HTML for the provided categories' keywords and returns an `HTMLScanResult`
+    /// Scans HTML for the provided categories' keywords and returns an `HTMLScanResult`
     /// with both confirmed (websiteKeywords) and related (relatedKeywords) matches.
     ///
+    /// Extracts **visible text only** — strips `<script>`, `<style>`, `<noscript>` blocks
+    /// and all HTML tags before scanning. This prevents false positives from JavaScript,
+    /// CSS class names, SEO metadata, third-party widget markup, and hidden content.
+    ///
     /// Uses word-boundary matching (`\b`) so that short keywords like "flan" don't
-    /// false-positive on "flank steak", "flannel", CSS class names, etc.
+    /// false-positive on "flank steak", "flannel", etc.
     /// Only scans the user's active picks (not all 50+ built-in categories)
     /// for a ~94% reduction in regex operations per page.
     ///
@@ -835,14 +839,14 @@ actor WebsiteCheckService {
     ///   2. Only if no websiteKeyword matched AND relatedKeywords is non-empty →
     ///      scan relatedKeywords → add to related dict with the matched keyword.
     private func scanForCategories(in html: String, categories: [FoodCategory]) -> HTMLScanResult {
-        let lower = html.lowercased()
+        let visibleText = extractVisibleText(from: html)
         var result = HTMLScanResult.empty
 
         for category in categories {
             // Step 1: check specific websiteKeywords first
             var foundSpecific = false
             for keyword in category.websiteKeywords {
-                if matchKeyword(keyword, in: lower) {
+                if matchKeyword(keyword, in: visibleText) {
                     result.confirmed.insert(category.id)
                     foundSpecific = true
                     break
@@ -852,7 +856,7 @@ actor WebsiteCheckService {
             // Step 2: only check relatedKeywords if no specific keyword matched
             if !foundSpecific && !category.relatedKeywords.isEmpty {
                 for keyword in category.relatedKeywords {
-                    if matchKeyword(keyword, in: lower) {
+                    if matchKeyword(keyword, in: visibleText) {
                         result.related[category.id] = keyword
                         break
                     }
@@ -860,6 +864,35 @@ actor WebsiteCheckService {
             }
         }
         return result
+    }
+
+    /// Extracts visible text from HTML by stripping script/style/noscript blocks
+    /// and all HTML tags. Returns lowercased text for keyword matching.
+    private func extractVisibleText(from html: String) -> String {
+        var text = html
+        // Remove <script>…</script>, <style>…</style>, <noscript>…</noscript> blocks
+        let blockPatterns = [
+            "<script[^>]*>[\\s\\S]*?</script>",
+            "<style[^>]*>[\\s\\S]*?</style>",
+            "<noscript[^>]*>[\\s\\S]*?</noscript>"
+        ]
+        for pattern in blockPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
+            }
+        }
+        // Strip all remaining HTML tags
+        if let tagRegex = try? NSRegularExpression(pattern: "<[^>]+>", options: []) {
+            text = tagRegex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
+        }
+        // Decode common HTML entities
+        text = text.replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+        return text.lowercased()
     }
 
     /// Word-boundary regex match for a single keyword in lowercased HTML.

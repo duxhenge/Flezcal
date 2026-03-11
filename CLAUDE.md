@@ -17,6 +17,19 @@ Always inspect code or check documentation instead. If a live test is truly nece
 - Called from `SuggestionService.fetchSuggestions()` on camera move (50m threshold guard)
 - Tier 1 (POI category passes) fails with `MKErrorGEOError=-8` in some US regions — Tier 2 text queries are the reliable fallback
 
+## Core Design Rule: One Search, Two Views
+
+**The Map tab and Spots tab are two presentations of ONE search workflow. They MUST produce identical results when searching from the same center point.**
+
+- Both tabs use `taggedMultiSearch` with the active picks' `mapSearchTerms` — NEVER a separate single-query search path.
+- The Spots tab search bar filters results by venue name (client-side). It does NOT trigger a different MKLocalSearch query.
+- Pills (category filters) are user-controlled only — never reset programmatically on pan, zoom, or search.
+- When switching between tabs, results transfer so the user sees the same data.
+- Any code change that introduces a separate search pipeline for either tab violates this rule.
+- Pre-screen (website scanning) runs identically on both tabs' result sets.
+
+**Before modifying any search logic, verify the change preserves parity between both tabs.**
+
 ## Architecture Notes
 
 ### Ghost Pin Search (`SuggestionService`)

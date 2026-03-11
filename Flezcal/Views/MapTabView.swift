@@ -46,7 +46,7 @@ struct MapTabView: View {
     /// True when "Search This Area" appeared because the user toggled pills,
     /// not because they panned. When true, the button searches with the
     /// currently active picks instead of resetting to all-on.
-    @State private var searchTriggeredByPills = false
+    // Pill selections are user-controlled only — never reset programmatically.
     /// Pin-type visibility toggles — all on by default.
     @State private var showVerifiedPins = true
     @State private var showPossiblePins = true
@@ -814,7 +814,6 @@ struct MapTabView: View {
                     preScreenTask?.cancel()
                     isPreScreening = false
                     showDeeperScanButton = false
-                    searchTriggeredByPills = false
                     showSearchHereButton = true
                 }
             }
@@ -829,7 +828,6 @@ struct MapTabView: View {
                 // visibleGhostPins hides non-matching pins immediately; the button
                 // lets the user fetch fresh results for only the active categories.
                 if bootFetchesRemaining == 0 {
-                    searchTriggeredByPills = true
                     showSearchHereButton = true
                 }
             }
@@ -990,20 +988,11 @@ struct MapTabView: View {
                     } else {
                         Button {
                             showSearchHereButton = false
-                            let pillTriggered = searchTriggeredByPills
-                            searchTriggeredByPills = false
-                            // Pill-triggered: search with active picks only.
-                            // Pan-triggered: reset pills to all-on, search all picks.
-                            let searchPicks: [FoodCategory]
-                            if pillTriggered {
-                                searchPicks = activePicks
-                            } else {
-                                activePickIDs = Set(picksService.picks.map(\.id))
-                                searchPicks = picksService.picks
-                            }
+                            // Always search with the user's current pill selection.
+                            // Never reset pills — the user's explicit filter is sacred.
                             guard let region = visibleRegion else { return }
                             lastFetchedCenter = region.center
-                            fetchAndPreScreen(in: region, picks: searchPicks, zoomToFit: true)
+                            fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
                         } label: {
                             Label("Search This Area", systemImage: "magnifyingglass")
                                 .font(.subheadline)

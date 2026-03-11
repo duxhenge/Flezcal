@@ -138,9 +138,16 @@ struct ConfirmSpotView: View {
     @State private var pendingSaveAfterSignIn = false
     /// Spot already had this category
     @State private var showAlreadyThere = false
+    /// Shows the rating prompt after a successful save — user can rate or skip.
+    @State private var showRatingPrompt = false
+    /// Loaded when rating prompt shows — used to submit the rating.
+    @StateObject private var verificationService = VerificationService()
 
     var body: some View {
         NavigationStack {
+            if showRatingPrompt {
+                ratingPromptView
+            } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // Map preview
@@ -380,6 +387,71 @@ struct ConfirmSpotView: View {
                     .transition(.opacity)
                 }
             }
+            } // end else (form content)
+        }
+    }
+
+    // MARK: - Rating Prompt
+
+    @ViewBuilder
+    private var ratingPromptView: some View {
+        VStack(spacing: 20) {
+            // Spot name header
+            VStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.green)
+                Text(mapItem.name ?? "Spot")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                Text("Added as \(category.displayName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 24)
+
+            // Rating flow
+            RatingFlowView(
+                categoryName: category.displayName,
+                existingRating: nil,
+                onSubmit: { rating in
+                    guard let userID = authService.userID,
+                          let spot = savedSpot else {
+                        dismiss()
+                        onSaved()
+                        return
+                    }
+                    Task {
+                        // Load verifications first so submitRating can find the auto-verify doc
+                        await verificationService.fetchVerifications(for: spot.id)
+                        let _ = await verificationService.submitRating(
+                            spotID: spot.id, userID: userID,
+                            category: category, rating: rating,
+                            spotService: spotService
+                        )
+                        dismiss()
+                        onSaved()
+                    }
+                },
+                onSkip: {
+                    dismiss()
+                    onSaved()
+                },
+                onRemove: nil
+            )
+            .padding(.horizontal)
+
+            Spacer()
+        }
+        .navigationTitle("Rate This Spot")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Skip") {
+                    dismiss()
+                    onSaved()
+                }
+            }
         }
     }
 
@@ -447,8 +519,7 @@ struct ConfirmSpotView: View {
                 if didSomething {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    dismiss()
-                    onSaved()
+                    withAnimation { showRatingPrompt = true }
                 } else {
                     // Category already existed, nothing changed — offer to rate it
                     showAlreadyThere = true
@@ -500,12 +571,11 @@ struct ConfirmSpotView: View {
                         }
                     }
 
-                    // Dismiss overlay after 1.4s then close
+                    // Dismiss overlay after 1.4s, then show rating prompt
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                         withAnimation { showSuccessOverlay = false }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            dismiss()
-                            onSaved()
+                            withAnimation { showRatingPrompt = true }
                         }
                     }
                 } else {
