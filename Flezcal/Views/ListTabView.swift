@@ -629,6 +629,18 @@ private struct ExplorePanel: View {
             print("[Explore] .task fired — searchText='\(searchText)' activePicks=\(picks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil") userTyped=\(userTypedText)")
             #endif
 
+            // Clear stale results for filter-based searches so the "Searching…"
+            // spinner shows immediately. Without this, changing location leaves
+            // old results visible for 5-10 seconds with no loading indicator.
+            // Text-search skips this to avoid flickering on every keystroke.
+            if !userTypedText {
+                exploreResults = []
+                exploreFullPool = []
+                matchedSuggestions = []
+                uncheckedCount = 0
+                showDeeperScanPrompt = false
+            }
+
             if userTypedText {
                 // User typed a venue name — single query, debounced
                 let query = searchText
@@ -948,6 +960,10 @@ struct ListTabView: View {
     @State private var showPossible = true
     @State private var showUnchecked = true
 
+    /// True immediately when the user selects a new location — shows the
+    /// "Searching nearby spots…" spinner without waiting for the task to fire.
+    @State private var isLocationSearchPending = false
+
     // Green-matched potential spots from ExplorePanel (for unified top section)
     @State private var matchedSuggestions: [SuggestedSpot] = []
     // All explore results (green + yellow) from ExplorePanel — for cross-tab transfer
@@ -1250,6 +1266,23 @@ struct ListTabView: View {
                 resultTypeFilters
                     .padding(.top, 8)
 
+                // ── Searching indicator — prominent banner when a fresh search
+                //    is running and results haven't arrived yet. Shown at the
+                //    parent level so it's always visible (not buried in scroll).
+                //    isLocationSearchPending fires instantly on location change;
+                //    isSearchActive fires once the .task(id:) begins the search. ──
+                if (isLocationSearchPending || isSearchActive) && allExploreResults.isEmpty && showExploreSearch {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.regular)
+                        Text("Searching nearby spots…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                }
+
                 // ── Content ───────────────────────────────────────────────────
                 if !showVerified && !showPossible && !showUnchecked {
                     Spacer()
@@ -1443,6 +1476,10 @@ struct ListTabView: View {
                 // This keeps Map and Spots tabs showing the same data.
                 latestExploreResults = newResults
                 latestExploreCenter = effectiveLocation
+                // Clear the instant-spinner flag once results arrive
+                if !newResults.isEmpty {
+                    isLocationSearchPending = false
+                }
             }
         }
     }
@@ -1744,6 +1781,13 @@ struct ListTabView: View {
         isResolvingLocation = true
         Task {
             if let location = await locationCompleter.resolve(completion) {
+                // Clear stale results and show spinner immediately —
+                // don't wait for .task(id:) to detect the SearchTaskID change.
+                allExploreResults = []
+                matchedSuggestions = []
+                uncheckedCount = 0
+                isLocationSearchPending = true
+
                 customLocation = location
                 isEditingLocation = false
                 locationInputText = ""
