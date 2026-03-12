@@ -89,6 +89,8 @@ struct ContentView: View {
                     onShowWhatsNew: { showWelcome = true },
                     onShowTutorials: { showTutorialCurriculum = true }
                 )
+                    .environmentObject(picksService)
+                    .environmentObject(searchResultStore)
                     .tabItem { Label("Profile", systemImage: "person.circle") }
                     .tag(AppTab.profile)
             }

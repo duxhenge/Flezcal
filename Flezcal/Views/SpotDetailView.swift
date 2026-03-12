@@ -7,6 +7,7 @@ struct SpotDetailView: View {
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var photoService: PhotoService
     @EnvironmentObject var picksService: UserPicksService
+    @EnvironmentObject var searchResultStore: SearchResultStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -92,7 +93,7 @@ struct SpotDetailView: View {
                         }
 
                         // Consolidated Flezcal section — verification + ratings in one place
-                        if !liveSpot.isClosed {
+                        if !liveSpot.isClosed && !liveSpot.isHidden {
                             VStack(alignment: .leading, spacing: 10) {
                                 ForEach(liveSpot.categories) { category in
                                     FlezcalRowView(
@@ -332,7 +333,7 @@ struct SpotDetailView: View {
                     .padding(.horizontal)
 
                     // Report as permanently closed — visible to all users
-                    if !liveSpot.isClosed {
+                    if !liveSpot.isClosed && !liveSpot.isHidden {
                         HStack {
                             Spacer()
                             Button {
@@ -485,10 +486,33 @@ struct SpotDetailView: View {
                 Button("Remove", role: .destructive) {
                     if let cat = categoryToRemove {
                         Task {
+                            #if DEBUG
+                            print("[SpotDetail] Remove tapped — category: \(cat.rawValue), liveSpot.categories: \(liveSpot.categories.map(\.rawValue)), spot.id: \(spot.id)")
+                            #endif
                             if liveSpot.categories.count <= 1 {
                                 // Last category — hide the spot entirely
+                                // Capture venue info BEFORE hiding for ghost pin restoration
+                                let coordinate = liveSpot.coordinate
+                                let spotName = liveSpot.name
+                                let fallbackCategory: FoodCategory = liveSpot.categories.first
+                                    .flatMap { FoodCategory(spotCategory: $0) }
+                                    ?? picksService.picks.first
+                                    ?? FoodCategory.allCategories[0]
+
                                 await spotService.hideSpot(spotID: spot.id)
-                                dismiss()
+
+                                // Only proceed if hideSpot actually succeeded
+                                if liveSpot.isHidden {
+                                    // Inject a ghost pin back so the user can re-assign a different Flezcal
+                                    searchResultStore.restoreGhostPin(
+                                        name: spotName,
+                                        coordinate: coordinate,
+                                        suggestedCategory: fallbackCategory
+                                    )
+                                    dismiss()
+                                } else {
+                                    showRemoveCategoryFailed = true
+                                }
                             } else {
                                 let success: Bool
                                 if AdminAccess.isAdmin(uid: authService.userID) {
@@ -1052,6 +1076,11 @@ private struct AddFlezcalFlow: View {
 
     private func saveCategory(_ category: FoodCategory) {
         guard let userID = authService.userID else { return }
+        // Guard: don't add to a hidden or deleted spot
+        guard spotService.spots.contains(where: { $0.id == spot.id && !$0.isHidden }) else {
+            dismiss()
+            return
+        }
         isSaving = true
 
         Task {

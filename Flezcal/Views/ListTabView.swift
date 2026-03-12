@@ -1126,8 +1126,10 @@ struct ListTabView: View {
                                 "latitude": center.latitude,
                                 "longitude": center.longitude
                             ]
-                            let isVenueSearch = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
-                            if !isVenueSearch && !searchResultStore.suggestions.isEmpty {
+                            // Always include the store's suggestions so the Map tab
+                            // preserves green pre-screen data instead of re-fetching.
+                            // Both tabs share SearchResultStore — the data is the same.
+                            if !searchResultStore.suggestions.isEmpty {
                                 info["suggestions"] = searchResultStore.suggestions
                             }
                             NotificationCenter.default.post(

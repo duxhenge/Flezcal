@@ -159,6 +159,15 @@ struct AdminCategoriesView: View {
                             Text(item.category.emoji)
                             Text(item.category.displayName)
                                 .foregroundStyle(.primary)
+                            if item.category.isCustom {
+                                Text("Trending")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.cyan, in: Capsule())
+                            }
                             Spacer()
                             Text("\(item.count)")
                                 .foregroundStyle(.secondary)
@@ -229,6 +238,15 @@ struct AdminCategoriesView: View {
                                 Text(item.category.emoji)
                                 Text(item.category.displayName)
                                     .foregroundStyle(.primary)
+                                if item.category.isCustom {
+                                    Text("Trending")
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.cyan, in: Capsule())
+                                }
                                 Spacer()
                                 Text("\(item.count) spots")
                                     .foregroundStyle(.secondary)
@@ -324,6 +342,15 @@ struct AdminCategoriesView: View {
                     HStack {
                         Text(item.category.emoji)
                         Text(item.category.displayName)
+                        if item.category.isCustom {
+                            Text("Trending")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.cyan, in: Capsule())
+                        }
                         Spacer()
                         Text("\(item.count)")
                             .foregroundStyle(.secondary)

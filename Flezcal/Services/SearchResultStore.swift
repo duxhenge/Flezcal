@@ -152,6 +152,27 @@ class SearchResultStore: ObservableObject {
             pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
         }
 
+        // Name-match pass: if a venue's name contains the Flezcal's display name
+        // (word-boundary match), mark it green immediately — no website scan needed.
+        // e.g. "Kung Fu Tea" contains \btea\b → green for Tea category.
+        pool = pool.map { suggestion in
+            var updated = suggestion
+            let venueName = suggestion.name.lowercased()
+            var nameMatchedCategories = Set<String>()
+            for pick in picks {
+                let term = pick.displayName.lowercased()
+                let escaped = NSRegularExpression.escapedPattern(for: term)
+                if let regex = try? NSRegularExpression(pattern: "\\b\(escaped)\\b", options: .caseInsensitive),
+                   regex.firstMatch(in: venueName, range: NSRange(venueName.startIndex..., in: venueName)) != nil {
+                    nameMatchedCategories.insert(pick.id)
+                }
+            }
+            if !nameMatchedCategories.isEmpty {
+                updated.preScreenMatches = nameMatchedCategories
+            }
+            return updated
+        }
+
         // Remove dismissed venues from the pool
         let validPool = pool.filter { !dismissedIDs.contains($0.id) }
         let found = Array(validPool.prefix(Self.maxDisplayPins))
@@ -199,10 +220,18 @@ class SearchResultStore: ObservableObject {
     /// - Not in dict → venue had no URL / social media only (stays yellow "?" pin)
     func applyPreScreenResults(_ results: [String: Set<String>]) {
         // Apply pre-screen results to the full pool first.
+        // Merge with existing matches (e.g. name-match) rather than replacing,
+        // so a venue that was green from its name stays green even if the
+        // website scan finds nothing.
         let updatedPool = fullPool.map { suggestion in
             var updated = suggestion
             if let matched = results[suggestion.id] {
-                updated.preScreenMatches = matched
+                if let existing = updated.preScreenMatches, !existing.isEmpty {
+                    // Merge: keep name-match results, add website-match results
+                    updated.preScreenMatches = existing.union(matched)
+                } else {
+                    updated.preScreenMatches = matched
+                }
             }
             return updated
         }
@@ -262,6 +291,39 @@ class SearchResultStore: ObservableObject {
     /// User confirmed a suggestion was added — remove it from suggestions
     func confirm(_ suggestion: SuggestedSpot) {
         suggestions.removeAll { $0.id == suggestion.id }
+    }
+
+    // MARK: - Restore Ghost Pin
+
+    /// Re-injects a venue as a yellow ghost pin after the user removed all
+    /// categories. Uses MKLocalSearch to find the venue's MKMapItem so the
+    /// ghost pin has full Apple Maps metadata (URL, phone, etc.).
+    func restoreGhostPin(name: String, coordinate: CLLocationCoordinate2D,
+                         suggestedCategory: FoodCategory) {
+        // Remove from dismissedIDs so it's not filtered out
+        dismissedIDs.remove(name.lowercased())
+
+        // Quick MKLocalSearch to get the MKMapItem back
+        Task {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = name
+            request.region = MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+
+            if let response = try? await MKLocalSearch(request: request).start(),
+               let item = response.mapItems.first(where: {
+                   ($0.name ?? "").lowercased() == name.lowercased()
+               }) ?? response.mapItems.first {
+                let ghost = SuggestedSpot(mapItem: item,
+                                           suggestedCategory: suggestedCategory)
+                // Insert at the front so it's visible immediately
+                if !suggestions.contains(where: { $0.id == ghost.id }) {
+                    suggestions.insert(ghost, at: 0)
+                }
+            }
+        }
     }
 
     // MARK: - Unified Filtering

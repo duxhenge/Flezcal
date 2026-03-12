@@ -19,6 +19,9 @@ struct CreateCustomCategoryView: View {
     @State private var similarCategories: [FoodCategory] = []
     @State private var similarCustom: [CustomCategory] = []
 
+    // Inline autocomplete suggestions (shown under text field as user types)
+    @State private var autocompleteSuggestions: [FoodCategory] = []
+
     // Search terms editing
     @State private var searchTerms: [String] = []
     @State private var newTerm: String = ""
@@ -60,7 +63,7 @@ struct CreateCustomCategoryView: View {
                     .background(Color.cyan.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    // Name input
+                    // Name input with inline autocomplete
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Category Name")
                             .font(.headline)
@@ -76,7 +79,61 @@ struct CreateCustomCategoryView: View {
                                     searchTerms = CustomCategory.suggestedKeywords(for: newValue)
                                 }
                                 updateSimilarSuggestions(for: newValue)
+                                updateAutocompleteSuggestions(for: newValue)
                             }
+
+                        // Inline autocomplete — shows matching categories as the user types
+                        if !autocompleteSuggestions.isEmpty {
+                            VStack(spacing: 0) {
+                                ForEach(autocompleteSuggestions) { cat in
+                                    let alreadyPicked = picksService.isSelected(cat)
+                                    Button {
+                                        if !alreadyPicked {
+                                            selectExistingCategory(cat)
+                                        } else {
+                                            dismiss()
+                                        }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Text(cat.emoji)
+                                                .font(.title3)
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(cat.displayName)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.medium)
+                                                    .foregroundStyle(.primary)
+                                                Text(matchReason(for: cat))
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            Spacer()
+                                            if alreadyPicked {
+                                                Text("In your picks")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.green)
+                                            }
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if cat.id != autocompleteSuggestions.last?.id {
+                                        Divider().padding(.leading, 44)
+                                    }
+                                }
+                            }
+                            .background(Color(.systemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(.systemGray4), lineWidth: 0.5)
+                            )
+                            .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+                        }
 
                         if let error = validationError, !name.isEmpty {
                             Text(error)
@@ -96,18 +153,29 @@ struct CreateCustomCategoryView: View {
                             if !similarCategories.isEmpty {
                                 FlowLayout(spacing: 6) {
                                     ForEach(similarCategories) { cat in
+                                        let alreadyPicked = picksService.isSelected(cat)
                                         Button {
-                                            selectExistingCategory(cat)
+                                            if !alreadyPicked {
+                                                selectExistingCategory(cat)
+                                            } else {
+                                                // Already picked — just dismiss, nothing to add
+                                                dismiss()
+                                            }
                                         } label: {
                                             HStack(spacing: 4) {
                                                 Text(cat.emoji)
                                                 Text(cat.displayName)
                                                     .font(.subheadline)
                                                     .fontWeight(.medium)
+                                                if alreadyPicked {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.green)
+                                                }
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 8)
-                                            .background(cat.color.opacity(0.15))
+                                            .background(cat.color.opacity(alreadyPicked ? 0.25 : 0.15))
                                             .clipShape(Capsule())
                                         }
                                         .buttonStyle(.plain)
@@ -137,9 +205,16 @@ struct CreateCustomCategoryView: View {
                                 }
                             }
 
-                            Text("Tap to use one of these instead, or keep typing to create your own.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            // Contextual help text
+                            if similarCategories.contains(where: { picksService.isSelected($0) }) {
+                                Text("You already have a Flezcal that covers this. Tap it to continue, or keep typing to create your own.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Tap to use one of these instead, or keep typing to create your own.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .padding(12)
                         .background(Color.orange.opacity(0.06))
@@ -349,8 +424,10 @@ struct CreateCustomCategoryView: View {
         // Check hardcoded Top 50 categories — match on displayName or websiteKeywords.
         // Require at least 4 characters for keyword matching to avoid false positives
         // (e.g. "bri" matching "brick oven" → Wood-Fired Pizza).
+        // Include categories already in user's picks — they should still surface
+        // so the user knows the concept is already covered (e.g. "Chai" → Tea).
         var matches: [FoodCategory] = []
-        for cat in FoodCategory.allCategories where !picksService.isSelected(cat) {
+        for cat in FoodCategory.allCategories {
             let catName = cat.displayName.lowercased()
             let nameMatch = catName.contains(lower) || lower.contains(catName)
             let keywordMatch = lower.count >= 4 && cat.websiteKeywords.contains { kw in
@@ -377,6 +454,86 @@ struct CreateCustomCategoryView: View {
             }
         }
         similarCustom = Array(customMatches.prefix(3))
+    }
+
+    // MARK: - Inline Autocomplete
+
+    /// Finds built-in categories that match the user's typing, starting at just
+    /// 2 characters. Matches against displayName and websiteKeywords so "CHA"
+    /// surfaces Tea (because Tea includes "chai" in its keywords).
+    /// Results appear in a dropdown directly under the text field.
+    private func updateAutocompleteSuggestions(for input: String) {
+        let lower = input.trimmingCharacters(in: .whitespaces).lowercased()
+        guard lower.count >= 2 else {
+            autocompleteSuggestions = []
+            return
+        }
+
+        var matches: [FoodCategory] = []
+        for cat in FoodCategory.allCategories {
+            let catName = cat.displayName.lowercased()
+
+            // Direct name match: "cha" in "chai" or "te" in "tea"
+            let nameMatch = catName.hasPrefix(lower) || catName.contains(lower)
+
+            // Keyword match: "cha" matches keyword "chai" in Tea category
+            let keywordMatch = cat.websiteKeywords.contains { kw in
+                let kwLower = kw.lowercased()
+                return kwLower.hasPrefix(lower) || kwLower.contains(lower)
+            }
+
+            // Also check mapSearchTerms for broader coverage
+            let searchTermMatch = cat.mapSearchTerms.contains { term in
+                let termLower = term.lowercased()
+                return termLower.hasPrefix(lower) || termLower.contains(lower)
+            }
+
+            if nameMatch || keywordMatch || searchTermMatch {
+                matches.append(cat)
+            }
+        }
+
+        // Sort: exact name prefix matches first, then keyword matches
+        matches.sort { a, b in
+            let aNamePrefix = a.displayName.lowercased().hasPrefix(lower)
+            let bNamePrefix = b.displayName.lowercased().hasPrefix(lower)
+            if aNamePrefix != bNamePrefix { return aNamePrefix }
+            return a.displayName < b.displayName
+        }
+
+        autocompleteSuggestions = Array(matches.prefix(4))
+    }
+
+    /// Returns a human-readable reason why a category matched the user's input.
+    /// Shown as a subtitle in the autocomplete dropdown (e.g. "Includes chai varieties").
+    private func matchReason(for category: FoodCategory) -> String {
+        let lower = name.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !lower.isEmpty else { return category.displayName }
+
+        let catName = category.displayName.lowercased()
+
+        // If the name itself matches, no extra explanation needed
+        if catName.hasPrefix(lower) || catName.contains(lower) {
+            return "Top 50 Flezcal"
+        }
+
+        // Find the matching keyword to explain the connection
+        if let matchedKeyword = category.websiteKeywords.first(where: { kw in
+            let kwLower = kw.lowercased()
+            return kwLower.hasPrefix(lower) || kwLower.contains(lower)
+        }) {
+            return "Includes \(matchedKeyword.lowercased()) varieties"
+        }
+
+        // Check mapSearchTerms
+        if let matchedTerm = category.mapSearchTerms.first(where: { term in
+            let termLower = term.lowercased()
+            return termLower.hasPrefix(lower) || termLower.contains(lower)
+        }) {
+            return "Searches for \"\(matchedTerm.lowercased())\""
+        }
+
+        return "Related category"
     }
 
     /// User tapped an existing hardcoded category — add it as a pick and dismiss.

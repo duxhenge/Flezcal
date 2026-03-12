@@ -395,14 +395,34 @@ class SpotService: ObservableObject {
     /// removes the last category — the spot disappears from all lists but
     /// the Firestore document is preserved so it can be restored if needed.
     func hideSpot(spotID: String) async {
-        guard let index = spots.firstIndex(where: { $0.id == spotID }) else { return }
+        guard let index = spots.firstIndex(where: { $0.id == spotID }) else {
+            #if DEBUG
+            print("[SpotService] hideSpot FAILED — spot \(spotID) not found in local array (\(spots.count) spots)")
+            #endif
+            return
+        }
+        #if DEBUG
+        print("[SpotService] hideSpot START — \(spots[index].name) (id: \(spotID)), categories: \(spots[index].categories.map(\.rawValue)), isHidden: \(spots[index].isHidden)")
+        #endif
+        let docRef = db.collection(collectionName).document(spotID)
         do {
-            let data: [String: Any] = ["isHidden": true]
-            try await db.collection(collectionName).document(spotID).updateData(data)
+            // Two separate writes — Firestore rules allow isHidden changes via the
+            // reporting rule, and category changes via the category rule, but not
+            // both fields in a single update.
+            try await docRef.updateData(["categories": [String](), "categoryAddedBy": FieldValue.delete()])
+            try await docRef.updateData(["isHidden": true])
             spots[index].isHidden = true
+            spots[index].categories = []
+            spots[index].categoryAddedBy = nil
+            #if DEBUG
+            print("[SpotService] hideSpot SUCCESS — \(spots[index].name) now isHidden=\(spots[index].isHidden), categories=\(spots[index].categories.map(\.rawValue))")
+            #endif
         } catch {
             errorMessage = "Failed to hide spot: \(error.localizedDescription)"
             CrashReporter.record(error, context: "SpotService.hideSpot")
+            #if DEBUG
+            print("[SpotService] hideSpot FAILED — Firestore error: \(error.localizedDescription)")
+            #endif
         }
     }
 

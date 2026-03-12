@@ -52,8 +52,6 @@ struct MapTabView: View {
     @State private var showPossiblePins = true
     @State private var showUncheckedPins = true
     @State private var showNoPinsAlert = false
-    /// Shows a sheet listing all current map pins in distance order.
-    @State private var showPinList = false
     /// Worm easter egg — tapping the worm shows a prompt to enable Community Map.
     @State private var showCommunityEasterEgg = false
     /// Which categories to show in Community Map mode.
@@ -564,40 +562,33 @@ struct MapTabView: View {
             .navigationTitle(AppConstants.appName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // "Show on Spots tab" — switches to the Spots tab with current map area.
+                // The old pin list sheet was removed — both tabs now share SearchResultStore
+                // so the Spots tab shows the same results with full search/filter UX.
                 ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 12) {
-                        Button {
-                            showPinList = true
-                        } label: {
-                            Image(systemName: "list.bullet")
+                    Button {
+                        let center = visibleRegion?.center
+                            ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
+                        let name = "Map Area"
+                        var info: [String: Any] = [
+                            "latitude": center.latitude,
+                            "longitude": center.longitude,
+                            "name": name
+                        ]
+                        let allSuggestions = searchResultStore.suggestions
+                        if !allSuggestions.isEmpty {
+                            info["suggestions"] = allSuggestions
                         }
-                        .accessibilityLabel("Show spots list")
-
-                        // "Show on Spots tab" — switches to Spots tab with current results
-                        Button {
-                            let center = visibleRegion?.center
-                                ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
-                            let name = "Map Area"
-                            var info: [String: Any] = [
-                                "latitude": center.latitude,
-                                "longitude": center.longitude,
-                                "name": name
-                            ]
-                            let allSuggestions = searchResultStore.suggestions
-                            if !allSuggestions.isEmpty {
-                                info["suggestions"] = allSuggestions
-                            }
-                            NotificationCenter.default.post(
-                                name: .showSpotsAtLocation,
-                                object: nil,
-                                userInfo: info
-                            )
-                        } label: {
-                            Image(systemName: "list.bullet.rectangle.fill")
-                        }
-                        .accessibilityLabel("Show on Spots tab")
-                        .accessibilityHint("Switches to the Spots tab with the current map search results")
+                        NotificationCenter.default.post(
+                            name: .showSpotsAtLocation,
+                            object: nil,
+                            userInfo: info
+                        )
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle.fill")
                     }
+                    .accessibilityLabel("Show on Spots tab")
+                    .accessibilityHint("Switches to the Spots tab with the current map search results")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
@@ -632,29 +623,6 @@ struct MapTabView: View {
                         multiCheckResult = nil
                     },
                     userPicks: picksService.picks
-                )
-                .presentationDetents([.medium, .large])
-            }
-            .sheet(isPresented: $showPinList) {
-                MapPinListView(
-                    searchResultStore: searchResultStore,
-                    spotService: spotService,
-                    activePickIDs: activePickIDs,
-                    showVerifiedPins: showVerifiedPins,
-                    showPossiblePins: showPossiblePins,
-                    showUncheckedPins: showUncheckedPins,
-                    showCommunityMap: showCommunityMap,
-                    verifiedSpots: filteredSpots,
-                    userLocation: visibleRegion?.center,
-                    visibleRegion: visibleRegion,
-                    onSelectSpot: { spot in
-                        showPinList = false
-                        selectedSpot = spot
-                    },
-                    onSelectSuggestion: { suggestion in
-                        showPinList = false
-                        handleSuggestionTap(suggestion)
-                    }
                 )
                 .presentationDetents([.medium, .large])
             }
@@ -742,11 +710,12 @@ struct MapTabView: View {
                 // Only shown when the venue isn't already in searchResultStore.suggestions.
                 if let pinned = showOnMapPin,
                    !searchResultStore.suggestions.contains(where: { $0.id == pinned.id }) {
+                    let pinnedIsGreen = pinned.preScreenMatches?.isEmpty == false
                     Annotation("", coordinate: pinned.coordinate) {
                         VStack(spacing: 0) {
                             GhostPinView(
                                 category: pinned.suggestedCategory,
-                                isLikely: pinned.preScreenMatches?.isEmpty == false,
+                                isLikely: pinnedIsGreen,
                                 isScanned: pinned.preScreenMatches != nil,
                                 likelyCategories: (pinned.preScreenMatches ?? [])
                                     .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
@@ -754,7 +723,11 @@ struct MapTabView: View {
                                 .scaleEffect(1.3)
                             Image(systemName: "arrowtriangle.down.fill")
                                 .font(.system(size: 8))
-                                .foregroundStyle(pinned.suggestedCategory.color.opacity(0.85))
+                                .foregroundStyle(
+                                    pinnedIsGreen
+                                        ? Color.green.opacity(0.85)
+                                        : Color.yellow.opacity(0.85)
+                                )
                                 .offset(y: -2)
                         }
                         .onTapGesture {
@@ -869,6 +842,12 @@ struct MapTabView: View {
                     }
                     #endif
 
+                    // Suppress "Search This Area" immediately so any .onEnd
+                    // that fires during the tab switch doesn't show the button
+                    // or trigger a fresh search that overwrites green pins.
+                    suppressSearchButton = true
+                    showSearchHereButton = false
+
                     // Zoom to fit the injected green pins directly. We use the
                     // raw injected results' green-match coordinates instead of
                     // visibleGhostPins to avoid any timing issues with computed
@@ -881,14 +860,15 @@ struct MapTabView: View {
                     // Short delay so the zoom happens AFTER any queued boot .onEnd
                     // events, preventing a boot fetch from overriding the camera.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        suppressSearchButton = true
-                        showSearchHereButton = false
+                        // Re-suppress for the zoom-settle .onEnd
+                        self.suppressSearchButton = true
+                        self.showSearchHereButton = false
                         if !greenCoords.isEmpty {
-                            zoomToFitPins(overridePins: greenCoords)
+                            self.zoomToFitPins(overridePins: greenCoords)
                         } else if !allCoords.isEmpty {
-                            zoomToFitPins(overridePins: allCoords)
+                            self.zoomToFitPins(overridePins: allCoords)
                         } else {
-                            zoomToFitPins(overridePins: [fallbackCenter])
+                            self.zoomToFitPins(overridePins: [fallbackCenter])
                         }
                     }
                 } else {
@@ -1398,186 +1378,6 @@ private struct MapEmptyBanner: View {
             Spacer()
         }
         .padding(.top, 80)
-    }
-}
-
-// MARK: - Map Pin List
-
-/// Sheet showing the current map pins as a scrollable list, sorted by distance.
-/// Observes searchResultStore directly so pre-screen updates appear in real time
-/// — true map↔list parity from the same live data source.
-private struct MapPinListView: View {
-    @ObservedObject var searchResultStore: SearchResultStore
-    @ObservedObject var spotService: SpotService
-    let activePickIDs: Set<String>
-    let showVerifiedPins: Bool
-    let showPossiblePins: Bool
-    let showUncheckedPins: Bool
-    let showCommunityMap: Bool
-    let verifiedSpots: [Spot]
-    let userLocation: CLLocationCoordinate2D?
-    /// Current visible map region — used to cap the list to spots near the viewport.
-    let visibleRegion: MKCoordinateRegion?
-    let onSelectSpot: (Spot) -> Void
-    let onSelectSuggestion: (SuggestedSpot) -> Void
-
-    /// Delegates to SearchResultStore.visiblePins — single source of truth.
-    private var ghostPins: [SuggestedSpot] {
-        let spotNames = Set(verifiedSpots.map { $0.name.lowercased() })
-        return searchResultStore.visiblePins(
-            activePickIDs: activePickIDs,
-            existingSpotNames: spotNames,
-            showLikely: showPossiblePins,
-            showUnchecked: showUncheckedPins,
-            showCommunityMap: showCommunityMap
-        )
-    }
-
-    private enum ListItem: Identifiable {
-        case verified(Spot)
-        case ghost(SuggestedSpot)
-
-        var id: String {
-            switch self {
-            case .verified(let spot): return "v_\(spot.id)"
-            case .ghost(let pin): return "g_\(pin.id)"
-            }
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if sortedItems.isEmpty {
-                    Text("No spots in this area")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .listRowSeparator(.hidden)
-                } else {
-                    ForEach(sortedItems) { item in
-                        switch item {
-                        case .verified(let spot):
-                            Button {
-                                onSelectSpot(spot)
-                            } label: {
-                                ListTabRowView(spot: spot, userLocation: userLocation)
-                            }
-                            .buttonStyle(.plain)
-                        case .ghost(let pin):
-                            Button {
-                                onSelectSuggestion(pin)
-                            } label: {
-                                ghostPinRow(pin)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .navigationTitle("Nearby Spots")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    /// Verified spots capped to the map's search area so the list doesn't extend
-    /// hundreds of miles beyond what's visible. Uses the farthest ghost pin as the
-    /// boundary, with a 1.5× buffer. Falls back to the visible map region span.
-    /// Returns empty when the Verified toggle is off.
-    private var nearbyVerifiedSpots: [Spot] {
-        guard showVerifiedPins else { return [] }
-        guard let loc = userLocation else { return verifiedSpots }
-        let ref = CLLocation(latitude: loc.latitude, longitude: loc.longitude)
-
-        // Determine the distance cap from ghost pins or visible region
-        let maxGhostDist = ghostPins.map { pin in
-            ref.distance(from: CLLocation(
-                latitude: pin.coordinate.latitude,
-                longitude: pin.coordinate.longitude
-            ))
-        }.max()
-
-        let cap: CLLocationDistance
-        if let maxDist = maxGhostDist, maxDist > 0 {
-            cap = maxDist * 1.5
-        } else if let region = visibleRegion {
-            // No ghost pins — use the visible map span
-            cap = max(region.span.latitudeDelta, region.span.longitudeDelta) * 111_000
-        } else {
-            cap = 0.5 * 111_000  // default ~35 miles
-        }
-
-        return verifiedSpots.filter { spot in
-            ref.distance(from: CLLocation(
-                latitude: spot.latitude, longitude: spot.longitude
-            )) <= cap
-        }
-    }
-
-    private var sortedItems: [ListItem] {
-        guard let loc = userLocation else {
-            return nearbyVerifiedSpots.map { .verified($0) } + ghostPins.map { .ghost($0) }
-        }
-        let ref = CLLocation(latitude: loc.latitude, longitude: loc.longitude)
-        var items: [ListItem] = nearbyVerifiedSpots.map { .verified($0) } + ghostPins.map { .ghost($0) }
-        items.sort { a, b in
-            func dist(_ item: ListItem) -> Double {
-                switch item {
-                case .verified(let spot):
-                    return ref.distance(from: CLLocation(latitude: spot.latitude, longitude: spot.longitude))
-                case .ghost(let pin):
-                    return ref.distance(from: CLLocation(latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude))
-                }
-            }
-            return dist(a) < dist(b)
-        }
-        return items
-    }
-
-    private func ghostPinRow(_ pin: SuggestedSpot) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Pin status icon
-            let isGreen = pin.preScreenMatches?.isEmpty == false
-            ZStack {
-                Circle()
-                    .fill(isGreen ? Color.green.opacity(0.15) : Color.yellow.opacity(0.12))
-                    .frame(width: 44, height: 44)
-                Image(systemName: isGreen ? "checkmark" : "questionmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(isGreen ? .green : Color.yellow.opacity(0.85))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(pin.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(pin.address)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(formattedDistanceMiles(from: userLocation, to: pin.coordinate) ?? "—")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                }
-                HStack(spacing: 4) {
-                    FoodCategoryIcon(category: pin.suggestedCategory, size: 15)
-                    Text(pin.suggestedCategory.displayName)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                    if isGreen {
-                        Text("· Likely match")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
-                    }
-                }
-            }
-            .layoutPriority(1)
-        }
-        .padding(.vertical, 4)
     }
 }
 

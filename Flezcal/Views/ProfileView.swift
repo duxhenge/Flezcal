@@ -713,18 +713,19 @@ private struct ImpactStat: View {
 
 struct VerificationHistoryView: View {
     let verifications: [Verification]
-    let spotService: SpotService
+    @ObservedObject var spotService: SpotService
 
     var body: some View {
         List {
             ForEach(verifications) { verification in
                 let cat = SpotCategory(rawValue: verification.category)
-                let spotName = spotService.spots.first(where: { $0.id == verification.spotID })?.name ?? "Unknown Spot"
-                NavigationLink {
-                    if let spot = spotService.spots.first(where: { $0.id == verification.spotID }) {
+                let spot = spotService.spots.first(where: { $0.id == verification.spotID })
+                let spotName = spot?.name ?? "Unknown Spot"
+                let spotAvailable = spot != nil && !(spot!.isHidden) && !(spot!.isClosed)
+                if spotAvailable, let spot {
+                    NavigationLink {
                         SpotDetailView(spot: spot)
-                    }
-                } label: {
+                    } label: {
                     HStack(spacing: 8) {
                         CategoryIcon(category: cat, size: 26)
 
@@ -772,6 +773,30 @@ struct VerificationHistoryView: View {
                         }
 
                         Text(verification.date, style: .date)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    }
+                } else {
+                    // Spot was hidden or deleted — show non-tappable row
+                    HStack(spacing: 8) {
+                        CategoryIcon(category: cat, size: 26)
+                            .opacity(0.4)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(cat.displayName)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+
+                            Text(spotName)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        Spacer()
+
+                        Text("Spot no longer available")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
