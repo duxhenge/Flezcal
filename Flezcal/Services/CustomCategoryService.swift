@@ -1,11 +1,10 @@
 import Foundation
 import FirebaseFirestore
 
-/// Manages user-created food categories.
+/// Manages user-created (trending) food categories.
 ///
 /// Custom categories are stored in Firestore at `customCategories/{normalizedName}`.
-/// Each user can create up to 3 custom picks per session, stored locally in UserDefaults.
-/// Firestore tracks global popularity (pickCount) for future promotion/relegation.
+/// Firestore tracks global popularity (pickCount) for future promotion to Top 50.
 @MainActor
 class CustomCategoryService: ObservableObject {
     @Published var customCategories: [CustomCategory] = []
@@ -15,10 +14,6 @@ class CustomCategoryService: ObservableObject {
     private let db = Firestore.firestore()
     private static let collectionName = "customCategories"
     private static let eventsCollection = "customSearchEvents"
-
-    /// Maximum custom picks a user can create per session.
-    /// Controlled by FeatureFlags.maxCustomItems (1 at launch, 3 in Phase 4).
-    static var maxCustomPicks: Int { FeatureFlags.maxCustomItems }
 
     // MARK: - Fetch all custom categories
 

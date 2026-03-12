@@ -249,8 +249,11 @@ actor WebsiteCheckService {
         // Reduced from 10 — too many simultaneous connections to slow
         // restaurant servers cause network timeouts to pile up, stalling
         // the URLSession and making the app feel frozen.
-        if !toFetch.isEmpty {
+        if !toFetch.isEmpty && !Task.isCancelled {
             let fetched = await fetchAndScanHomepages(toFetch, categories: picks)
+
+            // If cancelled during fetch, return what we have so far
+            guard !Task.isCancelled else { return results }
 
             // Cache results and filter to picks.
             // Only confirmed matches drive pre-screen ranking (not related).
@@ -720,6 +723,8 @@ actor WebsiteCheckService {
         }
 
         // Attempt 2: plain HTTP fallback (for broken SSL or HTTP-only sites)
+        // Skip if the parent task was cancelled — no point starting another request
+        guard !Task.isCancelled else { return nil }
         if httpsURL.scheme == "https",
            var components = URLComponents(url: httpsURL, resolvingAgainstBaseURL: false) {
             components.scheme = "http"
@@ -786,6 +791,10 @@ actor WebsiteCheckService {
     /// user's active picks only. Returns the ID, URL, and scan result for each successful fetch.
     /// Shared by batchPreScreen and batchPreScreenMapItems to avoid duplicating
     /// the throttled task-group loop.
+    ///
+    /// Checks `Task.isCancelled` between batches so that cancelling the parent task
+    /// (e.g. when the user pans the map or switches tabs) stops scanning promptly
+    /// instead of grinding through all remaining venues.
     private func fetchAndScanHomepages<ID: Sendable>(
         _ items: [(id: ID, url: URL)],
         categories: [FoodCategory]
@@ -799,11 +808,17 @@ actor WebsiteCheckService {
             var collected: [(ID, URL, HTMLScanResult)] = []
 
             while index < items.count {
+                // Stop promptly when the parent task is cancelled
+                guard !Task.isCancelled else {
+                    group.cancelAll()
+                    break
+                }
                 while pending < 6 && index < items.count {
                     let item = items[index]
                     index += 1
                     pending += 1
                     group.addTask { [self] in
+                        guard !Task.isCancelled else { return nil }
                         guard let (html, isValid) = await self.fetchPage(item.url),
                               isValid else { return nil }
                         let scanResult = await self.scanForCategories(in: html, categories: categories)

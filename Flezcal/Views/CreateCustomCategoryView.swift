@@ -30,7 +30,7 @@ struct CreateCustomCategoryView: View {
     @State private var userEditedTerms = false
 
     /// All trending Flezcals use the worm emoji.
-    private let customEmoji = "🐛"
+    private let customEmoji = CustomCategory.defaultEmoji
 
     var body: some View {
         NavigationStack {
@@ -558,7 +558,7 @@ struct CreateCustomCategoryView: View {
                     generator.notificationOccurred(.success)
                     dismiss()
                 } else {
-                    saveError = "You've reached the maximum number of trending picks."
+                    saveError = "You have too many Flezcals selected. Remove one first to make room."
                 }
             } else {
                 isSaving = false
@@ -593,7 +593,7 @@ struct CreateCustomCategoryView: View {
                     generator.notificationOccurred(.success)
                     showSuccess = true
                 } else {
-                    saveError = "You've reached the maximum number of trending picks."
+                    saveError = "You have too many Flezcals selected. Remove one first to make room."
                 }
             } else {
                 isSaving = false

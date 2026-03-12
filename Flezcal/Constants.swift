@@ -98,13 +98,10 @@ enum AppBranding {
 }
 
 /// Feature flags for phased rollout.
-/// Phase 4: Set broadSearchEnabled = true and maxCustomItems = 3 to unlock full custom search.
 enum FeatureFlags {
-    /// When true, all 21 categories are selectable and custom slots expand to 3.
+    /// When true, all 50 categories are selectable.
     /// When false, only the 3 launch defaults (mezcal, flan, tortillas) are active.
     static let broadSearchEnabled = true
-    /// Number of custom food/drink items a user can add. Phase 4: increase to 3.
-    static let maxCustomItems = 3
     /// The IDs of the 3 locked launch categories.
     static let defaultCategories = ["mezcal", "flan", "tortillas"]
 }

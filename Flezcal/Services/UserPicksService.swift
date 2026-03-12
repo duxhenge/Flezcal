@@ -8,37 +8,26 @@ import FirebaseFirestore
 /// AND synced to Firestore `categoryPicks` collection for global
 /// popularity tracking (admin dashboard).
 ///
-/// Users can freely select/deselect any of the 3 launch categories
-/// (mezcal, flan, handmade tortillas) plus custom picks, with a minimum
-/// of 1 pick required. When `FeatureFlags.broadSearchEnabled` is true
-/// (Phase 4), all categories become freely selectable and custom slots
-/// expand to 3.
+/// Users can select up to 3 picks at a time from any combination of
+/// Top 50 and trending (custom) categories. At least 1 pick must
+/// remain active.
 @MainActor
 class UserPicksService: ObservableObject {
 
-    /// The user's current picks — freely selectable from launch categories
-    /// and custom picks. At least 1 pick must remain active.
+    /// The user's current picks (1–3). Any mix of Top 50 and trending categories.
     @Published private(set) var picks: [FoodCategory] = []
 
-    /// Total pick capacity: the 3 launch categories + custom slots.
-    /// When broadSearchEnabled, this reverts to the original 3-total behavior
-    /// (users choose freely from all categories).
-    static var maxPicks: Int {
-        if FeatureFlags.broadSearchEnabled {
-            return 3
-        }
-        return FoodCategory.launchCategories.count + FeatureFlags.maxCustomItems
-    }
+    /// Maximum picks a user can have active at once.
+    static let maxPicks = 3
 
-    /// Number of custom picks the user has created this session.
-    @Published private(set) var customPickCount: Int = 0
+    /// Whether the user can add another pick.
+    var canAddMore: Bool { picks.count < Self.maxPicks }
 
     /// Search radius in degrees. Fixed at 0.5° ≈ 35 miles. The closest-N
     /// results from MKLocalSearch naturally define the effective radius.
     let searchRadiusDegrees: Double = 0.5
 
     private let defaultsKey = "userFoodCategoryPicks"
-    private let customPicksKey = "userCustomPicks"
     /// IDs of built-in categories whose mapSearchTerms the user intentionally
     /// customized via EditSpotSearchView. These are NOT refreshed from the
     /// static definition on load — the user's edits take precedence.
@@ -46,12 +35,10 @@ class UserPicksService: ObservableObject {
 
     init() {
         picks = loadPicks()
-        customPickCount = loadCustomPickCount()
         FoodCategory.registerUserPicks(picks)
-        // Clean up legacy radius preference
+        // Clean up legacy preferences
         UserDefaults.standard.removeObject(forKey: "userSearchRadiusDegrees")
-        // No Firestore sync on launch — only deliberate user actions
-        // (toggle/addCustomPick) trigger pick tracking.
+        UserDefaults.standard.removeObject(forKey: "userCustomPicks")
     }
 
     // MARK: - Public API
@@ -62,49 +49,24 @@ class UserPicksService: ObservableObject {
     }
 
     /// Toggle a pick on/off.
-    /// - Any pick (including launch defaults) can be toggled off as long as
-    ///   at least 1 pick remains active.
-    /// - Adding: only allowed when picks.count < maxPicks.
-    /// - Removing: only allowed when picks.count > 1 (must keep at least one).
+    /// Adding: blocked at `maxPicks`. Removing: blocked at 1 pick (minimum).
     @discardableResult
     func toggle(_ category: FoodCategory) -> Bool {
         if isSelected(category) {
             guard picks.count > 1 else { return false }
             picks.removeAll { $0 == category }
         } else {
-            guard picks.count < Self.maxPicks else { return false }
+            guard canAddMore else { return false }
             picks.append(category)
         }
         savePicks()
         return true
     }
 
-    /// Add a custom food category as a pick.
-    /// Returns false if at custom pick limit or total pick limit.
+    /// Add a trending category as a pick. Same cap as Top 50 — max 3 total.
     @discardableResult
     func addCustomPick(_ category: FoodCategory) -> Bool {
-        guard picks.count < Self.maxPicks else { return false }
-        guard customPickCount < FeatureFlags.maxCustomItems else { return false }
-        guard !isSelected(category) else { return false }
-
-        picks.append(category)
-        customPickCount += 1
-        savePicks()
-        saveCustomPickCount()
-        return true
-    }
-
-    /// Remove a custom pick and decrement the custom count.
-    /// Returns false if not found or if it would leave zero picks.
-    @discardableResult
-    func removeCustomPick(_ category: FoodCategory) -> Bool {
-        guard picks.count > 1 else { return false }
-        guard let index = picks.firstIndex(of: category) else { return false }
-        picks.remove(at: index)
-        customPickCount = max(0, customPickCount - 1)
-        savePicks()
-        saveCustomPickCount()
-        return true
+        toggle(category)
     }
 
     /// Replace an existing pick with an updated version (e.g. edited search terms).
@@ -140,19 +102,6 @@ class UserPicksService: ObservableObject {
         Set(UserDefaults.standard.stringArray(forKey: customizedTermsKey) ?? [])
     }
 
-
-    /// Whether adding more picks is currently allowed.
-    var canAddMore: Bool { picks.count < Self.maxPicks }
-
-    /// Whether the user can create another custom pick.
-    var canCreateCustom: Bool {
-        customPickCount < FeatureFlags.maxCustomItems && canAddMore
-    }
-
-    /// The user's custom picks (user-created categories with custom_ prefix).
-    var customPicks: [FoodCategory] {
-        picks.filter { $0.id.hasPrefix("custom_") }
-    }
 
     // MARK: - Persistence
 
@@ -203,30 +152,18 @@ class UserPicksService: ObservableObject {
         }
 
         // Launch mode: respect saved picks from launch categories,
-        // plus append saved custom picks (up to maxCustomItems)
+        // plus append saved custom picks
         let launchIDs = Set(FeatureFlags.defaultCategories)
         let savedLaunch = refreshed.filter { launchIDs.contains($0.id) }
         let savedCustom = refreshed.filter { !launchIDs.contains($0.id) }
 
         var result = savedLaunch
-        for pick in savedCustom.prefix(FeatureFlags.maxCustomItems) {
-            if !result.contains(pick) {
-                result.append(pick)
-            }
+        for pick in savedCustom where !result.contains(pick) {
+            result.append(pick)
         }
 
         // Must have at least 1 pick — fall back to defaults if somehow empty
         return result.isEmpty ? FoodCategory.defaultPicks : result
-    }
-
-    private func saveCustomPickCount() {
-        UserDefaults.standard.set(customPickCount, forKey: customPicksKey)
-    }
-
-    private func loadCustomPickCount() -> Int {
-        let saved = UserDefaults.standard.integer(forKey: customPicksKey)
-        // Clamp to maxCustomItems in case the flag was lowered
-        return min(saved, FeatureFlags.maxCustomItems)
     }
 
     // MARK: - Firestore Pick Tracking

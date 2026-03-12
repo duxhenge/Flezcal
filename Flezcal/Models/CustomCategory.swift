@@ -27,6 +27,14 @@ struct CustomCategory: Identifiable, Codable, Equatable, Hashable {
     var normalizedName: String { displayName.lowercased().trimmingCharacters(in: .whitespaces) }
     var color: Color { .cyan }
 
+    /// Default emoji for all trending categories. Promoted Top 50 categories
+    /// get a unique icon assigned; until then, every trending Flezcal uses the worm.
+    static let defaultEmoji = "🐛"
+
+    /// Display emoji — returns the stored emoji only if it differs from the default
+    /// (i.e. a promoted category with a custom icon). Otherwise returns the worm.
+    var displayEmoji: String { emoji.isEmpty ? Self.defaultEmoji : emoji }
+
     // MARK: - Memberwise init (required because custom init(from:) suppresses it)
 
     init(
