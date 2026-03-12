@@ -21,8 +21,8 @@ Always inspect code or check documentation instead. If a live test is truly nece
 
 **The Map tab and Spots tab are two presentations of ONE search workflow. They MUST produce identical results when searching from the same center point.**
 
-- Both tabs use `taggedMultiSearch` with the active picks' `mapSearchTerms` — NEVER a separate single-query search path.
-- The Spots tab search bar filters results by venue name (client-side). It does NOT trigger a different MKLocalSearch query.
+- Both tabs use `taggedMultiSearch` with the active picks' `mapSearchTerms` for category browsing.
+- The Spots tab search bar has TWO modes: empty = category browse (same as Map tab), text typed = venue-name search (add-spot workflow). The venue-name search is intentionally a separate MKLocalSearch because the user is looking for a specific place to add.
 - Pills (category filters) are user-controlled only — never reset programmatically on pan, zoom, or search.
 - When switching between tabs, results transfer so the user sees the same data.
 - Any code change that introduces a separate search pipeline for either tab violates this rule.

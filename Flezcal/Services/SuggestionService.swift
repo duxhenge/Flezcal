@@ -45,9 +45,15 @@ class SuggestionService: ObservableObject {
     /// Injects pre-built results from another tab (e.g. Spots → Map).
     /// Replaces any existing suggestions and marks pre-screen complete
     /// since the data already has `preScreenMatches` baked in.
+    /// Deduplicates by venue name (lowercased) to prevent overlapping pins.
     func injectResults(_ results: [SuggestedSpot]) {
-        suggestions = Array(results.prefix(25))
-        fullPool = results
+        // Deduplicate: keep the first occurrence of each venue name.
+        // taggedMultiSearch already deduplicates, but venue-name search
+        // and cross-tab injection can introduce dupes.
+        var seenIDs = Set<String>()
+        let unique = results.filter { seenIDs.insert($0.id).inserted }
+        suggestions = Array(unique.prefix(25))
+        fullPool = unique
         preScreenComplete = true
         isLoading = false
     }

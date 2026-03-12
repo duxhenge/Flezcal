@@ -45,8 +45,12 @@ class LocationSearchService: ObservableObject {
         )
     }
 
-    // MARK: - Single-query search (user-typed text)
+    // MARK: - Single-query search (user-typed venue name)
 
+    /// Venue-name search for the add-spot workflow. No POI filter — the user
+    /// is looking for a specific place by name, so we don't restrict categories.
+    /// Apple Maps may classify a tea house or juice bar outside our food/drink
+    /// POI set; removing the filter lets those results come through.
     func search(query: String, userLocation: CLLocationCoordinate2D? = nil) async {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             searchResults = []
@@ -62,7 +66,8 @@ class LocationSearchService: ObservableObject {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
         request.resultTypes = .pointOfInterest
-        request.pointOfInterestFilter = Self.poiFilter
+        // No POI filter — venue-name search should find any place by name.
+        // Category browsing (taggedMultiSearch) still uses the food/drink filter.
         request.region = Self.makeRegion(center: userLocation)
 
         let search = MKLocalSearch(request: request)

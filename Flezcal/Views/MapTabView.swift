@@ -874,6 +874,9 @@ struct MapTabView: View {
                     preScreenTask?.cancel()
                     isPreScreening = false
                     showDeeperScanButton = false
+                    // Clear any stale "Show on Map" pin so it doesn't overlap
+                    // with the same venue in the injected results.
+                    showOnMapPin = nil
 
                     suggestionService.injectResults(results)
                     #if DEBUG

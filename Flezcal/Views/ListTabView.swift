@@ -17,23 +17,27 @@ struct CustomSearchLocation: Equatable {
 }
 
 /// Combined task identity for `.task(id:)` — re-fires search when the
-/// location, active picks, or search terms change.
-/// NOTE: searchText is NOT included — text typing is a client-side filter
-/// on existing results, not a new MKLocalSearch. One Search, Two Views.
+/// query text, location, active picks, or search terms change.
+///
+/// Two modes:
+///   - searchText empty → category browse (taggedMultiSearch, same as Map tab)
+///   - searchText non-empty → venue-name search (add-spot workflow)
 private struct SearchTaskID: Equatable, Hashable {
+    let query: String              // Venue-name search text (empty = category browse)
     let activeFilterIDs: Set<String>   // IDs of active pick pills — triggers re-search on toggle
     let customLocation: CustomSearchLocation?
     let mapTermsVersion: Int        // Incremented when user edits mapSearchTerms — triggers re-search
     let refreshVersion: Int         // Incremented by manual refresh — triggers re-search
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.activeFilterIDs == rhs.activeFilterIDs
+        lhs.query == rhs.query && lhs.activeFilterIDs == rhs.activeFilterIDs
         && lhs.customLocation == rhs.customLocation
         && lhs.mapTermsVersion == rhs.mapTermsVersion
         && lhs.refreshVersion == rhs.refreshVersion
     }
 
     func hash(into hasher: inout Hasher) {
+        hasher.combine(query)
         hasher.combine(activeFilterIDs)
         hasher.combine(customLocation?.name)
         hasher.combine(customLocation?.coordinate.latitude)
@@ -373,15 +377,10 @@ private struct ExplorePanel: View {
         customLocation?.coordinate ?? currentLocation()
     }
 
-    /// Number of pre-screen matched results whose matched categories overlap
-    /// with the active picks — consistent with splitResults and MapTabView's
-    /// visibleGhostPins filtering.
+    /// Number of pre-screen matched results — derived from splitResults so
+    /// the banner count always matches the items sent to the parent.
     private var matchedCount: Int {
-        let activeIDs = Set(activeFilterPicks.map(\.id))
-        return exploreResults.filter { spot in
-            guard let matches = spot.preScreenMatches, !matches.isEmpty else { return false }
-            return !matches.isDisjoint(with: activeIDs)
-        }.count
+        splitResults.matched.count
     }
 
     /// Results split into matched (pre-screen confirmed) and unmatched.
@@ -563,6 +562,7 @@ private struct ExplorePanel: View {
             )
         }
         .task(id: SearchTaskID(
+            query: searchText,
             activeFilterIDs: Set(activeFilterPicks.map(\.id)),
             customLocation: customLocation,
             mapTermsVersion: mapTermsVersion,
@@ -599,53 +599,78 @@ private struct ExplorePanel: View {
                 return
             }
 
-            // One Search, Two Views: always use taggedMultiSearch with active picks.
-            // searchText is a client-side venue name filter, NOT a search query.
+            let venueSearch = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
             let picks = activePicks
             let center = effectiveLocation ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
             #if DEBUG
-            print("[Explore] .task fired — activePicks=\(picks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil")")
+            print("[Explore] .task fired — searchText='\(searchText)' activePicks=\(picks.map(\.displayName)) customLoc=\(customLocation?.name ?? "nil") venueSearch=\(venueSearch)")
             #endif
 
-            // Clear stale results so the "Searching…" spinner shows immediately.
-            isSearchActive = true
-            exploreResults = []
-            exploreFullPool = []
-            matchedSuggestions = []
-            uncheckedCount = 0
-            showDeeperScanPrompt = false
+            if venueSearch {
+                // ── Venue-name search (add-spot workflow) ──────────────────
+                // User typed a specific venue name. Run a dedicated MKLocalSearch
+                // so they can find and add any place, not just category results.
+                let query = searchText
+                guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+                    exploreResults = []
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                isSearchActive = true
+                await searchService.search(query: query, userLocation: effectiveLocation)
+                guard !Task.isCancelled else { return }
+                let foodCat = primaryFoodCategory
+                let results = searchService.searchResults.map {
+                    SuggestedSpot(mapItem: $0, suggestedCategory: foodCat)
+                }
+                exploreFullPool = results
+                exploreResults = results
+            } else {
+                // ── Category browse (One Search, Two Views) ───────────────
+                // Same taggedMultiSearch as the Map tab — identical results
+                // for the same center point and active picks.
 
-            // Build tagged queries from all active picks' mapSearchTerms —
-            // identical to Map tab's SuggestionService.fetchSuggestions().
-            var seenQueries = Set<String>()
-            var taggedQueries: [(query: String, tag: String)] = []
-            for pick in picks {
-                for term in pick.mapSearchTerms {
-                    let key = term.lowercased()
-                    if seenQueries.insert(key).inserted {
-                        taggedQueries.append((query: term, tag: pick.id))
+                // Clear stale results so the "Searching…" spinner shows immediately.
+                isSearchActive = true
+                exploreResults = []
+                exploreFullPool = []
+                matchedSuggestions = []
+                uncheckedCount = 0
+                showDeeperScanPrompt = false
+
+                // Build tagged queries from all active picks' mapSearchTerms —
+                // identical to Map tab's SuggestionService.fetchSuggestions().
+                var seenQueries = Set<String>()
+                var taggedQueries: [(query: String, tag: String)] = []
+                for pick in picks {
+                    for term in pick.mapSearchTerms {
+                        let key = term.lowercased()
+                        if seenQueries.insert(key).inserted {
+                            taggedQueries.append((query: term, tag: pick.id))
+                        }
                     }
                 }
-            }
-            if taggedQueries.isEmpty {
-                taggedQueries = [("restaurant", picks.first?.id ?? "")]
-            }
-            let taggedResults = await searchService.taggedMultiSearch(
-                queries: taggedQueries,
-                center: center
-            )
-            guard !Task.isCancelled else { return }
+                if taggedQueries.isEmpty {
+                    taggedQueries = [("restaurant", picks.first?.id ?? "")]
+                }
+                let taggedResults = await searchService.taggedMultiSearch(
+                    queries: taggedQueries,
+                    center: center
+                )
+                guard !Task.isCancelled else { return }
 
-            // Convert to SuggestedSpots with category tracking
-            let picksByID = Dictionary(uniqueKeysWithValues: picks.map { ($0.id, $0) })
-            var pool: [SuggestedSpot] = []
-            for result in taggedResults {
-                guard result.item.name != nil else { continue }
-                let category = picksByID[result.tag] ?? picks[0]
-                pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
+                // Convert to SuggestedSpots with category tracking
+                let picksByID = Dictionary(uniqueKeysWithValues: picks.map { ($0.id, $0) })
+                var pool: [SuggestedSpot] = []
+                for result in taggedResults {
+                    guard result.item.name != nil else { continue }
+                    let category = picksByID[result.tag] ?? picks[0]
+                    pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
+                }
+                exploreFullPool = pool
+                exploreResults = Array(pool.prefix(25))
             }
-            exploreFullPool = pool
-            exploreResults = Array(pool.prefix(25))
 
             // Pre-screen: scan homepages to re-rank results (matched venues first).
             guard !Task.isCancelled, !exploreResults.isEmpty else {
@@ -962,7 +987,7 @@ struct ListTabView: View {
 
     /// Search placeholder that reflects the active filter.
     private var explorePlaceholder: String {
-        "Filter by venue name…"
+        "Search for a venue to add…"
     }
 
     // MARK: Community data
@@ -1157,7 +1182,10 @@ struct ListTabView: View {
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    // "Show on Map" — switches to Map tab with the same search results
+                    // "Show on Map" — switches to Map tab with the same search results.
+                    // Only sends results for category browse (searchText empty).
+                    // Venue-name search is an add-spot workflow and shouldn't
+                    // overwrite the Map tab's category results.
                     if showExploreSearch {
                         Button {
                             let center = customLocation?.coordinate
@@ -1167,7 +1195,8 @@ struct ListTabView: View {
                                 "latitude": center.latitude,
                                 "longitude": center.longitude
                             ]
-                            if !allExploreResults.isEmpty {
+                            let isVenueSearch = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+                            if !isVenueSearch && !allExploreResults.isEmpty {
                                 info["suggestions"] = allExploreResults
                             }
                             NotificationCenter.default.post(
@@ -1406,10 +1435,13 @@ struct ListTabView: View {
                 }
             }
             .onChange(of: allExploreResults) { _, newResults in
-                // Sync Spots tab results to ContentView for cross-tab injection.
-                // This keeps Map and Spots tabs showing the same data.
-                latestExploreResults = newResults
-                latestExploreCenter = effectiveLocation
+                // Only sync category browse results to ContentView for cross-tab
+                // injection. Venue-name search (searchText non-empty) is an add-spot
+                // workflow — those results shouldn't overwrite the Map tab's data.
+                if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    latestExploreResults = newResults
+                    latestExploreCenter = effectiveLocation
+                }
                 // Clear the instant-spinner flag once results arrive
                 if !newResults.isEmpty {
                     isLocationSearchPending = false
@@ -1420,14 +1452,12 @@ struct ListTabView: View {
 
     // MARK: Result type filters (matches Map tab's PinToggleButton style)
 
-    /// Number of de-duped green-matched potential spots (excludes venues already verified).
+    /// Number of green-matched potential spots that will actually render.
+    /// Derived from unifiedTopSection so the pill count always matches the visible rows.
     private var possibleCount: Int {
-        matchedSuggestions.filter { suggestion in
-            spotService.findExistingSpot(
-                name: suggestion.name,
-                latitude: suggestion.coordinate.latitude,
-                longitude: suggestion.coordinate.longitude
-            ) == nil
+        unifiedTopSection.filter {
+            if case .potentialMatched = $0 { return true }
+            return false
         }.count
     }
 
