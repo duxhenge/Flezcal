@@ -14,28 +14,31 @@ Always inspect code or check documentation instead. If a live test is truly nece
 
 ### Apple Maps (MKLocalSearch)
 - Rate limit: ~50 requests per 60 seconds
-- Called from `SuggestionService.fetchSuggestions()` on camera move (50m threshold guard)
-- Tier 1 (POI category passes) fails with `MKErrorGEOError=-8` in some US regions — Tier 2 text queries are the reliable fallback
+- Called from `SearchResultStore.fetchSuggestions()` (Map boot + "Search This Area") and `ExplorePanel` (Spots tab category browse)
+- Both delegate to `LocationSearchService.taggedMultiSearch()` — search config exists in one place
 
 ## Core Design Rule: One Search, Two Views
 
 **The Map tab and Spots tab are two presentations of ONE search workflow. They MUST produce identical results when searching from the same center point.**
 
-- Both tabs use `taggedMultiSearch` with the active picks' `mapSearchTerms` for category browsing.
-- The Spots tab search bar has TWO modes: empty = category browse (same as Map tab), text typed = venue-name search (add-spot workflow). The venue-name search is intentionally a separate MKLocalSearch because the user is looking for a specific place to add.
-- Pills (category filters) are user-controlled only — never reset programmatically on pan, zoom, or search.
-- When switching between tabs, results transfer so the user sees the same data.
-- Any code change that introduces a separate search pipeline for either tab violates this rule.
-- Pre-screen (website scanning) runs identically on both tabs' result sets.
+- Both tabs share a single `SearchResultStore` (`@EnvironmentObject`) — one canonical `[SuggestedSpot]` array
+- Both tabs use `taggedMultiSearch` with the active picks' `mapSearchTerms` for category browsing
+- The Spots tab search bar has TWO modes: empty = category browse (reads from store), text typed = venue-name search (local `venueSearchResults` state, independent from store)
+- Pills (category filters) are user-controlled only — never reset programmatically on pan, zoom, or search
+- Pre-screen (website scanning) writes results to the store via `applyPreScreenResults()` — both tabs see updates instantly
+- Any code change that introduces a separate search pipeline for either tab violates this rule
 
 **Before modifying any search logic, verify the change preserves parity between both tabs.**
 
 ## Architecture Notes
 
-### Ghost Pin Search (`SuggestionService`)
-- Two-tier: Tier 1 = `MKPointOfInterestCategory` passes, Tier 2 = natural language text queries
+### SearchResultStore (single source of truth)
+- Owns: `suggestions` (≤25 displayed), `fullPool` (all ~100+ from search), `isLoading`, `preScreenComplete`
+- `fetchSuggestions()` delegates to `LocationSearchService.taggedMultiSearch()`
 - `fetchGeneration` counter aborts stale fetches when a newer one starts
-- `anyThrottled` flag prevents a partial throttled result from overwriting a good prior set
+- `applyPreScreenResults()` promotes green matches from full pool into displayed set
+- Unified filtering: `filteredSuggestions()`, `visiblePins()`, `splitByPreScreen()` — replaces 4 duplicate filter implementations
+- `dismissedIDs` is session-scoped (in-memory `Set<String>`) — does NOT persist to Firestore
 - 50m movement threshold in `MapTabView.shouldFetch()` suppresses camera-settle micro-fires
 
 ### Website Check (`WebsiteCheckService`)
@@ -47,6 +50,7 @@ Always inspect code or check documentation instead. If a live test is truly nece
 ### Explore Search (`ListTabView` / `ExplorePanel`)
 - See `memory/MEMORY.md` for critical SwiftUI pitfalls that broke this repeatedly
 - `searchText` must be `@Binding`, SpotService must be plain `let` (not `@EnvironmentObject`)
+- Category browse reads from `SearchResultStore` (shared); venue-name search uses local state (independent)
 
 ## Before App Store Submission
 - Replace placeholder URLs in `Constants.swift`: `privacyPolicyURL` and `supportURL`

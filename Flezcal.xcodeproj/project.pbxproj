@@ -55,7 +55,7 @@
 		B1000001000000000000001B /* ContributorStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001A /* ContributorStats.swift */; };
 		B1000001000000000000001C /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001B /* LeaderboardView.swift */; };
 		B1000001000000000000001D /* VeladoraIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001C /* VeladoraIcon.swift */; };
-		B1000001000000000000001E /* SuggestionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001D /* SuggestionService.swift */; };
+		SRS00001000000000000002 /* SearchResultStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRS00001000000000000001 /* SearchResultStore.swift */; };
 		B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001E /* SuggestedSpotSheet.swift */; };
 		SI0000020000000000000001 /* SignInSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SI0000010000000000000001 /* SignInSheet.swift */; };
 		B10000010000000000000020 /* WelcomeContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001F /* WelcomeContent.swift */; };
@@ -167,7 +167,7 @@
 		B2000001000000000000001A /* ContributorStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContributorStats.swift; sourceTree = "<group>"; };
 		B2000001000000000000001B /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
 		B2000001000000000000001C /* VeladoraIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeladoraIcon.swift; sourceTree = "<group>"; };
-		B2000001000000000000001D /* SuggestionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionService.swift; sourceTree = "<group>"; };
+		SRS00001000000000000001 /* SearchResultStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultStore.swift; sourceTree = "<group>"; };
 		B2000001000000000000001E /* SuggestedSpotSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestedSpotSheet.swift; sourceTree = "<group>"; };
 		SI0000010000000000000001 /* SignInSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInSheet.swift; sourceTree = "<group>"; };
 		B2000001000000000000001F /* WelcomeContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeContent.swift; sourceTree = "<group>"; };
@@ -375,7 +375,7 @@
 				B20000010000000000000012 /* LocationManager.swift */,
 				B20000010000000000000015 /* ReviewService.swift */,
 				B20000010000000000000026 /* PhotoService.swift */,
-				B2000001000000000000001D /* SuggestionService.swift */,
+				SRS00001000000000000001 /* SearchResultStore.swift */,
 				B200000100000000000000A1 /* WebsiteCheckService.swift */,
 				B200000100000000000000B2 /* UserPicksService.swift */,
 				B20000010000000000000020 /* WelcomeService.swift */,
@@ -670,7 +670,7 @@
 				B1000001000000000000001B /* ContributorStats.swift in Sources */,
 				B1000001000000000000001C /* LeaderboardView.swift in Sources */,
 				B1000001000000000000001D /* VeladoraIcon.swift in Sources */,
-				B1000001000000000000001E /* SuggestionService.swift in Sources */,
+				SRS00001000000000000002 /* SearchResultStore.swift in Sources */,
 				B100000100000000000000A1 /* WebsiteCheckService.swift in Sources */,
 				B1000001000000000000001F /* SuggestedSpotSheet.swift in Sources */,
 				FP0000010000000000000001 /* FlezcalPickerView.swift in Sources */,

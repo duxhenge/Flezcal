@@ -10,7 +10,7 @@ struct MapTabView: View {
     /// MapTabView centers the camera on this coordinate and runs fetchAndPreScreen.
     @Binding var pendingMapCenter: CLLocationCoordinate2D?
     /// Pre-built results from the Spots tab — when non-nil, injected directly
-    /// into suggestionService instead of running a fresh search.
+    /// into searchResultStore instead of running a fresh search.
     @Binding var pendingMapResults: [SuggestedSpot]?
     /// Shared Flezcal filter state — synced with Spots tab via ContentView.
     @Binding var activePickIDs: Set<String>
@@ -20,7 +20,7 @@ struct MapTabView: View {
     @EnvironmentObject var spotService: SpotService
     @EnvironmentObject var picksService: UserPicksService
     @EnvironmentObject var rankingService: RankingService
-    @StateObject private var suggestionService = SuggestionService()
+    @EnvironmentObject var searchResultStore: SearchResultStore
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var selectedSpot: Spot?
     @State private var selectedSuggestion: SuggestedSpot?
@@ -106,7 +106,7 @@ struct MapTabView: View {
                 }
             }
             // Remove the ghost pin since we're showing the real spot
-            suggestionService.confirm(suggestion)
+            searchResultStore.confirm(suggestion)
             // Open SpotDetailView — same experience as tapping a spot in the list
             selectedSpot = existing
         } else {
@@ -221,7 +221,7 @@ struct MapTabView: View {
             }
             // Show-on-Map pin if separate from suggestions
             if let pinned = showOnMapPin,
-               !suggestionService.suggestions.contains(where: { $0.id == pinned.id }) {
+               !searchResultStore.suggestions.contains(where: { $0.id == pinned.id }) {
                 coordinates.append(pinned.coordinate)
             }
         }
@@ -297,7 +297,7 @@ struct MapTabView: View {
             #if DEBUG
             print("[MapTab] fetchAndPreScreen called with \(picks.count) picks, radius \(picksService.searchRadiusDegrees)")
             #endif
-            await suggestionService.fetchSuggestions(
+            await searchResultStore.fetchSuggestions(
                 in: region,
                 existingSpots: spotService.spots,
                 picks: picks,
@@ -311,13 +311,13 @@ struct MapTabView: View {
             // Instant pass: apply any cached pre-screen results immediately.
             // When the shared htmlCache already has results (e.g. from Explore tab),
             // green pins appear the moment ghost pins load — no waiting for fetches.
-            let pool = suggestionService.fullPool
+            let pool = searchResultStore.fullPool
             let cachedResults = await websiteChecker.cachedPreScreen(
                 suggestions: pool,
                 picks: picks
             )
             if !cachedResults.isEmpty {
-                suggestionService.applyPreScreenResults(cachedResults)
+                searchResultStore.applyPreScreenResults(cachedResults)
                 #if DEBUG
                 let greenCount = cachedResults.values.filter { !$0.isEmpty }.count
                 print("[MapTab] Instant cache hit: \(greenCount) green out of \(cachedResults.count) cached")
@@ -328,9 +328,9 @@ struct MapTabView: View {
             // so green pins appear fast. Wave 2 (remaining pool) is deferred
             // until the user taps "Do a Deeper Scan?".
             preScreenBannerMessage = nil
-            suggestionService.preScreenComplete = false
+            searchResultStore.preScreenComplete = false
             isPreScreening = true
-            var poolToScan = suggestionService.fullPool
+            var poolToScan = searchResultStore.fullPool
             // Include showOnMapPin in the pre-screen batch so it gets
             // scanned along with the other ghost pins.
             if let pinned = showOnMapPin,
@@ -351,7 +351,7 @@ struct MapTabView: View {
                     isPreScreening = false
                     return
                 }
-                suggestionService.applyPreScreenResults(w1Results)
+                searchResultStore.applyPreScreenResults(w1Results)
                 if let pinned = showOnMapPin,
                    let matched = w1Results[pinned.id] {
                     showOnMapPin?.preScreenMatches = matched
@@ -369,10 +369,10 @@ struct MapTabView: View {
                 }
 
                 // Show Wave 1 result banner
-                let likelyCount = suggestionService.suggestions.filter {
+                let likelyCount = searchResultStore.suggestions.filter {
                     $0.preScreenMatches?.isEmpty == false
                 }.count
-                let totalCount = suggestionService.suggestions.count
+                let totalCount = searchResultStore.suggestions.count
                 #if DEBUG
                 print("[PreScreen] Wave 1 complete. \(likelyCount) likely out of \(totalCount) suggestions. \(wave2.count) venues deferred.")
                 #endif
@@ -426,7 +426,7 @@ struct MapTabView: View {
             for (key, value) in w2Results {
                 allResults[key] = value
             }
-            suggestionService.applyPreScreenResults(allResults)
+            searchResultStore.applyPreScreenResults(allResults)
             if let pinned = showOnMapPin,
                let matched = w2Results[pinned.id] {
                 showOnMapPin?.preScreenMatches = matched
@@ -443,10 +443,10 @@ struct MapTabView: View {
             zoomToFitPins()
 
             // Show final result banner
-            let likelyCount = suggestionService.suggestions.filter {
+            let likelyCount = searchResultStore.suggestions.filter {
                 $0.preScreenMatches?.isEmpty == false
             }.count
-            let totalCount = suggestionService.suggestions.count
+            let totalCount = searchResultStore.suggestions.count
             #if DEBUG
             print("[PreScreen] Deeper scan complete. \(likelyCount) likely out of \(totalCount) suggestions.")
             #endif
@@ -509,68 +509,50 @@ struct MapTabView: View {
         }
     }
 
-    /// Ghost pins filtered to exclude any that share a name with a confirmed spot
-    /// that's currently visible on the map (passes category filter). A ghost pin
-    /// for "Havana Cafe" is only suppressed if a confirmed "Havana Cafe" would
-    /// actually show — otherwise the user sees nothing for that venue.
-    /// Name-only matching avoids suppressing different restaurants that happen to
-    /// be near each other — important in small towns where venues cluster.
+    /// Lowercased names of confirmed spots that pass the current category filter.
+    /// Used by the store's filtering methods to suppress ghost pins that duplicate a confirmed spot.
+    private var existingSpotNames: Set<String> {
+        Set(filteredSpots.map { $0.name.lowercased() })
+    }
+
+    /// Ghost pins filtered to exclude any that share a name with a confirmed spot.
+    /// Delegates to SearchResultStore for the canonical implementation.
     private var filteredSuggestions: [SuggestedSpot] {
-        let visibleSpotNames = Set(filteredSpots.map { $0.name.lowercased() })
-        return suggestionService.suggestions.filter { suggestion in
-            !visibleSpotNames.contains(suggestion.name.lowercased())
-        }
+        searchResultStore.filteredSuggestions(existingSpotNames: existingSpotNames)
     }
 
     private var visibleSuggestions: [SuggestedSpot] {
-        guard let region = visibleRegion else { return suggestionService.suggestions }
+        guard let region = visibleRegion else { return searchResultStore.suggestions }
         let b = bounds(for: region)
-        return suggestionService.suggestions.filter { s in
+        return searchResultStore.suggestions.filter { s in
             s.coordinate.latitude  >= b.minLat && s.coordinate.latitude  <= b.maxLat &&
             s.coordinate.longitude >= b.minLon && s.coordinate.longitude <= b.maxLon
         }
     }
 
     /// Ghost pins that matched on pre-screen (green — "possible Flezcal spots").
-    /// Filtered by activePickIDs so the count matches what visibleGhostPins renders.
-    /// A venue green for "cuban_food" shouldn't count when only "flan" is active.
+    /// Delegates to SearchResultStore.splitByPreScreen for the canonical implementation.
     private var possibleSuggestions: [SuggestedSpot] {
-        filteredSuggestions.filter { suggestion in
-            guard let matches = suggestion.preScreenMatches, !matches.isEmpty else { return false }
-            return !matches.isDisjoint(with: activePickIDs)
-        }
+        searchResultStore.splitByPreScreen(activePickIDs: activePickIDs, existingSpotNames: existingSpotNames).matched
     }
 
     /// Ghost pins not yet scanned or scanned with no match (yellow/gray).
-    /// Filtered by activePickIDs so the count matches what visibleGhostPins renders.
+    /// Further filtered by activePickIDs so the count matches visibleGhostPins.
     private var uncheckedSuggestions: [SuggestedSpot] {
-        filteredSuggestions.filter { suggestion in
-            let isGreen = suggestion.preScreenMatches?.isEmpty == false
-            guard !isGreen else { return false }
-            return activePickIDs.contains(suggestion.suggestedCategory.id)
-        }
+        searchResultStore.splitByPreScreen(activePickIDs: activePickIDs, existingSpotNames: existingSpotNames).other
+            .filter { activePickIDs.contains($0.suggestedCategory.id) }
     }
 
     /// Ghost pins filtered by pin-type toggles AND active pick IDs.
-    /// Hidden entirely in Community Map mode (only verified spots shown).
-    /// When all Flezcal pills are off, no ghost pins show.
-    /// Pre-filtered to avoid conditional `if` inside MapContentBuilder's ForEach.
+    /// Delegates to SearchResultStore.visiblePins for the canonical implementation.
     private var visibleGhostPins: [SuggestedSpot] {
-        guard !showCommunityMap else { return [] }
-        guard !activePickIDs.isEmpty else { return [] }
-        return filteredSuggestions.filter { suggestion in
-            let isGreen = suggestion.preScreenMatches?.isEmpty == false
-            // Category filter: green pins match if pre-screen found any active category;
-            // yellow/unchecked pins match if their originating search category is active.
-            let matchesCategory: Bool
-            if isGreen, let matches = suggestion.preScreenMatches {
-                matchesCategory = !matches.isDisjoint(with: activePickIDs)
-            } else {
-                matchesCategory = activePickIDs.contains(suggestion.suggestedCategory.id)
-            }
-            guard matchesCategory else { return false }
-            return isGreen ? showPossiblePins : showUncheckedPins
-        }
+        searchResultStore.visiblePins(
+            activePickIDs: activePickIDs,
+            existingSpotNames: existingSpotNames,
+            showLikely: showPossiblePins,
+            showUnchecked: showUncheckedPins,
+            showCommunityMap: showCommunityMap
+        )
     }
 
     // MARK: - Body
@@ -601,7 +583,7 @@ struct MapTabView: View {
                                 "longitude": center.longitude,
                                 "name": name
                             ]
-                            let allSuggestions = suggestionService.suggestions
+                            let allSuggestions = searchResultStore.suggestions
                             if !allSuggestions.isEmpty {
                                 info["suggestions"] = allSuggestions
                             }
@@ -642,11 +624,11 @@ struct MapTabView: View {
                     suggestion: suggestion,
                     multiResult: multiCheckResult,
                     onConfirm: {
-                        suggestionService.confirm(suggestion)
+                        searchResultStore.confirm(suggestion)
                         multiCheckResult = nil
                     },
                     onDismiss: {
-                        suggestionService.dismiss(suggestion)
+                        searchResultStore.dismiss(suggestion)
                         multiCheckResult = nil
                     },
                     userPicks: picksService.picks
@@ -655,7 +637,7 @@ struct MapTabView: View {
             }
             .sheet(isPresented: $showPinList) {
                 MapPinListView(
-                    suggestionService: suggestionService,
+                    searchResultStore: searchResultStore,
                     spotService: spotService,
                     activePickIDs: activePickIDs,
                     showVerifiedPins: showVerifiedPins,
@@ -757,9 +739,9 @@ struct MapTabView: View {
 
                 // Persistent ghost pin for venues sent from Explore "Show on Map".
                 // Uses showOnMapPin (not selectedSuggestion) so it survives sheet dismissal.
-                // Only shown when the venue isn't already in suggestionService.suggestions.
+                // Only shown when the venue isn't already in searchResultStore.suggestions.
                 if let pinned = showOnMapPin,
-                   !suggestionService.suggestions.contains(where: { $0.id == pinned.id }) {
+                   !searchResultStore.suggestions.contains(where: { $0.id == pinned.id }) {
                     Annotation("", coordinate: pinned.coordinate) {
                         VStack(spacing: 0) {
                             GhostPinView(
@@ -878,7 +860,7 @@ struct MapTabView: View {
                     // with the same venue in the injected results.
                     showOnMapPin = nil
 
-                    suggestionService.injectResults(results)
+                    searchResultStore.injectResults(results)
                     #if DEBUG
                     print("[MapTab] Injected \(results.count) results from Spots tab → filteredSuggestions=\(filteredSuggestions.count) visibleGhostPins=\(visibleGhostPins.count)")
                     for r in results.prefix(10) {
@@ -1051,9 +1033,9 @@ struct MapTabView: View {
                 .animation(.easeInOut(duration: 0.3), value: preScreenBannerMessage)
             }
 
-            // Ghost pin fetch indicator — shows while SuggestionService is
+            // Ghost pin fetch indicator — shows while SearchResultStore is
             // querying Apple Maps, before the pre-screen phase begins.
-            if suggestionService.isLoading && !isPreScreening {
+            if searchResultStore.isLoading && !isPreScreening {
                 VStack {
                     Spacer()
                     HStack(spacing: 6) {
@@ -1072,7 +1054,7 @@ struct MapTabView: View {
                     .padding(.bottom, 24)
                 }
                 .transition(.opacity)
-                .animation(.easeInOut(duration: 0.25), value: suggestionService.isLoading)
+                .animation(.easeInOut(duration: 0.25), value: searchResultStore.isLoading)
             }
 
             // Pre-screen scanning indicator
@@ -1422,10 +1404,10 @@ private struct MapEmptyBanner: View {
 // MARK: - Map Pin List
 
 /// Sheet showing the current map pins as a scrollable list, sorted by distance.
-/// Observes suggestionService directly so pre-screen updates appear in real time
+/// Observes searchResultStore directly so pre-screen updates appear in real time
 /// — true map↔list parity from the same live data source.
 private struct MapPinListView: View {
-    @ObservedObject var suggestionService: SuggestionService
+    @ObservedObject var searchResultStore: SearchResultStore
     @ObservedObject var spotService: SpotService
     let activePickIDs: Set<String>
     let showVerifiedPins: Bool
@@ -1439,27 +1421,16 @@ private struct MapPinListView: View {
     let onSelectSpot: (Spot) -> Void
     let onSelectSuggestion: (SuggestedSpot) -> Void
 
-    /// Same filtering logic as MapTabView.visibleGhostPins — single source of truth.
-    /// Uses verifiedSpots (already filtered by activePickIDs) for name dedup,
-    /// matching MapTabView.filteredSuggestions behavior exactly.
+    /// Delegates to SearchResultStore.visiblePins — single source of truth.
     private var ghostPins: [SuggestedSpot] {
-        guard !showCommunityMap else { return [] }
-        guard !activePickIDs.isEmpty else { return [] }
         let spotNames = Set(verifiedSpots.map { $0.name.lowercased() })
-        let filtered = suggestionService.suggestions.filter { suggestion in
-            !spotNames.contains(suggestion.name.lowercased())
-        }
-        return filtered.filter { suggestion in
-            let isGreen = suggestion.preScreenMatches?.isEmpty == false
-            let matchesCategory: Bool
-            if isGreen, let matches = suggestion.preScreenMatches {
-                matchesCategory = !matches.isDisjoint(with: activePickIDs)
-            } else {
-                matchesCategory = activePickIDs.contains(suggestion.suggestedCategory.id)
-            }
-            guard matchesCategory else { return false }
-            return isGreen ? showPossiblePins : showUncheckedPins
-        }
+        return searchResultStore.visiblePins(
+            activePickIDs: activePickIDs,
+            existingSpotNames: spotNames,
+            showLikely: showPossiblePins,
+            showUnchecked: showUncheckedPins,
+            showCommunityMap: showCommunityMap
+        )
     }
 
     private enum ListItem: Identifiable {
@@ -1619,4 +1590,5 @@ private struct MapPinListView: View {
                websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
         .environmentObject(UserPicksService())
+        .environmentObject(SearchResultStore())
 }

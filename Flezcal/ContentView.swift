@@ -15,6 +15,7 @@ struct ContentView: View {
     @StateObject private var picksService = UserPicksService()
     @StateObject private var rankingService = RankingService()
     @StateObject private var tutorialService = TutorialService()
+    @StateObject private var searchResultStore = SearchResultStore()
     @State private var showWelcome = false
     @State private var showTutorialCurriculum = false
     @State private var selectedTab: Int = AppTab.explore
@@ -30,9 +31,6 @@ struct ContentView: View {
     /// Set by the .showSpotsAtLocation notification — ListTabView picks this up
     /// and sets its customLocation so the Spots tab searches from that area.
     @State private var pendingSpotsLocation: CustomSearchLocation? = nil
-    /// Set by the .showSpotsAtLocation notification when the Map tab includes its
-    /// search results. ListTabView injects these directly instead of fetching fresh.
-    @State private var pendingSpotsResults: [SuggestedSpot]? = nil
     /// Shared Flezcal filter state — which pick pills are active.
     /// Synced between Map and Spots tabs so toggling a pill on one tab
     /// carries over when switching to the other.
@@ -41,12 +39,6 @@ struct ContentView: View {
     /// Community Map mode — shows all verified spots across all 50 categories,
     /// hides ghost pins. Shared between Map and Spots tabs.
     @State private var showCommunityMap = false
-    /// Live results from the Spots tab — kept in sync by ListTabView's onChange.
-    /// Auto-injected into the Map tab when the user switches tabs so both tabs
-    /// show the same data ("one search, both tabs").
-    @State private var latestExploreResults: [SuggestedSpot] = []
-    /// Search center from the Spots tab — used for auto-injection into Map tab.
-    @State private var latestExploreCenter: CLLocationCoordinate2D? = nil
     @State private var showDisplayNamePrompt = false
     @State private var promptedName = ""
 
@@ -75,10 +67,12 @@ struct ContentView: View {
                           showCommunityMap: $showCommunityMap,
                           websiteChecker: websiteChecker)
                     .environmentObject(picksService)
+                    .environmentObject(searchResultStore)
                     .tabItem { Label("Explore", systemImage: "map") }
                     .tag(AppTab.explore)
 
-                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, pendingSpotsResults: $pendingSpotsResults, latestExploreResults: $latestExploreResults, latestExploreCenter: $latestExploreCenter, websiteChecker: websiteChecker)
+                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, websiteChecker: websiteChecker)
+                    .environmentObject(searchResultStore)
                     .tabItem { Label("Spots", systemImage: "list.bullet") }
                     .tag(AppTab.spots)
 
@@ -143,17 +137,9 @@ struct ContentView: View {
             // When picks change (added/removed/swapped), reset all to active
             activePickIDs = Set(newPicks.map(\.id))
         }
-        .onChange(of: selectedTab) { oldTab, newTab in
-            // Auto-sync Spots tab results → Map tab when switching to Map.
-            // This ensures both tabs show the same data without requiring
-            // the user to tap "Show on Map" — fulfills "one search, both tabs".
-            if newTab == AppTab.explore && !latestExploreResults.isEmpty {
-                let center = latestExploreCenter
-                    ?? locationManager.userLocation
-                    ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
-                pendingMapCenter = center
-                pendingMapResults = latestExploreResults
-            }
+        .onChange(of: selectedTab) { _, _ in
+            // Tab-switch auto-sync removed — both tabs share SearchResultStore.
+            // No need to inject results when switching tabs.
         }
         .overlayPreferenceValue(TutorialTargetKey.self) { anchors in
             GeometryReader { geo in
@@ -205,7 +191,6 @@ struct ContentView: View {
                     name: name,
                     coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)
                 )
-                pendingSpotsResults = info["suggestions"] as? [SuggestedSpot]
             }
             selectedTab = AppTab.spots
         }

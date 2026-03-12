@@ -1,5 +1,8 @@
 import Foundation
 @preconcurrency import MapKit
+import CoreLocation
+
+// MARK: - SuggestedSpot
 
 /// A suggested (unconfirmed) spot found via Apple Maps search.
 /// Shown on the map as a ghost pin until a user confirms or dismisses it.
@@ -27,10 +30,28 @@ struct SuggestedSpot: Identifiable, Equatable {
     var address: String { mapItem.placemark.formattedAddress ?? "" }
 }
 
-// MARK: - SuggestionService
+// MARK: - SearchResultStore
 
+/// Single source of truth for search results shared between Map and Spots tabs.
+///
+/// Replaces the previous architecture where `SuggestionService` (Map),
+/// `ExplorePanel` (Spots), and `ContentView` (relay) each held independent
+/// copies of the same data. Now both tabs read from this one store.
+///
+/// **What this store owns:**
+/// - The canonical `[SuggestedSpot]` array (`suggestions` / `fullPool`)
+/// - Pre-screen state (`preScreenComplete`)
+/// - Fetch lifecycle (`isLoading`, `fetchGeneration`)
+/// - Unified filtering (replaces 4 duplicate filter implementations)
+///
+/// **What this store does NOT own:**
+/// - MKLocalSearch configuration (delegated to `LocationSearchService`)
+/// - Website checking / HTML scanning (stays in `WebsiteCheckService`)
+/// - Venue-name search (stays local in `ExplorePanel`)
 @MainActor
-class SuggestionService: ObservableObject {
+class SearchResultStore: ObservableObject {
+    // ── Canonical data ──────────────────────────────────────────────────
+
     @Published var suggestions: [SuggestedSpot] = []
     @Published var isLoading = false
     /// True once the batch homepage pre-screen has finished for the current suggestions.
@@ -42,25 +63,9 @@ class SuggestionService: ObservableObject {
     /// displayed `suggestions` even if they weren't in the closest 25.
     var fullPool: [SuggestedSpot] = []
 
-    /// Injects pre-built results from another tab (e.g. Spots → Map).
-    /// Replaces any existing suggestions and marks pre-screen complete
-    /// since the data already has `preScreenMatches` baked in.
-    /// Deduplicates by venue name (lowercased) to prevent overlapping pins.
-    func injectResults(_ results: [SuggestedSpot]) {
-        // Deduplicate: keep the first occurrence of each venue name.
-        // taggedMultiSearch already deduplicates, but venue-name search
-        // and cross-tab injection can introduce dupes.
-        var seenIDs = Set<String>()
-        let unique = results.filter { seenIDs.insert($0.id).inserted }
-        suggestions = Array(unique.prefix(25))
-        fullPool = unique
-        preScreenComplete = true
-        isLoading = false
-    }
-
     /// Reference center from the last fetch — used for distance sorting
     /// when applying pre-screen results.
-    private var lastFetchCenter: CLLocation?
+    var lastFetchCenter: CLLocation?
 
     /// Dismissed suggestion IDs (stable String IDs, persisted for the session)
     private var dismissedIDs: Set<String> = []
@@ -78,6 +83,8 @@ class SuggestionService: ObservableObject {
     /// Maximum ghost pins shown on the map / in the annotation set.
     private static let maxDisplayPins = 25
 
+    // MARK: - Fetch suggestions
+
     /// Fetch suggestions near the given map region for the user's chosen picks.
     ///
     /// Strategy: run each pick's mapSearchTerms as text queries, collect every
@@ -85,12 +92,6 @@ class SuggestionService: ObservableObject {
     /// center, then show the closest `maxDisplayPins`. The full pool is kept
     /// in `fullPool` so the pre-screen can scan every venue — green matches
     /// are promoted into the displayed set even if they weren't in the initial 25.
-    ///
-    /// No broad or POI-category queries — each pick's mapSearchTerms already
-    /// include the right mix of specific + broad terms (e.g. mezcal's terms
-    /// are ["mezcal", "bar", "liquor store", "restaurante", "restaurant"]).
-    /// This keeps the total MKLocalSearch call count low (~5 per pick) so
-    /// every term actually runs without throttling.
     func fetchSuggestions(in region: MKCoordinateRegion,
                           existingSpots: [Spot],
                           picks: [FoodCategory],
@@ -116,7 +117,7 @@ class SuggestionService: ObservableObject {
         }
 
         #if DEBUG
-        print("[Suggestions] Fetching for region center (\(String(format: "%.4f", region.center.latitude)), \(String(format: "%.4f", region.center.longitude))), picks: \(picks.map(\.id)), \(taggedQueries.count) unique queries: \(taggedQueries.map(\.query))")
+        print("[SearchResultStore] Fetching for region center (\(String(format: "%.4f", region.center.latitude)), \(String(format: "%.4f", region.center.longitude))), picks: \(picks.map(\.id)), \(taggedQueries.count) unique queries: \(taggedQueries.map(\.query))")
         #endif
 
         // Existing confirmed spot names — never re-suggest these.
@@ -128,8 +129,6 @@ class SuggestionService: ObservableObject {
                                       longitude: region.center.longitude)
 
         // ── Delegate to the unified search engine ────────────────────────
-        // taggedMultiSearch applies the correct POI filter, retail bypass,
-        // region handling, distance sort, and hard distance cutoff.
         let taggedResults = await searchService.taggedMultiSearch(
             queries: taggedQueries,
             center: region.center,
@@ -144,7 +143,7 @@ class SuggestionService: ObservableObject {
             let key = name.lowercased()
             if existingNames.contains(key) {
                 #if DEBUG
-                print("[Suggestions] Skipped \"\(name)\" — already a confirmed spot")
+                print("[SearchResultStore] Skipped \"\(name)\" — already a confirmed spot")
                 #endif
                 continue
             }
@@ -158,37 +157,38 @@ class SuggestionService: ObservableObject {
         let found = Array(validPool.prefix(Self.maxDisplayPins))
 
         #if DEBUG
-        print("[Suggestions] Pool: \(pool.count) unique venues → closest \(found.count) kept (full pool: \(validPool.count))")
-        print("[Suggestions] Venues: \(found.map(\.name).joined(separator: ", "))")
+        print("[SearchResultStore] Pool: \(pool.count) unique venues → closest \(found.count) kept (full pool: \(validPool.count))")
+        print("[SearchResultStore] Venues: \(found.map(\.name).joined(separator: ", "))")
         #endif
 
         // A newer fetch started while we were running — discard our results entirely.
         guard fetchGeneration == myGeneration else { isLoading = false; return }
 
-        // Replace suggestions when results are non-empty. taggedMultiSearch
-        // handles throttling internally (continues with remaining queries),
-        // so a partial result set is still the best available.
+        // Replace suggestions when results are non-empty.
         if !found.isEmpty {
             suggestions = found
-            // Store the full pool (distance-sorted, dismissed removed) for pre-screening.
-            // batchPreScreen will scan all of these, and applyPreScreenResults will
-            // promote green matches into the displayed suggestions.
             fullPool = validPool
             lastFetchCenter = regionCenter
         }
         isLoading = false
     }
 
-    /// User said "not accurate" — hide this suggestion for the session
-    func dismiss(_ suggestion: SuggestedSpot) {
-        dismissedIDs.insert(suggestion.id)
-        suggestions.removeAll { $0.id == suggestion.id }
+    // MARK: - Inject cross-tab results
+
+    /// Injects pre-built results from another tab (e.g. Spots → Map).
+    /// Replaces any existing suggestions and marks pre-screen complete
+    /// since the data already has `preScreenMatches` baked in.
+    /// Deduplicates by venue name (lowercased) to prevent overlapping pins.
+    func injectResults(_ results: [SuggestedSpot]) {
+        var seenIDs = Set<String>()
+        let unique = results.filter { seenIDs.insert($0.id).inserted }
+        suggestions = Array(unique.prefix(Self.maxDisplayPins))
+        fullPool = unique
+        preScreenComplete = true
+        isLoading = false
     }
 
-    /// User confirmed a suggestion was added — remove it from suggestions
-    func confirm(_ suggestion: SuggestedSpot) {
-        suggestions.removeAll { $0.id == suggestion.id }
-    }
+    // MARK: - Pre-screen
 
     /// Updates suggestions with batch pre-screen results, promoting green
     /// matches from the full pool into the displayed set.
@@ -207,14 +207,6 @@ class SuggestionService: ObservableObject {
             return updated
         }
 
-        // Re-sort: green matches first (sorted by distance), then remaining
-        // (sorted by distance). Take the best maxDisplayPins.
-        //
-        // Promotion cap: only promote green pins within a reasonable distance
-        // of the search center (the 25th-closest venue's distance × 1.5).
-        // Green pins beyond this cap are interleaved by distance with
-        // non-green pins so a match 30 miles away doesn't displace a
-        // nearby unchecked pin.
         let regionCenter = lastFetchCenter
         func distance(_ s: SuggestedSpot) -> Double {
             guard let center = regionCenter else { return 0 }
@@ -244,16 +236,111 @@ class SuggestionService: ObservableObject {
         let trimmed = Array(combined.prefix(Self.maxDisplayPins))
 
         #if DEBUG
-        print("[ApplyPreScreen] Applying \(results.count) results to pool of \(fullPool.count)")
+        print("[SearchResultStore] Applying \(results.count) pre-screen results to pool of \(fullPool.count)")
         let allGreen = updatedPool.filter { $0.preScreenMatches?.isEmpty == false }
-        print("[ApplyPreScreen] Green matches in pool: \(allGreen.count) (\(nearbyGreen.count) nearby, \(allGreen.count - nearbyGreen.count) beyond cap)")
+        print("[SearchResultStore] Green matches in pool: \(allGreen.count) (\(nearbyGreen.count) nearby, \(allGreen.count - nearbyGreen.count) beyond cap)")
         for s in allGreen {
-            print("[ApplyPreScreen]   GREEN: \(s.name) → \(s.preScreenMatches!) dist=\(Int(distance(s)))m")
+            print("[SearchResultStore]   GREEN: \(s.name) → \(s.preScreenMatches!) dist=\(Int(distance(s)))m")
         }
-        print("[ApplyPreScreen] Promotion cap: \(Int(promotionCap))m, Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
+        print("[SearchResultStore] Promotion cap: \(Int(promotionCap))m, Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
         #endif
 
+        // Update fullPool with pre-screen data so subsequent reads see it
+        fullPool = updatedPool
         suggestions = trimmed
         preScreenComplete = true
+    }
+
+    // MARK: - Dismiss / Confirm
+
+    /// User said "not accurate" — hide this suggestion for the session
+    func dismiss(_ suggestion: SuggestedSpot) {
+        dismissedIDs.insert(suggestion.id)
+        suggestions.removeAll { $0.id == suggestion.id }
+    }
+
+    /// User confirmed a suggestion was added — remove it from suggestions
+    func confirm(_ suggestion: SuggestedSpot) {
+        suggestions.removeAll { $0.id == suggestion.id }
+    }
+
+    // MARK: - Unified Filtering
+
+    /// Ghost pins filtered to exclude any that share a name with a confirmed spot.
+    /// Replaces MapTabView.filteredSuggestions.
+    func filteredSuggestions(existingSpotNames: Set<String>) -> [SuggestedSpot] {
+        suggestions.filter { suggestion in
+            !existingSpotNames.contains(suggestion.name.lowercased())
+        }
+    }
+
+    /// Ghost pins filtered by pin-type toggles AND active pick IDs.
+    /// Replaces MapTabView.visibleGhostPins and MapPinListView.ghostPins.
+    ///
+    /// - Parameters:
+    ///   - activePickIDs: Currently active Flezcal pill IDs
+    ///   - existingSpotNames: Lowercased names of confirmed spots (for dedup)
+    ///   - showLikely: Whether "Likely" (green) pins are toggled on
+    ///   - showUnchecked: Whether "Unchecked" (yellow) pins are toggled on
+    ///   - showCommunityMap: Community map mode hides all ghost pins
+    func visiblePins(activePickIDs: Set<String>,
+                     existingSpotNames: Set<String>,
+                     showLikely: Bool,
+                     showUnchecked: Bool,
+                     showCommunityMap: Bool = false) -> [SuggestedSpot] {
+        guard !showCommunityMap else { return [] }
+        guard !activePickIDs.isEmpty else { return [] }
+        let filtered = filteredSuggestions(existingSpotNames: existingSpotNames)
+        return filtered.filter { suggestion in
+            let isGreen = suggestion.preScreenMatches?.isEmpty == false
+            // Category filter: green pins match if pre-screen found any active category;
+            // yellow/unchecked pins match if their originating search category is active.
+            let matchesCategory: Bool
+            if isGreen, let matches = suggestion.preScreenMatches {
+                matchesCategory = !matches.isDisjoint(with: activePickIDs)
+            } else {
+                matchesCategory = activePickIDs.contains(suggestion.suggestedCategory.id)
+            }
+            guard matchesCategory else { return false }
+            return isGreen ? showLikely : showUnchecked
+        }
+    }
+
+    /// Results split into matched (pre-screen confirmed) and unmatched.
+    /// Replaces ExplorePanel.splitResults and the possibleSuggestions/uncheckedSuggestions
+    /// computed properties on MapTabView.
+    struct SplitResults {
+        let matched: [SuggestedSpot]    // green — preScreenMatches overlaps activePickIDs
+        let other: [SuggestedSpot]      // yellow/gray — not matched or not yet scanned
+    }
+
+    /// Splits suggestions by pre-screen match status.
+    ///
+    /// - Parameters:
+    ///   - activePickIDs: Currently active Flezcal pill IDs
+    ///   - existingSpotNames: Lowercased names of confirmed spots (for dedup)
+    ///   - nameFilter: Optional client-side venue name filter (Spots tab search text)
+    func splitByPreScreen(activePickIDs: Set<String>,
+                          existingSpotNames: Set<String>,
+                          nameFilter: String = "") -> SplitResults {
+        let filtered = filteredSuggestions(existingSpotNames: existingSpotNames)
+        let trimmedNameFilter = nameFilter.trimmingCharacters(in: .whitespaces).lowercased()
+
+        var matched: [SuggestedSpot] = []
+        var other: [SuggestedSpot] = []
+
+        for spot in filtered {
+            // Client-side venue name filter — searchText narrows visible results
+            if !trimmedNameFilter.isEmpty && !spot.name.lowercased().contains(trimmedNameFilter) {
+                continue
+            }
+            if let matches = spot.preScreenMatches, !matches.isEmpty,
+               !matches.isDisjoint(with: activePickIDs) {
+                matched.append(spot)
+            } else {
+                other.append(spot)
+            }
+        }
+        return SplitResults(matched: matched, other: other)
     }
 }
