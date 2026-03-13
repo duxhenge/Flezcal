@@ -1385,7 +1385,7 @@ private struct MapEmptyBanner: View {
     MapTabView(pendingMapSuggestion: .constant(nil),
                pendingMapCenter: .constant(nil),
                pendingMapResults: .constant(nil),
-               activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])),
+               activePickIDs: .constant(Set(["mezcal", "flan", "tacos"])),
                showCommunityMap: .constant(false),
                websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())

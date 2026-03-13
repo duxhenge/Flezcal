@@ -23,7 +23,7 @@ struct FoodCategory: Identifiable, Codable, Equatable, Hashable {
 
     /// Broad keywords that suggest the item might be present but need user verification.
     /// When found without a `websiteKeywords` match, the result is `.relatedFound`
-    /// instead of `.confirmed`. E.g. "tortillas" for Handmade Tortillas, "custard" for Flan.
+    /// instead of `.confirmed`. E.g. "custard" for Flan, "polish food" for Pierogi.
     let relatedKeywords: [String]
 
     /// Short prompt shown on the Add Spot screen (future use).
@@ -84,7 +84,7 @@ struct FoodCategory: Identifiable, Codable, Equatable, Hashable {
 
 // MARK: - Color hex helpers
 
-private extension Color {
+extension Color {
     init(hex: String) {
         let h = hex.trimmingCharacters(in: .init(charactersIn: "#"))
         let val = UInt64(h, radix: 16) ?? 0xFF8000FF
@@ -126,18 +126,6 @@ extension FoodCategory {
         addSpotPrompt: "Search for a bar, restaurant, or store to add it as a mezcal spot."
     )
 
-    static let tortillas = FoodCategory(
-        id: "tortillas",
-        displayName: "Handmade Tortillas",
-        emoji: "🫓",
-        color: Color(red: 0.85, green: 0.65, blue: 0.2),
-        mapSearchTerms: ["tortilleria", "handmade tortillas", "fresh tortillas", "mexican restaurant", "mexican bakery"],
-        websiteKeywords: ["handmade tortillas", "tortillas hechas a mano", "fresh tortillas",
-                          "tortilleria", "house-made tortillas", "homemade tortillas"],
-        relatedKeywords: ["tortillas", "corn tortillas", "flour tortillas"],
-        addSpotPrompt: "Search for a restaurant or tortilleria that makes handmade tortillas."
-    )
-
     // ── Latin / Mexican ─────────────────────────────────────────
 
     static let tacos = FoodCategory(
@@ -145,10 +133,14 @@ extension FoodCategory {
         displayName: "Tacos",
         emoji: "🌮",
         color: Color(red: 0.95, green: 0.6, blue: 0.0),
-        mapSearchTerms: ["tacos", "taqueria", "taco restaurant", "mexican restaurant"],
+        mapSearchTerms: ["tacos", "taqueria", "taco restaurant", "mexican restaurant",
+                         "tortilleria", "handmade tortillas", "fresh tortillas", "mexican bakery"],
         websiteKeywords: ["tacos", "taqueria", "al pastor", "carnitas",
-                          "suadero", "taco menu"],
-        relatedKeywords: ["taco", "mexican street food", "carne asada"],
+                          "suadero", "taco menu",
+                          "handmade tortillas", "tortillas hechas a mano", "fresh tortillas",
+                          "tortilleria", "house-made tortillas", "homemade tortillas"],
+        relatedKeywords: ["taco", "mexican street food", "carne asada",
+                          "tortillas", "corn tortillas", "flour tortillas"],
         addSpotPrompt: "Search for a taqueria or taco spot."
     )
 
@@ -825,10 +817,10 @@ extension FoodCategory {
 
     static let allCategories: [FoodCategory] = [
         // ── 🍽️ Food (24) ──
-        tortillas, tacos, birria, pozole, ceviche, mole, pupusas,
+        tacos, birria, pozole, ceviche, mole, pupusas,
         ramen, sushi, omakase, dimSum, pho, bibimbap, koreanBBQ, dumplings, poke,
         tapas, paella, ibericoHam, woodFiredPizza,
-        oysters, lobsterRolls, tartare, caviar,
+        oysters, lobsterRolls, tartare, caviar, pierogi,
         // ── 🍹 Drinks (14) ──
         mezcal, whiskey, amaro, newEnglandIPA, craftBeer, naturalWine,
         sake, cocktails, specialtyCoffee, boba, tea, matcha, kombucha, cider,
@@ -841,7 +833,7 @@ extension FoodCategory {
     /// Use `allCategories` for the picker grid; use this for decoding/lookup.
     static let allKnownCategories: [FoodCategory] = allCategories + [
         negroni, bourbon, singleMaltScotch, fernetBranca,
-        peamealBacon, mapleSyrup, fugu, pierogi, smashburgers, pizza,
+        peamealBacon, mapleSyrup, fugu, smashburgers, pizza,
     ]
 
     /// Common venue types offered as quick-add suggestions in EditSpotSearchView.
@@ -932,16 +924,16 @@ extension FoodCategory {
 
     // MARK: - Default picks (used when user hasn't chosen yet)
 
-    static let defaultPicks: [FoodCategory] = [mezcal, flan, tortillas]
+    static let defaultPicks: [FoodCategory] = [mezcal, flan, tacos]
 
     // MARK: - Launch categories (locked, non-removable)
 
     /// The 3 categories locked for launch. Always active for every user.
-    static let launchCategories: [FoodCategory] = [mezcal, flan, tortillas]
+    static let launchCategories: [FoodCategory] = [mezcal, flan, tacos]
 
-    /// Whether a category is one of the 3 locked launch defaults.
-    static func isLaunchCategory(_ category: FoodCategory) -> Bool {
-        FeatureFlags.defaultCategories.contains(category.id)
+    /// Whether a category is one of the locked launch defaults (Firestore-driven).
+    @MainActor static func isLaunchCategory(_ category: FoodCategory) -> Bool {
+        FeatureFlagService.shared.defaultCategories.contains(category.id)
     }
 
     // MARK: - Lookup helpers

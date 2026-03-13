@@ -85,6 +85,8 @@ enum FirestoreCollections {
     static let featureFlags      = "feature_flags"      // document under app_config
     static let flezcalRankings   = "flezcal_rankings"    // document under app_config
     static let searchTermOverrides = "search_term_overrides" // document under app_config
+    static let offeringLists     = "offering_lists"         // document under app_config
+    static let validationRules   = "validation_rules"       // document under app_config
     static let betaFeedback      = "beta_feedback"
 
     // Category pick tracking (per-category pick counts with per-user dedup)
@@ -99,12 +101,13 @@ enum AppBranding {
 }
 
 /// Feature flags for phased rollout.
+/// Fallback defaults — runtime reads use `FeatureFlagService.shared` (Firestore-driven).
 enum FeatureFlags {
     /// When true, all 50 categories are selectable.
-    /// When false, only the 3 launch defaults (mezcal, flan, tortillas) are active.
+    /// When false, only the 3 launch defaults (mezcal, flan, tacos) are active.
     static let broadSearchEnabled = true
     /// The IDs of the 3 locked launch categories.
-    static let defaultCategories = ["mezcal", "flan", "tortillas"]
+    static let defaultCategories = ["mezcal", "flan", "tacos"]
 }
 
 /// Tab index constants — update if tab order changes in ContentView.

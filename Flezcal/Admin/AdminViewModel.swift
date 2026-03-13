@@ -344,7 +344,7 @@ class AdminViewModel: ObservableObject {
         var byCat: [String: Int] = [:]
         for spot in spots {
             for cat in spot.categories {
-                byCat[cat.displayName, default: 0] += 1
+                byCat[cat.id, default: 0] += 1
             }
         }
 

@@ -124,6 +124,7 @@ struct AdminSearchTermEditView: View {
     @State private var mapTerms: [String] = []
     @State private var webKeywords: [String] = []
     @State private var relatedKeywords: [String] = []
+    @State private var emojiOverride: String = ""
     @State private var newMapTerm = ""
     @State private var newWebKeyword = ""
     @State private var newRelatedKeyword = ""
@@ -145,7 +146,9 @@ struct AdminSearchTermEditView: View {
         let effectiveMap = existing?.mapSearchTerms ?? defaults.mapSearchTerms
         let effectiveWeb = existing?.websiteKeywords ?? defaults.websiteKeywords
         let effectiveRel = existing?.relatedKeywords ?? defaults.relatedKeywords
-        return mapTerms != effectiveMap || webKeywords != effectiveWeb || relatedKeywords != effectiveRel
+        let effectiveEmoji = existing?.emoji ?? ""
+        return mapTerms != effectiveMap || webKeywords != effectiveWeb
+            || relatedKeywords != effectiveRel || emojiOverride != effectiveEmoji
     }
 
     var body: some View {
@@ -177,6 +180,7 @@ struct AdminSearchTermEditView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 editorHeader
+                emojiSection
                 termSections
                 errorView
                 saveButton
@@ -188,7 +192,7 @@ struct AdminSearchTermEditView: View {
 
     private var editorHeader: some View {
         HStack(spacing: 12) {
-            Text(category.emoji)
+            Text(emojiOverride.isEmpty ? category.emoji : emojiOverride)
                 .font(.largeTitle)
                 .frame(width: 56, height: 56)
                 .background(category.color.opacity(0.15))
@@ -201,6 +205,33 @@ struct AdminSearchTermEditView: View {
                     .font(.subheadline)
                     .foregroundStyle(hasOverride ? .orange : .secondary)
             }
+        }
+    }
+
+    private var emojiSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Emoji Override").font(.headline)
+                    Text("Leave empty to use the hardcoded default (\(category.emoji))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if !emojiOverride.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            emojiOverride = ""
+                        }
+                    } label: {
+                        Text("Reset")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+            TextField("Enter emoji", text: $emojiOverride)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
         }
     }
 
@@ -274,16 +305,24 @@ struct AdminSearchTermEditView: View {
         mapTerms = existing?.mapSearchTerms ?? defaults.mapSearchTerms
         webKeywords = existing?.websiteKeywords ?? defaults.websiteKeywords
         relatedKeywords = existing?.relatedKeywords ?? defaults.relatedKeywords
+        emojiOverride = existing?.emoji ?? ""
     }
 
     private func save() {
         let defaults = hardcodedCategory ?? category
+        let trimmedEmoji = emojiOverride.trimmingCharacters(in: .whitespaces)
+        let emojiValue: String? = trimmedEmoji.isEmpty ? nil : trimmedEmoji
         let override = CategoryTermOverride(
             mapSearchTerms: mapTerms != defaults.mapSearchTerms ? mapTerms : nil,
             websiteKeywords: webKeywords != defaults.websiteKeywords ? webKeywords : nil,
-            relatedKeywords: relatedKeywords != defaults.relatedKeywords ? relatedKeywords : nil
+            relatedKeywords: relatedKeywords != defaults.relatedKeywords ? relatedKeywords : nil,
+            displayName: nil,
+            emoji: emojiValue,
+            colorHex: nil,
+            addSpotPrompt: nil
         )
-        if override.mapSearchTerms == nil && override.websiteKeywords == nil && override.relatedKeywords == nil {
+        if override.mapSearchTerms == nil && override.websiteKeywords == nil
+            && override.relatedKeywords == nil && override.emoji == nil {
             removeOverride()
             return
         }

@@ -107,6 +107,8 @@
 		RK0000010000000000000001 /* RankingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = RK0000020000000000000001 /* RankingService.swift */; };
 		AR0000010000000000000001 /* AdminRankingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AR0000020000000000000001 /* AdminRankingsView.swift */; };
 		AS0000010000000000000001 /* AdminSearchTermsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AS0000020000000000000001 /* AdminSearchTermsView.swift */; };
+		OL0000010000000000000001 /* OfferingListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OL0000020000000000000001 /* OfferingListService.swift */; };
+		VR0000010000000000000001 /* ValidationRuleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VR0000020000000000000001 /* ValidationRuleService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -229,6 +231,8 @@
 		RK0000020000000000000001 /* RankingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingService.swift; sourceTree = "<group>"; };
 		AR0000020000000000000001 /* AdminRankingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminRankingsView.swift; sourceTree = "<group>"; };
 		AS0000020000000000000001 /* AdminSearchTermsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminSearchTermsView.swift; sourceTree = "<group>"; };
+		OL0000020000000000000001 /* OfferingListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferingListService.swift; sourceTree = "<group>"; };
+		VR0000020000000000000001 /* ValidationRuleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidationRuleService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -401,6 +405,8 @@
 				FF0000020000000000000001 /* FeatureFlagService.swift */,
 				ST0000020000000000000001 /* SearchTermOverrideService.swift */,
 				RK0000020000000000000001 /* RankingService.swift */,
+				OL0000020000000000000001 /* OfferingListService.swift */,
+				VR0000020000000000000001 /* ValidationRuleService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -742,6 +748,8 @@
 				RK0000010000000000000001 /* RankingService.swift in Sources */,
 				AR0000010000000000000001 /* AdminRankingsView.swift in Sources */,
 				AS0000010000000000000001 /* AdminSearchTermsView.swift in Sources */,
+				OL0000010000000000000001 /* OfferingListService.swift in Sources */,
+				VR0000010000000000000001 /* ValidationRuleService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

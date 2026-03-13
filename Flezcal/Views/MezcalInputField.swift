@@ -110,12 +110,18 @@ enum CommunityOfferings {
             }
         }
 
-        // Categories with static suggestion lists
-        let staticList: [String]? = switch category {
-        case .mezcal: MezcalBrands.all
-        case .tea:    TeaVarieties.all
-        default:      nil
-        }
+        // Categories with curated suggestion lists (Firestore override > hardcoded > nil)
+        let staticList: [String]? = {
+            if let firestoreList = OfferingListService.overridesSnapshot[category.rawValue],
+               !firestoreList.isEmpty {
+                return firestoreList
+            }
+            return switch category {
+            case .mezcal: MezcalBrands.all
+            case .tea:    TeaVarieties.all
+            default:      nil
+            }
+        }()
 
         if let staticList {
             let staticSet = Set(staticList.map { $0.lowercased() })

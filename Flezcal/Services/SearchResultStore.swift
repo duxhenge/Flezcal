@@ -152,19 +152,29 @@ class SearchResultStore: ObservableObject {
             pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
         }
 
-        // Name-match pass: if a venue's name contains the Flezcal's display name
+        // Name-match pass: if a venue's name contains any of a pick's keywords
         // (word-boundary match), mark it green immediately — no website scan needed.
+        // Checks displayName + websiteKeywords so variant spellings like "Pierogies"
+        // or "Pierogy" are caught, not just the canonical displayName.
+        // Does NOT check mapSearchTerms — those are broad MKLocalSearch queries
+        // (e.g. "polish restaurant") that would false-positive on any "restaurant" name.
         // e.g. "Kung Fu Tea" contains \btea\b → green for Tea category.
         pool = pool.map { suggestion in
             var updated = suggestion
             let venueName = suggestion.name.lowercased()
             var nameMatchedCategories = Set<String>()
             for pick in picks {
-                let term = pick.displayName.lowercased()
-                let escaped = NSRegularExpression.escapedPattern(for: term)
-                if let regex = try? NSRegularExpression(pattern: "\\b\(escaped)\\b", options: .caseInsensitive),
-                   regex.firstMatch(in: venueName, range: NSRange(venueName.startIndex..., in: venueName)) != nil {
-                    nameMatchedCategories.insert(pick.id)
+                let terms = Set(
+                    ([pick.displayName] + pick.websiteKeywords)
+                        .map { $0.lowercased() }
+                ).filter { $0.count >= 3 }
+                for term in terms {
+                    let escaped = NSRegularExpression.escapedPattern(for: term)
+                    if let regex = try? NSRegularExpression(pattern: "\\b\(escaped)\\b", options: .caseInsensitive),
+                       regex.firstMatch(in: venueName, range: NSRange(venueName.startIndex..., in: venueName)) != nil {
+                        nameMatchedCategories.insert(pick.id)
+                        break // One match per pick is enough
+                    }
                 }
             }
             if !nameMatchedCategories.isEmpty {

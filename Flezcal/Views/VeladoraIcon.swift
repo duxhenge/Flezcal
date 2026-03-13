@@ -290,8 +290,8 @@ struct FoodCategoryIcon: View {
         } else if category.id == "flan" {
             FlanIcon(size: size)
         } else if category.id.hasPrefix("custom_") {
-            // Trending Flezcals show 🐛 worm emoji
-            Text("🐛")
+            // Trending Flezcals — admin-configurable default emoji
+            Text(FeatureFlagService.trendingEmojiSnapshot)
                 .font(.system(size: size * 0.75))
                 .frame(width: size, height: size)
         } else {

@@ -12,6 +12,11 @@ import SwiftUI
 /// - `rating` (1-5, optional) = quality score, only valid when `vote == true`
 /// - A rating implies a thumbs-up (verification) — one vote either way, not double-counted
 struct Verification: Identifiable, Codable {
+    /// Current schema version. Increment when changing the Firestore document shape.
+    /// Existing docs without this field are implicitly version 0 (pre-versioning).
+    static let currentSchemaVersion = 1
+
+    var schemaVersion: Int = Self.currentSchemaVersion
     var id: String = UUID().uuidString
     let spotID: String
     let userID: String
@@ -21,6 +26,35 @@ struct Verification: Identifiable, Codable {
     let date: Date             // when first voted
     var updatedDate: Date?     // set when user changes their vote or rating
     var isOriginalVerifier: Bool = false  // true for the first user to verify this category on this spot
+
+    // Custom decoder to handle missing schemaVersion on pre-versioning documents.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 0
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        spotID = try container.decode(String.self, forKey: .spotID)
+        userID = try container.decode(String.self, forKey: .userID)
+        category = try container.decode(String.self, forKey: .category)
+        vote = try container.decode(Bool.self, forKey: .vote)
+        rating = try container.decodeIfPresent(Int.self, forKey: .rating)
+        date = try container.decode(Date.self, forKey: .date)
+        updatedDate = try container.decodeIfPresent(Date.self, forKey: .updatedDate)
+        isOriginalVerifier = try container.decodeIfPresent(Bool.self, forKey: .isOriginalVerifier) ?? false
+    }
+
+    // Memberwise init for programmatic creation
+    init(spotID: String, userID: String, category: String, vote: Bool,
+         rating: Int? = nil, date: Date = Date(), updatedDate: Date? = nil,
+         isOriginalVerifier: Bool = false) {
+        self.spotID = spotID
+        self.userID = userID
+        self.category = category
+        self.vote = vote
+        self.rating = rating
+        self.date = date
+        self.updatedDate = updatedDate
+        self.isOriginalVerifier = isOriginalVerifier
+    }
 }
 
 // MARK: - Verification Status

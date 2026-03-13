@@ -27,12 +27,13 @@ struct CustomCategory: Identifiable, Codable, Equatable, Hashable {
     var normalizedName: String { displayName.lowercased().trimmingCharacters(in: .whitespaces) }
     var color: Color { .cyan }
 
-    /// Default emoji for all trending categories. Promoted Top 50 categories
-    /// get a unique icon assigned; until then, every trending Flezcal uses the worm.
-    static let defaultEmoji = "🐛"
+    /// Default emoji for all trending categories. Admin-configurable via Firestore.
+    /// Promoted Top 50 categories get a unique icon assigned; until then, every
+    /// trending Flezcal uses this emoji.
+    static var defaultEmoji: String { FeatureFlagService.trendingEmojiSnapshot }
 
     /// Display emoji — returns the stored emoji only if it differs from the default
-    /// (i.e. a promoted category with a custom icon). Otherwise returns the worm.
+    /// (i.e. a promoted category with a custom icon). Otherwise returns the trending default.
     var displayEmoji: String { emoji.isEmpty ? Self.defaultEmoji : emoji }
 
     // MARK: - Memberwise init (required because custom init(from:) suppresses it)
@@ -501,8 +502,14 @@ extension CustomCategory {
     /// the term is never persisted or tracked.
     static func isBlocked(_ input: String) -> Bool {
         let lower = input.lowercased()
-        if blockedExact.contains(lower) { return true }
+        let remote = ValidationRuleService.snapshot
+
+        // Union: check BOTH Firestore and hardcoded (defense-in-depth)
+        if blockedExact.contains(lower) || remote.blockedExact.contains(lower) { return true }
         for sub in blockedSubstrings {
+            if lower.contains(sub) { return true }
+        }
+        for sub in remote.blockedSubstrings {
             if lower.contains(sub) { return true }
         }
         return false
@@ -520,7 +527,8 @@ extension CustomCategory {
         if trimmed.count > 30 {
             return "Name must be 30 characters or fewer."
         }
-        if tooGenericTerms.contains(lower) {
+        let remote = ValidationRuleService.snapshot
+        if tooGenericTerms.contains(lower) || remote.tooGenericTerms.contains(lower) {
             return "\"\(trimmed)\" is too broad. Try something more specific like a particular dish."
         }
 

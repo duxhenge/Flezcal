@@ -69,12 +69,27 @@ struct AdminOverviewView: View {
         }
         .refreshable {
             await spotService.fetchSpots()
-            await customService.fetchAll()
-            categoryPickCounts = await UserPicksService.fetchPickCounts()
+            await refreshAllPickData()
         }
         .task {
-            await customService.fetchAll()
+            await refreshAllPickData()
+        }
+        .onReceive(spotService.$spots.dropFirst()) { _ in
+            // Spots changed (snapshot listener) — recompute pick data
+            Task { await refreshAllPickData() }
+        }
+    }
+
+    /// Refreshes both Flezcal pick counts and custom/trending pick data.
+    private func refreshAllPickData() async {
+        await customService.fetchAll()
+        if let since = picksTimeFilter.since {
+            categoryPickCounts = await UserPicksService.fetchPickCounts(since: since)
+        } else {
             categoryPickCounts = await UserPicksService.fetchPickCounts()
+        }
+        if customPicksTimeFilter != .allTime, let since = customPicksTimeFilter.since {
+            filteredCustomPicks = await customService.fetchPickCounts(since: since)
         }
     }
 
@@ -192,18 +207,18 @@ struct AdminOverviewView: View {
                     .padding(.vertical, 4)
             } else {
                 ForEach(Array(ranked.enumerated()), id: \.element.key) { index, item in
+                    let cat = SpotCategory(rawValue: item.key)
                     HStack(spacing: 8) {
                         Text("\(index + 1)")
-                            .font(.caption)
+                            .font(.caption.monospacedDigit())
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
-                            .frame(width: 20, alignment: .trailing)
+                            .frame(minWidth: 24, alignment: .trailing)
+                            .fixedSize()
 
-                        if let cat = FoodCategory.allKnownCategories.first(where: { $0.displayName == item.key }) {
-                            FoodCategoryIcon(category: cat, size: 20)
-                        }
+                        CategoryIcon(category: cat, size: 20)
 
-                        Text(item.key)
+                        Text(cat.displayName)
                             .font(.subheadline)
                             .lineLimit(1)
 
@@ -214,9 +229,10 @@ struct AdminOverviewView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.green)
                             Text("\(item.value)")
-                                .font(.subheadline)
+                                .font(.subheadline.monospacedDigit())
                                 .fontWeight(.medium)
                         }
+                        .fixedSize()
                     }
                 }
             }
@@ -253,18 +269,18 @@ struct AdminOverviewView: View {
                     .padding(.vertical, 4)
             } else {
                 ForEach(Array(categoryPickCounts.prefix(20).enumerated()), id: \.element.categoryID) { index, item in
+                    let cat = SpotCategory(rawValue: item.categoryID)
                     HStack(spacing: 8) {
                         Text("\(index + 1)")
-                            .font(.caption)
+                            .font(.caption.monospacedDigit())
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
-                            .frame(width: 20, alignment: .trailing)
+                            .frame(minWidth: 24, alignment: .trailing)
+                            .fixedSize()
 
-                        if let cat = FoodCategory.allCategories.first(where: { $0.id == item.categoryID }) {
-                            FoodCategoryIcon(category: cat, size: 20)
-                        }
+                        CategoryIcon(category: cat, size: 20)
 
-                        Text(item.displayName)
+                        Text(cat.displayName)
                             .font(.subheadline)
                             .lineLimit(1)
 
@@ -275,9 +291,10 @@ struct AdminOverviewView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
                             Text("\(item.pickCount)")
-                                .font(.subheadline)
+                                .font(.subheadline.monospacedDigit())
                                 .fontWeight(.medium)
                         }
+                        .fixedSize()
                     }
                 }
             }
@@ -445,12 +462,13 @@ struct AdminOverviewView: View {
                     ForEach(Array(ranked.enumerated()), id: \.offset) { index, item in
                         HStack(spacing: 8) {
                             Text("\(index + 1)")
-                                .font(.caption)
+                                .font(.caption.monospacedDigit())
                                 .fontWeight(.bold)
                                 .foregroundStyle(.secondary)
-                                .frame(width: 20, alignment: .trailing)
+                                .frame(minWidth: 24, alignment: .trailing)
+                                .fixedSize()
 
-                            Text(item.category.emoji)
+                            Text(FeatureFlagService.trendingEmojiSnapshot)
 
                             Text(item.category.displayName)
                                 .font(.subheadline)
@@ -463,9 +481,10 @@ struct AdminOverviewView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.cyan)
                                 Text("\(item.pickCount)")
-                                    .font(.subheadline)
+                                    .font(.subheadline.monospacedDigit())
                                     .fontWeight(.medium)
                             }
+                            .fixedSize()
 
                             if item.pickCount >= 5 {
                                 Image(systemName: "arrow.up.circle.fill")

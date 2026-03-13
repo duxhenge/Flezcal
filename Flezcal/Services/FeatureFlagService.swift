@@ -13,6 +13,23 @@ final class FeatureFlagService: ObservableObject {
     @Published var betaFeedbackEnabled = false
     @Published var betaFeedbackPromptText = "How's your Flezcal experience? Share your thoughts!"
 
+    /// When true, all 50 categories are selectable. When false, only launch defaults are active.
+    /// Fail-closed default: true (matches Constants.FeatureFlags.broadSearchEnabled).
+    @Published var broadSearchEnabled = true
+
+    /// The IDs of the locked launch categories (e.g. ["mezcal", "flan", "tacos"]).
+    /// Fail-closed default matches Constants.FeatureFlags.defaultCategories.
+    @Published var defaultCategories = ["mezcal", "flan", "tacos"]
+
+    /// Default emoji for all trending/custom Flezcals. Changeable from admin.
+    /// Fail-closed default: 🐛 (worm).
+    @Published var trendingEmoji = "🐛" {
+        didSet { Self.trendingEmojiSnapshot = trendingEmoji }
+    }
+
+    /// Thread-safe snapshot for non-MainActor access (e.g. SpotCategory.emoji).
+    nonisolated(unsafe) private(set) static var trendingEmojiSnapshot = "🐛"
+
     // MARK: - Private
 
     private let db = Firestore.firestore()
@@ -34,25 +51,38 @@ final class FeatureFlagService: ObservableObject {
                     return
                 }
                 guard let data = snapshot?.data() else {
-                    // Document doesn't exist yet. Keep defaults (feedback disabled).
+                    // Document doesn't exist yet. Keep defaults (feedback disabled, broad search on).
                     #if DEBUG
-                    print("[FeatureFlags] No document found. Defaulting to disabled.")
+                    print("[FeatureFlags] No document found. Using fail-closed defaults.")
                     #endif
                     Task { @MainActor in
                         self.betaFeedbackEnabled = false
+                        self.broadSearchEnabled = true
+                        self.defaultCategories = ["mezcal", "flan", "tacos"]
+                        self.trendingEmoji = "🐛"
                     }
                     return
                 }
                 let enabled = data["betaFeedbackEnabled"] as? Bool ?? false
                 let prompt = data["betaFeedbackPromptText"] as? String ?? ""
+                let broad = data["broadSearchEnabled"] as? Bool ?? true
+                let defaults = data["defaultCategories"] as? [String] ?? ["mezcal", "flan", "tacos"]
+                let trending = data["trendingEmoji"] as? String ?? "🐛"
                 Task { @MainActor in
                     self.betaFeedbackEnabled = enabled
                     if !prompt.isEmpty {
                         self.betaFeedbackPromptText = prompt
                     }
+                    self.broadSearchEnabled = broad
+                    if !defaults.isEmpty {
+                        self.defaultCategories = defaults
+                    }
+                    if !trending.isEmpty {
+                        self.trendingEmoji = trending
+                    }
                 }
                 #if DEBUG
-                print("[FeatureFlags] Updated: betaFeedback=\(enabled) prompt='\(prompt)'")
+                print("[FeatureFlags] Updated: betaFeedback=\(enabled) broadSearch=\(broad) defaults=\(defaults) trendingEmoji=\(trending)")
                 #endif
             }
     }
@@ -74,5 +104,23 @@ final class FeatureFlagService: ObservableObject {
     func setBetaFeedbackPromptText(_ text: String) async throws {
         try await db.collection("app_config").document("feature_flags")
             .setData(["betaFeedbackPromptText": text], merge: true)
+    }
+
+    /// Toggles whether all 50 categories are selectable. Admin-only.
+    func setBroadSearchEnabled(_ enabled: Bool) async throws {
+        try await db.collection("app_config").document("feature_flags")
+            .setData(["broadSearchEnabled": enabled], merge: true)
+    }
+
+    /// Updates the locked launch category IDs. Admin-only.
+    func setDefaultCategories(_ categories: [String]) async throws {
+        try await db.collection("app_config").document("feature_flags")
+            .setData(["defaultCategories": categories], merge: true)
+    }
+
+    /// Updates the default emoji for trending/custom Flezcals. Admin-only.
+    func setTrendingEmoji(_ emoji: String) async throws {
+        try await db.collection("app_config").document("feature_flags")
+            .setData(["trendingEmoji": emoji], merge: true)
     }
 }

@@ -6,6 +6,8 @@ struct AdminFeatureFlagsView: View {
     @StateObject private var feedbackService = BetaFeedbackService()
     @State private var editingPrompt: String = ""
     @State private var isEditingPrompt = false
+    @State private var editingTrendingEmoji: String = ""
+    @State private var isEditingTrendingEmoji = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -84,6 +86,57 @@ struct AdminFeatureFlagsView: View {
                         .font(.caption)
                     }
                 }
+            }
+
+            // MARK: - Trending Emoji
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Trending Flezcal Emoji")
+                            .font(.headline)
+                        Text("Default icon for all custom/trending categories")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(featureFlags.trendingEmoji)
+                        .font(.largeTitle)
+                }
+
+                if isEditingTrendingEmoji {
+                    HStack {
+                        TextField("Emoji", text: $editingTrendingEmoji)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                        Spacer()
+                        Button("Cancel") {
+                            isEditingTrendingEmoji = false
+                        }
+                        Button("Save") {
+                            let emoji = editingTrendingEmoji.trimmingCharacters(in: .whitespaces)
+                            guard !emoji.isEmpty else { return }
+                            Task {
+                                do {
+                                    try await featureFlags.setTrendingEmoji(emoji)
+                                    isEditingTrendingEmoji = false
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                        .fontWeight(.semibold)
+                    }
+                } else {
+                    Button("Change Emoji") {
+                        editingTrendingEmoji = featureFlags.trendingEmoji
+                        isEditingTrendingEmoji = true
+                    }
+                    .font(.caption)
+                }
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("Changes apply to all trending Flezcals across the app in real-time.")
             }
 
             // MARK: - Error

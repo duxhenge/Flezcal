@@ -139,18 +139,20 @@ struct AdminCustomPicksView: View {
                 ForEach(Array(ranked.enumerated()), id: \.offset) { index, item in
                     HStack(spacing: 10) {
                         Text("#\(index + 1)")
-                            .font(.caption)
+                            .font(.caption.monospacedDigit())
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
-                            .frame(width: 28, alignment: .trailing)
+                            .frame(minWidth: 28, alignment: .trailing)
+                            .fixedSize()
 
-                        Text(item.category.emoji)
+                        Text(FeatureFlagService.trendingEmojiSnapshot)
                             .font(.title3)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.category.displayName)
                                 .font(.subheadline)
                                 .fontWeight(.medium)
+                                .lineLimit(1)
                             Text(item.category.websiteKeywords.joined(separator: ", "))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -164,9 +166,10 @@ struct AdminCustomPicksView: View {
                                 .font(.caption)
                                 .foregroundStyle(.cyan)
                             Text("\(item.pickCount)")
-                                .font(.subheadline)
+                                .font(.subheadline.monospacedDigit())
                                 .fontWeight(.semibold)
                         }
+                        .fixedSize()
 
                         if item.pickCount >= 5 {
                             Image(systemName: "arrow.up.circle.fill")

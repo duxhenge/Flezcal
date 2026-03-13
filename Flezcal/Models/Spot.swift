@@ -8,9 +8,14 @@ struct CategoryRating: Codable, Hashable {
 }
 
 struct Spot: Identifiable, Codable, Hashable {
+    /// Current schema version. Increment when changing the Firestore document shape.
+    /// Existing docs without this field are implicitly version 0 (pre-versioning).
+    static let currentSchemaVersion = 1
+
     static func == (lhs: Spot, rhs: Spot) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
+    var schemaVersion: Int = Self.currentSchemaVersion
     var id: String = UUID().uuidString
     let name: String
     let address: String
@@ -117,9 +122,6 @@ struct Spot: Identifiable, Codable, Hashable {
     /// Whether this spot has mezcal
     var hasMezcal: Bool { categories.contains(.mezcal) }
 
-    /// Whether this spot has handmade tortillas
-    var hasTortillas: Bool { categories.contains(.tortillas) }
-
     /// Offerings for a specific category on this spot
     func offerings(for category: SpotCategory) -> [String] {
         offerings?[category.rawValue] ?? []
@@ -219,6 +221,7 @@ struct Spot: Identifiable, Codable, Hashable {
     /// Supports reading old Firestore documents that have a single "category" field
     /// and old "mezcalOfferings" field (migrated to "offerings" dict).
     enum CodingKeys: String, CodingKey {
+        case schemaVersion
         case id, name, address, latitude, longitude, mapItemName
         case categories, category  // "category" for old data
         case addedByUserID, addedDate, averageRating, reviewCount, categoryRatings
@@ -240,7 +243,8 @@ struct Spot: Identifiable, Codable, Hashable {
         case analyticsViewCount, analyticsReservationClicks, geohash4
     }
 
-    init(id: String = UUID().uuidString,
+    init(schemaVersion: Int = Spot.currentSchemaVersion,
+         id: String = UUID().uuidString,
          name: String, address: String,
          latitude: Double, longitude: Double,
          mapItemName: String, categories: [SpotCategory],
@@ -272,6 +276,7 @@ struct Spot: Identifiable, Codable, Hashable {
          analyticsViewCount: Int = 0,
          analyticsReservationClicks: Int = 0,
          geohash4: String? = nil) {
+        self.schemaVersion = schemaVersion
         self.id = id
         self.name = name
         self.address = address
@@ -313,6 +318,7 @@ struct Spot: Identifiable, Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 0
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         address = try container.decode(String.self, forKey: .address)
@@ -380,6 +386,7 @@ struct Spot: Identifiable, Codable, Hashable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(address, forKey: .address)

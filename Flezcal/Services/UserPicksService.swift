@@ -166,13 +166,13 @@ class UserPicksService: ObservableObject {
             return SearchTermOverrideService.shared.defaultCategory(for: pick)
         }
 
-        if FeatureFlags.broadSearchEnabled {
+        if FeatureFlagService.shared.broadSearchEnabled {
             return refreshed
         }
 
         // Launch mode: respect saved picks from launch categories,
         // plus append saved custom picks
-        let launchIDs = Set(FeatureFlags.defaultCategories)
+        let launchIDs = Set(FeatureFlagService.shared.defaultCategories)
         let savedLaunch = refreshed.filter { launchIDs.contains($0.id) }
         let savedCustom = refreshed.filter { !launchIDs.contains($0.id) }
 

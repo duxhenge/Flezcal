@@ -29,7 +29,7 @@ struct MyPicksTabView: View {
                         .padding(.horizontal)
                         .tutorialTarget("pickSubtitle")
 
-                    if FeatureFlags.broadSearchEnabled {
+                    if FeatureFlagService.shared.broadSearchEnabled {
                         broadSearchContent
                     } else {
                         launchModeContent

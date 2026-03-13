@@ -21,7 +21,6 @@ enum SpotCategory: Hashable, Identifiable {
     // Launch trio
     case mezcal
     case flan
-    case tortillas
 
     // Latin / Mexican
     case tacos
@@ -53,6 +52,7 @@ enum SpotCategory: Hashable, Identifiable {
     case lobsterRolls
     case tartare
     case caviar
+    case pierogi
 
     // ── 🍹 DRINKS ─────────────────────────────────────────────
 
@@ -93,7 +93,6 @@ enum SpotCategory: Hashable, Identifiable {
     case peamealBacon
     case mapleSyrup
     case fugu
-    case pierogi
     case smashburgers
     case pizza
 
@@ -115,7 +114,6 @@ enum SpotCategory: Hashable, Identifiable {
         switch self {
         case .mezcal:            return "mezcal"
         case .flan:              return "flan"
-        case .tortillas:         return "tortillas"
         case .tacos:             return "tacos"
         case .birria:            return "birria"
         case .pozole:            return "pozole"
@@ -183,7 +181,6 @@ enum SpotCategory: Hashable, Identifiable {
         switch rawValue {
         case "mezcal":            self = .mezcal
         case "flan":              self = .flan
-        case "tortillas":        self = .tortillas
         case "tacos":            self = .tacos
         case "birria":           self = .birria
         case "pozole":           self = .pozole
@@ -241,18 +238,33 @@ enum SpotCategory: Hashable, Identifiable {
         case "pierogi":          self = .pierogi
         case "smashburgers":     self = .smashburgers
         case "pizza":            self = .pizza
-        default:                 self = .custom(rawValue)
+        default:
+            // Auto-promote: if a "custom_X" value matches a built-in case,
+            // decode as the built-in. Supports dynamic promotion of trending
+            // categories without requiring a Firestore migration first.
+            if rawValue.hasPrefix("custom_") {
+                let stripped = String(rawValue.dropFirst(7))
+                let promoted = SpotCategory(rawValue: stripped)
+                if case .custom = promoted {
+                    // stripped ID isn't built-in either — keep as custom
+                    self = .custom(rawValue)
+                } else {
+                    self = promoted
+                }
+            } else {
+                self = .custom(rawValue)
+            }
         }
     }
 
     /// All built-in cases (excludes `.custom`). Replaces CaseIterable.
     static let allCases: [SpotCategory] = [
         // Food
-        .mezcal, .flan, .tortillas,
+        .mezcal, .flan,
         .tacos, .birria, .pozole, .ceviche, .mole, .pupusas,
         .ramen, .sushi, .omakase, .dimSum, .pho, .bibimbap, .koreanBBQ, .dumplings, .poke,
         .tapas, .paella, .ibericoHam, .woodFiredPizza,
-        .oysters, .lobsterRolls, .tartare, .caviar,
+        .oysters, .lobsterRolls, .tartare, .caviar, .pierogi,
         // Drinks
         .whiskey, .amaro, .newEnglandIPA, .craftBeer, .naturalWine,
         .sake, .cocktails, .specialtyCoffee, .boba, .tea, .matcha, .kombucha, .cider,
@@ -261,7 +273,7 @@ enum SpotCategory: Hashable, Identifiable {
         .mochi, .empanadas, .crepes, .cremeBrulee, .croissants, .tresLeches,
         // Legacy
         .negroni, .bourbon, .singleMaltScotch, .fernetBranca,
-        .peamealBacon, .mapleSyrup, .fugu, .pierogi, .smashburgers, .pizza,
+        .peamealBacon, .mapleSyrup, .fugu, .smashburgers, .pizza,
     ]
 
     /// Whether this is a custom (user-created) category.
@@ -274,7 +286,7 @@ enum SpotCategory: Hashable, Identifiable {
     var isLegacy: Bool {
         switch self {
         case .negroni, .bourbon, .singleMaltScotch, .fernetBranca,
-             .peamealBacon, .mapleSyrup, .fugu, .pierogi, .smashburgers, .pizza:
+             .peamealBacon, .mapleSyrup, .fugu, .smashburgers, .pizza:
             return true
         default:
             return false
@@ -294,11 +306,12 @@ enum SpotCategory: Hashable, Identifiable {
 
     /// Name shown in the UI
     var displayName: String {
+        if let override = SearchTermOverrideService.overridesSnapshot[rawValue],
+           let name = override.displayName { return name }
         switch self {
         // ── Food ──
         case .mezcal:            return "Mezcal"
         case .flan:              return "Flan"
-        case .tortillas:         return "Handmade Tortillas"
         case .tacos:             return "Tacos"
         case .birria:            return "Birria"
         case .pozole:            return "Pozole"
@@ -322,6 +335,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return "Lobster Rolls"
         case .tartare:           return "Tartare"
         case .caviar:            return "Caviar"
+        case .pierogi:           return "Pierogi"
         // ── Drinks ──
         case .whiskey:           return "Whiskey"
         case .amaro:             return "Amaro"
@@ -356,7 +370,6 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return "Peameal Bacon"
         case .mapleSyrup:        return "Maple Syrup"
         case .fugu:              return "Fugu"
-        case .pierogi:           return "Pierogi"
         case .smashburgers:      return "Smashburgers"
         case .pizza:             return "Neapolitan Pizza"
         // ── Custom ──
@@ -367,11 +380,12 @@ enum SpotCategory: Hashable, Identifiable {
 
     /// Emoji shown on map pins, badges, and filter chips
     var emoji: String {
+        if let override = SearchTermOverrideService.overridesSnapshot[rawValue],
+           let e = override.emoji { return e }
         switch self {
         // ── Food ──
         case .mezcal:            return "🥃"
         case .flan:              return "🍮"
-        case .tortillas:         return "🫓"
         case .tacos:             return "🌮"
         case .birria:            return "🫕"
         case .pozole:            return "🍲"
@@ -395,6 +409,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return "🦞"
         case .tartare:           return "🥩"
         case .caviar:            return "🫧"
+        case .pierogi:           return "🥟"
         // ── Drinks ──
         case .whiskey:           return "🥃"
         case .amaro:             return "🌿"
@@ -429,12 +444,11 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return "🥓"
         case .mapleSyrup:        return "🍁"
         case .fugu:              return "🐡"
-        case .pierogi:           return "🥟"
         case .smashburgers:      return "🍔"
         case .pizza:             return "🍕"
-        // ── Custom / Trending — 🐛 worm icon ──
+        // ── Custom / Trending — Firestore-driven default (admin-changeable) ──
         case .custom:
-            return "🐛"
+            return FeatureFlagService.trendingEmojiSnapshot
         }
     }
 
@@ -468,11 +482,12 @@ enum SpotCategory: Hashable, Identifiable {
     /// Accent color for badges, filter chips, and map pins.
     /// Custom / Trending Flezcals use cyan to match the trending tier.
     var color: Color {
+        if let override = SearchTermOverrideService.overridesSnapshot[rawValue],
+           let hex = override.colorHex { return Color(hex: hex) }
         switch self {
         // ── Food ──
         case .mezcal:            return .green
         case .flan:              return .orange
-        case .tortillas:         return Color(red: 0.85, green: 0.65, blue: 0.2)
         case .tacos:             return Color(red: 0.95, green: 0.6, blue: 0.0)
         case .birria:            return Color(red: 0.7, green: 0.1, blue: 0.0)
         case .pozole:            return Color(red: 0.7, green: 0.2, blue: 0.15)
@@ -496,6 +511,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return Color(red: 0.85, green: 0.3, blue: 0.2)
         case .tartare:           return Color(red: 0.6, green: 0.1, blue: 0.1)
         case .caviar:            return Color(red: 0.15, green: 0.2, blue: 0.3)
+        case .pierogi:           return Color(red: 0.8, green: 0.6, blue: 0.15)
         // ── Drinks ──
         case .whiskey:           return Color(red: 0.65, green: 0.38, blue: 0.08)
         case .amaro:             return Color(red: 0.1, green: 0.35, blue: 0.15)
@@ -530,7 +546,6 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return Color(red: 0.7, green: 0.4, blue: 0.2)
         case .mapleSyrup:        return Color(red: 0.72, green: 0.4, blue: 0.08)
         case .fugu:              return Color(red: 0.15, green: 0.4, blue: 0.65)
-        case .pierogi:           return Color(red: 0.8, green: 0.6, blue: 0.15)
         case .smashburgers:      return Color(red: 0.8, green: 0.15, blue: 0.1)
         case .pizza:             return Color(red: 0.8, green: 0.2, blue: 0.1)
         // ── Custom / Trending — cyan to match trending tier ──
@@ -553,12 +568,11 @@ enum SpotCategory: Hashable, Identifiable {
                     "mezcal list", "mezcal menu", "mezcal selection", "agave spirits"]
         case .flan:
             return ["flan", "flan casero"]
-        case .tortillas:
-            return ["handmade tortillas", "tortillas hechas a mano", "fresh tortillas",
-                    "tortilleria", "house-made tortillas", "homemade tortillas"]
         case .tacos:
             return ["tacos", "taqueria", "al pastor", "carnitas",
-                    "suadero", "taco menu"]
+                    "suadero", "taco menu",
+                    "handmade tortillas", "tortillas hechas a mano", "fresh tortillas",
+                    "tortilleria", "house-made tortillas", "homemade tortillas"]
         case .birria:
             return ["birria", "birrieria", "consomé", "birria tacos",
                     "quesabirria", "birria de res"]
@@ -624,6 +638,9 @@ enum SpotCategory: Hashable, Identifiable {
         case .caviar:
             return ["caviar", "osetra", "beluga caviar",
                     "sturgeon caviar", "caviar service"]
+        case .pierogi:
+            return ["pierogi", "pierog", "pierogy", "pierogies",
+                    "polish dumplings", "ruskie", "varenyky", "vareniki"]
         // ── Drinks ──
         case .whiskey:
             return ["whiskey", "whisky", "bourbon", "scotch", "rye whiskey",
@@ -719,9 +736,6 @@ enum SpotCategory: Hashable, Identifiable {
                     "sugar shack", "cabane à sucre", "grade a maple"]
         case .fugu:
             return ["fugu", "pufferfish", "blowfish", "fugu sashimi", "tessa"]
-        case .pierogi:
-            return ["pierogi", "pierog", "pierogy", "pierogies",
-                    "polish dumplings", "ruskie", "varenyky", "vareniki"]
         case .smashburgers:
             return ["smashburger", "smash burger", "smashed burger",
                     "smash patty", "crispy edges"]
@@ -736,11 +750,12 @@ enum SpotCategory: Hashable, Identifiable {
 
     /// Prompt shown on the Add Spot screen
     var addSpotPrompt: String {
+        if let override = SearchTermOverrideService.overridesSnapshot[rawValue],
+           let prompt = override.addSpotPrompt { return prompt }
         switch self {
         // ── Food ──
         case .mezcal:            return "Search for a bar, restaurant, or store to add it as a mezcal spot."
         case .flan:              return "Search for a restaurant or bakery to add it as a flan spot."
-        case .tortillas:         return "Search for a restaurant or tortilleria that makes handmade tortillas."
         case .tacos:             return "Search for a taqueria or taco spot."
         case .birria:            return "Search for a birria restaurant or truck."
         case .pozole:            return "Search for a restaurant that serves pozole."
@@ -764,6 +779,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return "Search for a seafood spot that serves lobster rolls."
         case .tartare:           return "Search for a restaurant that serves tartare."
         case .caviar:            return "Search for a restaurant with a caviar service."
+        case .pierogi:           return "Search for a restaurant that serves pierogi."
         // ── Drinks ──
         case .whiskey:           return "Search for a bar or restaurant with a whiskey selection."
         case .amaro:             return "Search for a bar with an amaro selection."
@@ -798,7 +814,6 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return "Search for a restaurant or deli that serves peameal bacon."
         case .mapleSyrup:        return "Search for a spot that serves or sells real maple syrup."
         case .fugu:              return "Search for a Japanese restaurant that serves fugu."
-        case .pierogi:           return "Search for a restaurant that serves pierogi."
         case .smashburgers:      return "Search for a restaurant that serves smashburgers."
         case .pizza:             return "Search for a Neapolitan or wood-fired pizzeria."
         // ── Custom ──
@@ -817,7 +832,6 @@ enum SpotCategory: Hashable, Identifiable {
         // ── Food ──
         case .mezcal:            return "Mezcal Brands"
         case .flan:              return "Flan Styles"
-        case .tortillas:         return "Tortilla Types"
         case .tacos:             return "Taco Types"
         case .birria:            return "Birria Styles"
         case .pozole:            return "Pozole Styles"
@@ -841,6 +855,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return "Roll Styles"
         case .tartare:           return "Tartare Types"
         case .caviar:            return "Caviar Types"
+        case .pierogi:           return "Pierogi Fillings"
         // ── Drinks ──
         case .whiskey:           return "Whiskey Brands"
         case .amaro:             return "Amaro Brands"
@@ -875,7 +890,6 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return "Serving Styles"
         case .mapleSyrup:        return "Syrup Grades"
         case .fugu:              return "Fugu Preparations"
-        case .pierogi:           return "Pierogi Fillings"
         case .smashburgers:      return "Burger Styles"
         case .pizza:             return "Pizza Styles"
         // ── Custom ──
@@ -889,7 +903,6 @@ enum SpotCategory: Hashable, Identifiable {
         // ── Food ──
         case .mezcal:            return "brand"
         case .flan:              return "style"
-        case .tortillas:         return "type"
         case .tacos:             return "type"
         case .birria:            return "style"
         case .pozole:            return "style"
@@ -913,6 +926,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return "style"
         case .tartare:           return "type"
         case .caviar:            return "type"
+        case .pierogi:           return "filling"
         // ── Drinks ──
         case .whiskey:           return "brand"
         case .amaro:             return "brand"
@@ -947,7 +961,6 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return "style"
         case .mapleSyrup:        return "grade"
         case .fugu:              return "preparation"
-        case .pierogi:           return "filling"
         case .smashburgers:      return "style"
         case .pizza:             return "style"
         // ── Custom ──
@@ -961,8 +974,7 @@ enum SpotCategory: Hashable, Identifiable {
         // ── Food ──
         case .mezcal:            return "e.g. Del Maguey, Vago, Bozal"
         case .flan:              return "e.g. Classic, Coconut, Cheese Flan"
-        case .tortillas:         return "e.g. Corn, Flour, Blue Corn, Handmade"
-        case .tacos:             return "e.g. Al Pastor, Carnitas, Suadero"
+        case .tacos:             return "e.g. Al Pastor, Carnitas, Handmade Tortillas"
         case .birria:            return "e.g. Tacos, Consomme, Quesabirria"
         case .pozole:            return "e.g. Rojo, Verde, Blanco"
         case .ceviche:           return "e.g. Mixto, Pescado, Shrimp"
@@ -985,6 +997,7 @@ enum SpotCategory: Hashable, Identifiable {
         case .lobsterRolls:      return "e.g. Maine Style, Connecticut Style"
         case .tartare:           return "e.g. Steak, Tuna, Salmon"
         case .caviar:            return "e.g. Osetra, Beluga, Paddlefish"
+        case .pierogi:           return "e.g. Potato & Cheese, Sauerkraut, Meat"
         // ── Drinks ──
         case .whiskey:           return "e.g. Maker's Mark, Lagavulin, Nikka"
         case .amaro:             return "e.g. Fernet, Averna, Montenegro, Cynar"
@@ -1019,7 +1032,6 @@ enum SpotCategory: Hashable, Identifiable {
         case .peamealBacon:      return "e.g. Classic Sandwich, Eggs Benedict, Platter"
         case .mapleSyrup:        return "e.g. Grade A Amber, Dark Robust, Maple Candy"
         case .fugu:              return "e.g. Sashimi (Tessa), Hot Pot (Tecchiri)"
-        case .pierogi:           return "e.g. Potato & Cheese, Sauerkraut, Meat"
         case .smashburgers:      return "e.g. Single, Double, Cheese, Special Sauce"
         case .pizza:             return "e.g. Margherita, Marinara, Diavola"
         // ── Custom ──

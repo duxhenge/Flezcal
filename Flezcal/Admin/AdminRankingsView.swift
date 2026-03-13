@@ -159,7 +159,8 @@ struct AdminRankingsView: View {
             Text("#\(entry.rank)")
                 .font(.caption.monospacedDigit().weight(.bold))
                 .foregroundStyle(entry.tier == .top50 ? .orange : .cyan)
-                .frame(width: 36, alignment: .trailing)
+                .frame(minWidth: 36, alignment: .trailing)
+                .fixedSize()
 
             Text(entry.emoji)
                 .font(.title3)
@@ -168,6 +169,7 @@ struct AdminRankingsView: View {
                 HStack(spacing: 4) {
                     Text(entry.displayName)
                         .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
                     if entry.isCustom {
                         Text("Custom")
                             .font(.caption2)
@@ -188,6 +190,7 @@ struct AdminRankingsView: View {
                     .font(.subheadline.monospacedDigit().weight(.semibold))
             }
             .foregroundStyle(.secondary)
+            .fixedSize()
         }
         .padding(.vertical, 2)
     }
@@ -248,7 +251,7 @@ struct AdminRankingsView: View {
             all.append(RankedCategory(
                 categoryID: "custom_\(custom.normalizedName)",
                 displayName: custom.displayName,
-                emoji: custom.emoji,
+                emoji: FeatureFlagService.trendingEmojiSnapshot,
                 rank: 0,
                 pickCount: count,
                 tier: .trending,

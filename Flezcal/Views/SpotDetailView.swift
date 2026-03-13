@@ -49,6 +49,8 @@ struct SpotDetailView: View {
 
     // Owner editing
     @State private var showOwnerEdit = false
+    // Flezcal help popover
+    @State private var showFlezcalHelp = false
 
     /// Live version of this spot from SpotService, reflecting any in-session mutations
     /// (e.g. isCommunityVerified flip, report updates). Falls back to the original `let spot`.
@@ -95,6 +97,20 @@ struct SpotDetailView: View {
                         // Consolidated Flezcal section — verification + ratings in one place
                         if !liveSpot.isClosed && !liveSpot.isHidden {
                             VStack(alignment: .leading, spacing: 10) {
+                                // Section header with help button
+                                HStack {
+                                    Spacer()
+                                    Button {
+                                        showFlezcalHelp = true
+                                    } label: {
+                                        Image(systemName: "questionmark.circle")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("What do these icons mean?")
+                                }
+
                                 ForEach(liveSpot.categories) { category in
                                     FlezcalRowView(
                                         spot: liveSpot,
@@ -147,6 +163,16 @@ struct SpotDetailView: View {
                             .padding(.horizontal, 14)
                             .background(Color(.systemGray6).opacity(0.6))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .alert("Flezcal Icons", isPresented: $showFlezcalHelp) {
+                                Button("Got it", role: .cancel) {}
+                            } message: {
+                                Text("""
+                                ⭐  Rate this Flezcal (1–5 🍮)
+                                ⊘  Report "not here" — helps the community know if a spot no longer offers this
+                                ✏️  Edit your existing rating
+                                ✕  Remove this Flezcal (only if you added it)
+                                """)
+                            }
                         }
 
                         // Fun badges row

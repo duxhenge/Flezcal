@@ -40,7 +40,7 @@ struct FoodCategoryCell: View {
     /// Non-launch categories are locked ("Coming Soon") until broadSearchEnabled.
     /// Launch categories are always freely selectable.
     private var isLocked: Bool {
-        if FeatureFlags.broadSearchEnabled { return false }
+        if FeatureFlagService.shared.broadSearchEnabled { return false }
         if FoodCategory.isLaunchCategory(category) { return false }
         // Non-launch, non-custom categories are "Coming Soon"
         return !category.id.hasPrefix("custom_")

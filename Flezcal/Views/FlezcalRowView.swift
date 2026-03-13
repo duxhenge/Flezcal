@@ -2,14 +2,14 @@ import SwiftUI
 
 /// Consolidated per-category row for SpotDetailView.
 ///
-/// Layout (multi-row, breathing room):
+/// Single-line layout:
 /// ```
-///              🫓 Tortillas                   ← Row 1: emoji + full name, centered
-///   4.2🍮 (7 ratings)        3 confirmed      ← Row 2: aggregate rating | confirm count
-///          ⭐ Tried it? Rate it               ← Row 3 (no engagement): single-line prompt
-///              Not here?                      ← Tertiary report link
-///       Your rating: Road Trip (4🍮) ✏️       ← Row 3 (if rated): tappable to edit
+///   🌮 Tacos    4.2🍮 (7)         ⭐ Rate  ⊘    ×
+///   🫓 Tortillas                   ⭐ Rate  ⊘    ×
+///   🌮 Tacos    Your: 4🍮 ✏️                ⊘    ×
+///   🌮 Tacos    ⚠️ Reported · Undo          ×
 /// ```
+/// Tapping the row or ⭐ expands the RatingFlowView below.
 struct FlezcalRowView: View {
     let spot: Spot
     let category: SpotCategory
@@ -58,80 +58,12 @@ struct FlezcalRowView: View {
             ?? liveSpot.rating(for: category)
     }
 
-    /// Confirmation count from Spot tallies (verificationUpCount)
-    private var confirmCount: Int {
-        liveSpot.verificationUpCount?[category.rawValue] ?? 0
-    }
-
     var body: some View {
-        VStack(spacing: 8) {
-            // ── Row 1: Category name, centered (with optional remove) ─
-            HStack(spacing: 6) {
-                CategoryIcon(category: category, size: 26)
-                    .accessibilityHidden(true)
-                Text(category.displayName)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+        VStack(spacing: 6) {
+            // ── Single-line row ──────────────────────────────────────
+            mainRow
 
-                if canRemove, let onRemove = onRemoveCategory {
-                    Button {
-                        onRemove()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Remove \(category.displayName)")
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-
-            // ── Row 2: Aggregate rating | Confirmation count ────
-            HStack {
-                // Left: Aggregate rating — "4.2🍮 (7 ratings)"
-                if let catRating = aggregateRating, catRating.count > 0 {
-                    HStack(spacing: 3) {
-                        Text(String(format: "%.1f", catRating.average))
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("🍮")
-                            .font(.caption)
-                            .accessibilityHidden(true)
-                        Text("(\(catRating.count) \(catRating.count == 1 ? "rating" : "ratings"))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(String(format: "%.1f", catRating.average)) out of 5, \(catRating.count) \(catRating.count == 1 ? "rating" : "ratings")")
-                }
-
-                Spacer()
-
-                // Right: Confirmation count (social proof)
-                if confirmCount > 0 {
-                    Text("\(confirmCount) confirmed")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                }
-            }
-
-            // ── Row 3: Engagement state ────
-            if authService.isSignedIn {
-                if userVote == false {
-                    unavailableReportedRow
-                } else if let rating = userRating, let level = RatingLevel.from(rating) {
-                    userRatingRow(rating: rating, level: level)
-                } else if userVote == true {
-                    addYourRatingPrompt
-                } else {
-                    compactRatePrompt
-                }
-            } else {
-                compactRatePrompt
-            }
-
-            // ── Inline rating picker (expandable) ───────────────────
+            // ── Expandable rating picker ─────────────────────────────
             if showRatingPicker {
                 RatingFlowView(
                     categoryName: category.displayName,
@@ -149,7 +81,7 @@ struct FlezcalRowView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // ── Inline error message (auto-dismissing) ───────────────
+            // ── Inline error message (auto-dismissing) ──────────────
             if let error = actionError {
                 Text(error)
                     .font(.caption2)
@@ -166,7 +98,6 @@ struct FlezcalRowView: View {
         .onChange(of: authService.isSignedIn) { _, signedIn in
             if signedIn, let action = pendingAction {
                 pendingAction = nil
-                // Small delay so the sign-in sheet finishes dismissing
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     switch action {
                     case .rate:
@@ -181,109 +112,162 @@ struct FlezcalRowView: View {
         }
     }
 
-    // MARK: - Row Subviews
+    // MARK: - Main Row (single line)
 
-    /// State B: User has a rating — show it with edit affordance
-    private func userRatingRow(rating: Int, level: RatingLevel) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showRatingPicker.toggle()
-            }
-        } label: {
+    private var mainRow: some View {
+        HStack(spacing: 8) {
+            // ── Leading: emoji + name ──
+            CategoryIcon(category: category, size: 22)
+                .accessibilityHidden(true)
+            Text(category.displayName)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .lineLimit(1)
+
+            // ── Center: rating or engagement state ──
+            centerContent
+                .layoutPriority(-1)
+
+            Spacer(minLength: 4)
+
+            // ── Trailing: action buttons ──
+            trailingActions
+        }
+    }
+
+    // MARK: - Center Content (inline with the row)
+
+    @ViewBuilder
+    private var centerContent: some View {
+        if userVote == false {
+            // Reported unavailable — compact inline
             HStack(spacing: 4) {
-                Text("Your rating:")
-                    .font(.caption)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                Text("Reported")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text("\(level.label) (\(rating)🍮)")
+                Button {
+                    retractUnavailable()
+                } label: {
+                    Text("Undo")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmitting)
+            }
+            .fixedSize()
+        } else if let rating = userRating {
+            // User has rated — show compact "Your: 4🍮 ✏️"
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showRatingPicker.toggle()
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Text("You: \(rating)🍮")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                    Image(systemName: "pencil")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.blue)
+                }
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel("Your rating: \(rating) out of 5")
+            .accessibilityHint("Double tap to change your rating")
+        } else if let catRating = aggregateRating, catRating.count > 0 {
+            // Has community ratings but user hasn't rated
+            HStack(spacing: 3) {
+                Text(String(format: "%.1f", catRating.average))
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundStyle(.primary)
-                Image(systemName: "pencil")
+                Text("🍮")
                     .font(.caption2)
-                    .foregroundStyle(.blue)
                     .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Your rating: \(level.label), \(rating) out of 5")
-        .accessibilityHint("Double tap to change your rating")
-    }
-
-    /// Default prompt — lightweight single-line rate + tertiary "not here" link
-    private var compactRatePrompt: some View {
-        VStack(spacing: 2) {
-            Button {
-                openRatingPicker()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "star.circle")
-                        .font(.caption)
-                    Text("Tried it? Rate it")
-                        .font(.caption)
-                }
-                .foregroundStyle(.orange)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                if authService.isSignedIn {
-                    markUnavailable()
-                } else {
-                    pendingAction = .markUnavailable
-                    showSignIn = true
-                }
-            } label: {
-                Text("Not here?")
+                Text("(\(catRating.count))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .disabled(isSubmitting)
+            .fixedSize()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(String(format: "%.1f", catRating.average)) out of 5, \(catRating.count) \(catRating.count == 1 ? "rating" : "ratings")")
         }
+        // else: no ratings yet — center stays empty, rate button is in trailing
     }
 
-    /// State C: User voted up (legacy) but hasn't rated yet
-    private var addYourRatingPrompt: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showRatingPicker.toggle()
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "plus.circle")
-                    .font(.caption)
-                Text("Add your rating")
-                    .font(.caption)
-            }
-            .foregroundStyle(.blue)
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .buttonStyle(.plain)
-    }
+    // MARK: - Trailing Actions
 
-    /// State D: User marked this as unavailable
-    private var unavailableReportedRow: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.orange)
-            Text("You reported this as unavailable")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button {
-                retractUnavailable()
-            } label: {
-                Text("Undo")
-                    .font(.caption)
-                    .foregroundStyle(.blue)
+    @ViewBuilder
+    private var trailingActions: some View {
+        HStack(spacing: 12) {
+            // Rate button — shown unless user reported unavailable
+            if userVote != false {
+                if userRating != nil {
+                    // Already rated — no extra button needed (edit is in center)
+                    EmptyView()
+                } else if userVote == true {
+                    // Legacy confirmed, no rating yet
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showRatingPicker.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.body)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add your rating")
+                } else {
+                    // No engagement yet — primary rate CTA
+                    Button {
+                        openRatingPicker()
+                    } label: {
+                        Image(systemName: "star.circle")
+                            .font(.body)
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Rate \(category.displayName)")
+                }
+
+                // "Not here" button
+                Button {
+                    if authService.isSignedIn {
+                        markUnavailable()
+                    } else {
+                        pendingAction = .markUnavailable
+                        showSignIn = true
+                    }
+                } label: {
+                    Image(systemName: "nosign")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmitting)
+                .accessibilityLabel("Report \(category.displayName) as not available here")
             }
-            .buttonStyle(.plain)
-            .disabled(isSubmitting)
+
+            // Remove button (admin / original adder)
+            if canRemove, let onRemove = onRemoveCategory {
+                Button {
+                    onRemove()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(category.displayName)")
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize()
     }
 
     // MARK: - Actions

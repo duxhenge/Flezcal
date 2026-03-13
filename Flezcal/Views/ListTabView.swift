@@ -1790,7 +1790,7 @@ struct ListTabView: View {
 }
 
 #Preview {
-    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tortillas"])), showCommunityMap: .constant(false), pendingSpotsLocation: .constant(nil), websiteChecker: WebsiteCheckService())
+    ListTabView(locationManager: LocationManager(), picksService: UserPicksService(), activePickIDs: .constant(Set(["mezcal", "flan", "tacos"])), showCommunityMap: .constant(false), pendingSpotsLocation: .constant(nil), websiteChecker: WebsiteCheckService())
         .environmentObject(SpotService())
         .environmentObject(SearchResultStore())
 }

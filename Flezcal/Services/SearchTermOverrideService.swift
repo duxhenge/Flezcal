@@ -1,13 +1,20 @@
 import Foundation
 import FirebaseFirestore
 import Combine
+import SwiftUI
 
-/// Per-category search term override loaded from Firestore.
+/// Per-category override loaded from Firestore.
 /// Nil fields mean "keep the hardcoded default."
 struct CategoryTermOverride {
+    // Search terms
     let mapSearchTerms: [String]?
     let websiteKeywords: [String]?
     let relatedKeywords: [String]?
+    // Display metadata
+    let displayName: String?
+    let emoji: String?
+    let colorHex: String?
+    let addSpotPrompt: String?
 }
 
 /// Reads admin search-term overrides from Firestore `app_config/search_term_overrides`.
@@ -59,13 +66,22 @@ final class SearchTermOverrideService: ObservableObject {
                     let mapTerms = dict["mapSearchTerms"] as? [String]
                     let webKeys = dict["websiteKeywords"] as? [String]
                     let related = dict["relatedKeywords"] as? [String]
+                    let displayName = dict["displayName"] as? String
+                    let emoji = dict["emoji"] as? String
+                    let colorHex = dict["colorHex"] as? String
+                    let addSpotPrompt = dict["addSpotPrompt"] as? String
 
                     // Only store if at least one field is present
-                    if mapTerms != nil || webKeys != nil || related != nil {
+                    if mapTerms != nil || webKeys != nil || related != nil
+                        || displayName != nil || emoji != nil || colorHex != nil || addSpotPrompt != nil {
                         parsed[key] = CategoryTermOverride(
                             mapSearchTerms: mapTerms,
                             websiteKeywords: webKeys,
-                            relatedKeywords: related
+                            relatedKeywords: related,
+                            displayName: displayName,
+                            emoji: emoji,
+                            colorHex: colorHex,
+                            addSpotPrompt: addSpotPrompt
                         )
                     }
                 }
@@ -93,13 +109,13 @@ final class SearchTermOverrideService: ObservableObject {
         guard let override = overrides[category.id] ?? overrides[strippedID] else { return category }
         return FoodCategory(
             id: category.id,
-            displayName: category.displayName,
-            emoji: category.emoji,
-            color: category.color,
+            displayName: override.displayName ?? category.displayName,
+            emoji: override.emoji ?? category.emoji,
+            color: override.colorHex.map { Color(hex: $0) } ?? category.color,
             mapSearchTerms: override.mapSearchTerms ?? category.mapSearchTerms,
             websiteKeywords: override.websiteKeywords ?? category.websiteKeywords,
             relatedKeywords: override.relatedKeywords ?? category.relatedKeywords,
-            addSpotPrompt: category.addSpotPrompt
+            addSpotPrompt: override.addSpotPrompt ?? category.addSpotPrompt
         )
     }
 
@@ -115,13 +131,13 @@ final class SearchTermOverrideService: ObservableObject {
             let base = FoodCategory.allKnownCategories.first(where: { $0.id == strippedID }) ?? category
             return FoodCategory(
                 id: category.id,
-                displayName: category.displayName,
-                emoji: category.emoji,
-                color: category.color,
+                displayName: override.displayName ?? category.displayName,
+                emoji: override.emoji ?? category.emoji,
+                color: override.colorHex.map { Color(hex: $0) } ?? category.color,
                 mapSearchTerms: override.mapSearchTerms ?? base.mapSearchTerms,
                 websiteKeywords: override.websiteKeywords ?? base.websiteKeywords,
                 relatedKeywords: override.relatedKeywords ?? base.relatedKeywords,
-                addSpotPrompt: category.addSpotPrompt
+                addSpotPrompt: override.addSpotPrompt ?? category.addSpotPrompt
             )
         }
 
@@ -151,6 +167,10 @@ final class SearchTermOverrideService: ObservableObject {
         if let terms = override.mapSearchTerms { data["mapSearchTerms"] = terms }
         if let keywords = override.websiteKeywords { data["websiteKeywords"] = keywords }
         if let related = override.relatedKeywords { data["relatedKeywords"] = related }
+        if let name = override.displayName { data["displayName"] = name }
+        if let emoji = override.emoji { data["emoji"] = emoji }
+        if let hex = override.colorHex { data["colorHex"] = hex }
+        if let prompt = override.addSpotPrompt { data["addSpotPrompt"] = prompt }
 
         try await db.collection("app_config").document(FirestoreCollections.searchTermOverrides)
             .setData([

@@ -128,6 +128,8 @@ struct ContentView: View {
         .onAppear {
             featureFlags.startListening()
             SearchTermOverrideService.shared.startListening()
+            OfferingListService.shared.startListening()
+            ValidationRuleService.shared.startListening()
             tutorialService.switchTab = { tab in selectedTab = tab }
             // Initialize shared filter state with all picks active
             if !activePickIDsInitialized {
@@ -138,6 +140,8 @@ struct ContentView: View {
         .onDisappear {
             featureFlags.stopListening()
             SearchTermOverrideService.shared.stopListening()
+            OfferingListService.shared.stopListening()
+            ValidationRuleService.shared.stopListening()
         }
         .onChange(of: picksService.picks) { _, newPicks in
             // When picks change (added/removed/swapped), reset all to active
