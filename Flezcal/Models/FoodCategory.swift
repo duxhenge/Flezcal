@@ -80,6 +80,258 @@ struct FoodCategory: Identifiable, Codable, Equatable, Hashable {
 
     static func == (lhs: FoodCategory, rhs: FoodCategory) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+    // MARK: - Derived Display Properties
+    //
+    // These are the single source of truth for category display metadata.
+    // SpotCategory delegates to these via FoodCategory.by(id:).
+    // When dynamic ranking ships, Firestore overrides will layer on top.
+
+    /// Whether this is a legacy category no longer shown in the picker grid.
+    var isLegacy: Bool {
+        let legacyIDs: Set<String> = [
+            "negroni", "bourbon", "single_malt_scotch", "fernet_branca",
+            "peameal_bacon", "maple_syrup", "fugu", "smashburgers", "pizza"
+        ]
+        return legacyIDs.contains(id)
+    }
+
+    /// SF Symbol used where an emoji can't be rendered (e.g. Picker, map Marker).
+    var icon: String {
+        switch id {
+        // Spirit drinks
+        case "mezcal", "whiskey", "amaro", "cider":
+            return "cup.and.saucer"
+        // Beer
+        case "new_england_ipa", "craft_beer":
+            return "mug"
+        // Wine / cocktails / sake
+        case "natural_wine", "sake", "cocktails":
+            return "wineglass"
+        // Coffee / tea
+        case "specialty_coffee", "tea", "matcha":
+            return "cup.and.saucer.fill"
+        // Boba / kombucha
+        case "boba", "kombucha":
+            return "takeoutbag.and.cup.and.straw"
+        // Legacy spirits
+        case "negroni", "bourbon", "single_malt_scotch", "fernet_branca":
+            return "cup.and.saucer"
+        // Everything else (food + sweets + custom)
+        default:
+            return "fork.knife"
+        }
+    }
+
+    /// Label for the offerings section header (e.g. "Mezcal Brands", "Taco Types").
+    var offeringsLabel: String {
+        switch id {
+        // ── Food ──
+        case "mezcal":            return "Mezcal Brands"
+        case "flan":              return "Flan Styles"
+        case "tacos":             return "Taco Types"
+        case "birria":            return "Birria Styles"
+        case "pozole":            return "Pozole Styles"
+        case "ceviche":           return "Ceviche Types"
+        case "mole":              return "Mole Varieties"
+        case "pupusas":           return "Pupusa Fillings"
+        case "ramen":             return "Ramen Styles"
+        case "sushi":             return "Sushi Highlights"
+        case "omakase":           return "Omakase Style"
+        case "dim_sum":           return "Dim Sum Dishes"
+        case "pho":               return "Pho Types"
+        case "bibimbap":          return "Bibimbap Types"
+        case "korean_bbq":        return "BBQ Cuts"
+        case "dumplings":         return "Dumpling Types"
+        case "poke":              return "Poke Bowls"
+        case "tapas":             return "Tapas Dishes"
+        case "paella":            return "Paella Types"
+        case "iberico_ham":       return "Ham Grades"
+        case "wood_fired_pizza":  return "Pizza Styles"
+        case "oysters":           return "Oyster Varieties"
+        case "lobster_rolls":     return "Roll Styles"
+        case "tartare":           return "Tartare Types"
+        case "caviar":            return "Caviar Types"
+        case "pierogi":           return "Pierogi Fillings"
+        // ── Drinks ──
+        case "whiskey":           return "Whiskey Brands"
+        case "amaro":             return "Amaro Brands"
+        case "new_england_ipa":   return "Beer Brands"
+        case "craft_beer":        return "Beer Styles"
+        case "natural_wine":      return "Wine Styles"
+        case "sake":              return "Sake Types"
+        case "cocktails":         return "Cocktail Styles"
+        case "specialty_coffee":  return "Coffee Methods"
+        case "boba":              return "Drink Flavors"
+        case "tea":               return "Tea Varieties"
+        case "matcha":            return "Matcha Types"
+        case "kombucha":          return "Kombucha Flavors"
+        case "cider":             return "Cider Styles"
+        // ── Sweets & Specialty ──
+        case "artisan_chocolate": return "Chocolate Types"
+        case "khachapuri":        return "Khachapuri Styles"
+        case "baklava":           return "Baklava Types"
+        case "churros":           return "Churro Varieties"
+        case "gelato":            return "Gelato Flavors"
+        case "mochi":             return "Mochi Types"
+        case "empanadas":         return "Empanada Fillings"
+        case "crepes":            return "Crepe Varieties"
+        case "creme_brulee":      return "Brûlée Flavors"
+        case "croissants":        return "Croissant Types"
+        case "tres_leches":       return "Tres Leches Styles"
+        // ── Legacy ──
+        case "negroni":           return "Negroni Variations"
+        case "bourbon":           return "Bourbon Brands"
+        case "single_malt_scotch": return "Scotch Brands"
+        case "fernet_branca":     return "Serving Styles"
+        case "peameal_bacon":     return "Serving Styles"
+        case "maple_syrup":       return "Syrup Grades"
+        case "fugu":              return "Fugu Preparations"
+        case "smashburgers":      return "Burger Styles"
+        case "pizza":             return "Pizza Styles"
+        default:                  return "\(displayName) Varieties"
+        }
+    }
+
+    /// Singular label for an offering entry (e.g. "brand", "style", "flavor").
+    var offeringSingular: String {
+        switch id {
+        // ── Food ──
+        case "mezcal":            return "brand"
+        case "flan":              return "style"
+        case "tacos":             return "type"
+        case "birria":            return "style"
+        case "pozole":            return "style"
+        case "ceviche":           return "type"
+        case "mole":              return "variety"
+        case "pupusas":           return "filling"
+        case "ramen":             return "style"
+        case "sushi":             return "highlight"
+        case "omakase":           return "style"
+        case "dim_sum":           return "dish"
+        case "pho":               return "type"
+        case "bibimbap":          return "type"
+        case "korean_bbq":        return "cut"
+        case "dumplings":         return "type"
+        case "poke":              return "bowl"
+        case "tapas":             return "dish"
+        case "paella":            return "type"
+        case "iberico_ham":       return "grade"
+        case "wood_fired_pizza":  return "style"
+        case "oysters":           return "variety"
+        case "lobster_rolls":     return "style"
+        case "tartare":           return "type"
+        case "caviar":            return "type"
+        case "pierogi":           return "filling"
+        // ── Drinks ──
+        case "whiskey":           return "brand"
+        case "amaro":             return "brand"
+        case "new_england_ipa":   return "brand"
+        case "craft_beer":        return "style"
+        case "natural_wine":      return "style"
+        case "sake":              return "type"
+        case "cocktails":         return "style"
+        case "specialty_coffee":  return "method"
+        case "boba":              return "flavor"
+        case "tea":               return "variety"
+        case "matcha":            return "type"
+        case "kombucha":          return "flavor"
+        case "cider":             return "style"
+        // ── Sweets & Specialty ──
+        case "artisan_chocolate": return "type"
+        case "khachapuri":        return "style"
+        case "baklava":           return "type"
+        case "churros":           return "variety"
+        case "gelato":            return "flavor"
+        case "mochi":             return "type"
+        case "empanadas":         return "filling"
+        case "crepes":            return "variety"
+        case "creme_brulee":      return "flavor"
+        case "croissants":        return "type"
+        case "tres_leches":       return "style"
+        // ── Legacy ──
+        case "negroni":           return "variation"
+        case "bourbon":           return "brand"
+        case "single_malt_scotch": return "brand"
+        case "fernet_branca":     return "style"
+        case "peameal_bacon":     return "style"
+        case "maple_syrup":       return "grade"
+        case "fugu":              return "preparation"
+        case "smashburgers":      return "style"
+        case "pizza":             return "style"
+        default:                  return "variety"
+        }
+    }
+
+    /// Example offerings shown as placeholder hints.
+    var offeringsExamples: String {
+        switch id {
+        // ── Food ──
+        case "mezcal":            return "e.g. Del Maguey, Vago, Bozal"
+        case "flan":              return "e.g. Classic, Coconut, Cheese Flan"
+        case "tacos":             return "e.g. Al Pastor, Carnitas, Handmade Tortillas"
+        case "birria":            return "e.g. Tacos, Consomme, Quesabirria"
+        case "pozole":            return "e.g. Rojo, Verde, Blanco"
+        case "ceviche":           return "e.g. Mixto, Pescado, Shrimp"
+        case "mole":              return "e.g. Negro, Poblano, Rojo, Coloradito"
+        case "pupusas":           return "e.g. Revueltas, Queso, Frijol, Loroco"
+        case "ramen":             return "e.g. Tonkotsu, Shoyu, Miso, Tsukemen"
+        case "sushi":             return "e.g. Omakase, Chirashi, Salmon Nigiri"
+        case "omakase":           return "e.g. Edomae, Seasonal, Chef's Special"
+        case "dim_sum":           return "e.g. Har Gow, Siu Mai, Char Siu Bao"
+        case "pho":               return "e.g. Tai (Rare Beef), Dac Biet (Special)"
+        case "bibimbap":          return "e.g. Dolsot (Stone Pot), Vegetable, Beef"
+        case "korean_bbq":        return "e.g. Bulgogi, Galbi, Samgyeopsal"
+        case "dumplings":         return "e.g. Xiaolongbao, Gyoza, Potstickers"
+        case "poke":              return "e.g. Ahi Tuna, Salmon, Spicy Mayo"
+        case "tapas":             return "e.g. Croquetas, Patatas Bravas, Gambas"
+        case "paella":            return "e.g. Valenciana, Mixta, Mariscos"
+        case "iberico_ham":       return "e.g. Bellota, Cebo, Reserva"
+        case "wood_fired_pizza":  return "e.g. Margherita, Marinara, Diavola"
+        case "oysters":           return "e.g. Wellfleet, Kumamoto, Blue Point"
+        case "lobster_rolls":     return "e.g. Maine Style, Connecticut Style"
+        case "tartare":           return "e.g. Steak, Tuna, Salmon"
+        case "caviar":            return "e.g. Osetra, Beluga, Paddlefish"
+        case "pierogi":           return "e.g. Potato & Cheese, Sauerkraut, Meat"
+        // ── Drinks ──
+        case "whiskey":           return "e.g. Maker's Mark, Lagavulin, Nikka"
+        case "amaro":             return "e.g. Fernet, Averna, Montenegro, Cynar"
+        case "new_england_ipa":   return "e.g. Trillium, Tree House, Other Half"
+        case "craft_beer":        return "e.g. Hazy IPA, Stout, Sour, Pilsner"
+        case "natural_wine":      return "e.g. Pet-Nat, Orange, Skin Contact"
+        case "sake":              return "e.g. Junmai, Daiginjo, Nigori"
+        case "cocktails":         return "e.g. Negroni, Old Fashioned, Mezcal Mule"
+        case "specialty_coffee":  return "e.g. Pour Over, Espresso, Cold Brew"
+        case "boba":              return "e.g. Taro, Brown Sugar, Matcha"
+        case "tea":               return "e.g. Earl Grey, Oolong, Pu-erh, Chai"
+        case "matcha":            return "e.g. Ceremonial, Latte, Iced, Koicha"
+        case "kombucha":          return "e.g. Ginger, Lavender, Hibiscus"
+        case "cider":             return "e.g. Dry, Semi-Sweet, Rosé, Perry"
+        // ── Sweets & Specialty ──
+        case "artisan_chocolate": return "e.g. Single Origin Bar, Truffles, Bonbons"
+        case "khachapuri":        return "e.g. Adjaruli, Imeruli, Megruli"
+        case "baklava":           return "e.g. Pistachio, Walnut, Bird's Nest"
+        case "churros":           return "e.g. Classic, Filled, Chocolate Dipped"
+        case "gelato":            return "e.g. Pistachio, Stracciatella, Hazelnut"
+        case "mochi":             return "e.g. Daifuku, Ice Cream, Strawberry"
+        case "empanadas":         return "e.g. Beef, Chicken, Cheese, Spinach"
+        case "crepes":            return "e.g. Nutella, Savory Ham & Cheese"
+        case "creme_brulee":      return "e.g. Classic Vanilla, Lavender, Espresso"
+        case "croissants":        return "e.g. Butter, Almond, Pain au Chocolat"
+        case "tres_leches":       return "e.g. Classic, Chocolate, Strawberry"
+        // ── Legacy ──
+        case "negroni":           return "e.g. Classic, Sbagliato, White, Mezcal"
+        case "bourbon":           return "e.g. Maker's Mark, Woodford Reserve, Buffalo Trace"
+        case "single_malt_scotch": return "e.g. Lagavulin, Macallan, Glenfiddich"
+        case "fernet_branca":     return "e.g. Neat, with Cola, Cocktail"
+        case "peameal_bacon":     return "e.g. Classic Sandwich, Eggs Benedict, Platter"
+        case "maple_syrup":       return "e.g. Grade A Amber, Dark Robust, Maple Candy"
+        case "fugu":              return "e.g. Sashimi (Tessa), Hot Pot (Tecchiri)"
+        case "smashburgers":      return "e.g. Single, Double, Cheese, Special Sauce"
+        case "pizza":             return "e.g. Margherita, Marinara, Diavola"
+        default:                  return "e.g. Add specific varieties or styles"
+        }
+    }
 }
 
 // MARK: - Color hex helpers

@@ -278,27 +278,13 @@ struct CategoryIcon: View {
 }
 
 /// Convenience view that shows the right icon for any FoodCategory.
-/// Mezcal → veladora candle, Flan → flan drawing, trending → 🐛 worm emoji.
-/// Use this everywhere a FoodCategory icon is needed (ghost pins, filter pills, pick cards).
+/// Delegates to CategoryIcon via SpotCategory for unified rendering.
 struct FoodCategoryIcon: View {
     let category: FoodCategory
     var size: CGFloat = 28
 
     var body: some View {
-        if category.id == "mezcal" {
-            VeladoraIcon(size: size)
-        } else if category.id == "flan" {
-            FlanIcon(size: size)
-        } else if category.id.hasPrefix("custom_") {
-            // Trending Flezcals — admin-configurable default emoji
-            Text(FeatureFlagService.trendingEmojiSnapshot)
-                .font(.system(size: size * 0.75))
-                .frame(width: size, height: size)
-        } else {
-            Text(category.emoji)
-                .font(.system(size: size * 0.75))
-                .frame(width: size, height: size)
-        }
+        CategoryIcon(category: SpotCategory(rawValue: category.id), size: size)
     }
 }
 

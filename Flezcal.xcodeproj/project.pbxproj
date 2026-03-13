@@ -52,7 +52,7 @@
 
 		B10000010000000000000019 /* MezcalBrands.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000018 /* MezcalBrands.swift */; };
 		B100000100000000000000C1 /* TeaVarieties.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200000100000000000000C1 /* TeaVarieties.swift */; };
-		B1000001000000000000001A /* MezcalInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000019 /* MezcalInputField.swift */; };
+		B1000001000000000000001A /* OfferingInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000019 /* OfferingInputField.swift */; };
 		B1000001000000000000001B /* ContributorStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001A /* ContributorStats.swift */; };
 		B1000001000000000000001C /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001B /* LeaderboardView.swift */; };
 		B1000001000000000000001D /* VeladoraIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000001C /* VeladoraIcon.swift */; };
@@ -169,7 +169,7 @@
 
 		B20000010000000000000018 /* MezcalBrands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalBrands.swift; sourceTree = "<group>"; };
 		B200000100000000000000C1 /* TeaVarieties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeaVarieties.swift; sourceTree = "<group>"; };
-		B20000010000000000000019 /* MezcalInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MezcalInputField.swift; sourceTree = "<group>"; };
+		B20000010000000000000019 /* OfferingInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferingInputField.swift; sourceTree = "<group>"; };
 		B2000001000000000000001A /* ContributorStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContributorStats.swift; sourceTree = "<group>"; };
 		B2000001000000000000001B /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
 		B2000001000000000000001C /* VeladoraIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeladoraIcon.swift; sourceTree = "<group>"; };
@@ -357,7 +357,7 @@
 				B20000010000000000000014 /* BusinessSearchView.swift */,
 				B20000010000000000000016 /* StarRatingView.swift */,
 
-				B20000010000000000000019 /* MezcalInputField.swift */,
+				B20000010000000000000019 /* OfferingInputField.swift */,
 				B2000001000000000000001B /* LeaderboardView.swift */,
 				B2000001000000000000001C /* VeladoraIcon.swift */,
 				B2000001000000000000001E /* SuggestedSpotSheet.swift */,
@@ -681,7 +681,7 @@
 
 				B10000010000000000000019 /* MezcalBrands.swift in Sources */,
 				B100000100000000000000C1 /* TeaVarieties.swift in Sources */,
-				B1000001000000000000001A /* MezcalInputField.swift in Sources */,
+				B1000001000000000000001A /* OfferingInputField.swift in Sources */,
 				B1000001000000000000001B /* ContributorStats.swift in Sources */,
 				B1000001000000000000001C /* LeaderboardView.swift in Sources */,
 				B1000001000000000000001D /* VeladoraIcon.swift in Sources */,
@@ -929,7 +929,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -966,7 +966,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

@@ -69,24 +69,6 @@ struct OfferingInputField: View {
     }
 }
 
-// MARK: - Legacy wrapper
-
-/// Convenience wrapper that uses the static MezcalBrands list + VeladoraIcon.
-/// Keeps existing call sites working without changes during migration.
-struct MezcalInputField: View {
-    @Binding var text: String
-    let placeholder: String
-
-    var body: some View {
-        OfferingInputField(
-            text: $text,
-            placeholder: placeholder,
-            knownOfferings: MezcalBrands.all,
-            useVeladoraIcon: true
-        )
-    }
-}
-
 // MARK: - Community offerings aggregator
 
 /// Aggregates offerings across all saved spots for a given category,
