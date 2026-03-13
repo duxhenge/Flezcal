@@ -84,6 +84,7 @@ enum FirestoreCollections {
     static let appConfig         = "app_config"
     static let featureFlags      = "feature_flags"      // document under app_config
     static let flezcalRankings   = "flezcal_rankings"    // document under app_config
+    static let searchTermOverrides = "search_term_overrides" // document under app_config
     static let betaFeedback      = "beta_feedback"
 
     // Category pick tracking (per-category pick counts with per-user dedup)

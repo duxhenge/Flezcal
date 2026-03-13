@@ -32,6 +32,7 @@ class UserPicksService: ObservableObject {
     /// customized via EditSpotSearchView. These are NOT refreshed from the
     /// static definition on load — the user's edits take precedence.
     private let customizedTermsKey = "userCustomizedTermsIDs"
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         picks = loadPicks()
@@ -39,6 +40,15 @@ class UserPicksService: ObservableObject {
         // Clean up legacy preferences
         UserDefaults.standard.removeObject(forKey: "userSearchRadiusDegrees")
         UserDefaults.standard.removeObject(forKey: "userCustomPicks")
+
+        // Re-apply picks when admin overrides change mid-session
+        SearchTermOverrideService.shared.$overrides
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.refreshPicksFromOverrides()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Public API
@@ -102,6 +112,20 @@ class UserPicksService: ObservableObject {
         Set(UserDefaults.standard.stringArray(forKey: customizedTermsKey) ?? [])
     }
 
+    /// Re-applies admin overrides to current picks when Firestore overrides change mid-session.
+    /// User-customized picks are left untouched (same precedence as loadPicks).
+    private func refreshPicksFromOverrides() {
+        let customizedIDs = loadCustomizedTermsIDs()
+        let refreshed = picks.map { pick -> FoodCategory in
+            guard !customizedIDs.contains(pick.id) else { return pick }
+            return SearchTermOverrideService.shared.defaultCategory(for: pick)
+        }
+        picks = refreshed
+        FoodCategory.registerUserPicks(picks)
+        #if DEBUG
+        print("[UserPicks] Refreshed picks from admin overrides")
+        #endif
+    }
 
     // MARK: - Persistence
 
@@ -121,30 +145,25 @@ class UserPicksService: ObservableObject {
             return FoodCategory.defaultPicks
         }
 
-        // Refresh built-in categories from static definitions so code updates
-        // to mapSearchTerms/websiteKeywords propagate automatically.
+        // Refresh terms from the single source of truth:
+        // Firestore admin override > hardcoded static definition > saved pick.
         // User-customized categories (edited via EditSpotSearchView) keep their terms.
         let customizedIDs = loadCustomizedTermsIDs()
         let refreshed = saved.map { pick -> FoodCategory in
-            // Custom user-created categories — refresh color to match current
-            // CustomCategory.color (prevents stale serialized colors persisting).
-            if pick.id.hasPrefix("custom_") {
-                return FoodCategory(
-                    id: pick.id,
-                    displayName: pick.displayName,
-                    emoji: pick.emoji,
-                    color: .cyan,
-                    mapSearchTerms: pick.mapSearchTerms,
-                    websiteKeywords: pick.websiteKeywords,
-                    relatedKeywords: pick.relatedKeywords,
-                    addSpotPrompt: pick.addSpotPrompt
-                )
+            // User intentionally customized this one — keep their edits (just refresh color for custom_)
+            if customizedIDs.contains(pick.id) {
+                if pick.id.hasPrefix("custom_") {
+                    return FoodCategory(
+                        id: pick.id, displayName: pick.displayName, emoji: pick.emoji,
+                        color: .cyan, mapSearchTerms: pick.mapSearchTerms,
+                        websiteKeywords: pick.websiteKeywords, relatedKeywords: pick.relatedKeywords,
+                        addSpotPrompt: pick.addSpotPrompt
+                    )
+                }
+                return pick
             }
-            // User intentionally customized this one — keep their edits
-            guard !customizedIDs.contains(pick.id) else { return pick }
-            // Refresh from static definition if available
-            guard let canonical = FoodCategory.allKnownCategories.first(where: { $0.id == pick.id }) else { return pick }
-            return canonical
+            // Not customized — use canonical defaults (Firestore override > hardcoded)
+            return SearchTermOverrideService.shared.defaultCategory(for: pick)
         }
 
         if FeatureFlags.broadSearchEnabled {

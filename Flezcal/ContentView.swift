@@ -127,6 +127,7 @@ struct ContentView: View {
         .environmentObject(rankingService)
         .onAppear {
             featureFlags.startListening()
+            SearchTermOverrideService.shared.startListening()
             tutorialService.switchTab = { tab in selectedTab = tab }
             // Initialize shared filter state with all picks active
             if !activePickIDsInitialized {
@@ -134,10 +135,19 @@ struct ContentView: View {
                 activePickIDsInitialized = true
             }
         }
-        .onDisappear { featureFlags.stopListening() }
+        .onDisappear {
+            featureFlags.stopListening()
+            SearchTermOverrideService.shared.stopListening()
+        }
         .onChange(of: picksService.picks) { _, newPicks in
             // When picks change (added/removed/swapped), reset all to active
             activePickIDs = Set(newPicks.map(\.id))
+            // Clear HTML cache so pages are re-scanned with updated keywords
+            Task { await websiteChecker.clearHTMLCache() }
+        }
+        .onReceive(SearchTermOverrideService.shared.$overrides.dropFirst()) { _ in
+            // Admin changed search terms in Firestore — clear scan cache
+            Task { await websiteChecker.clearHTMLCache() }
         }
         .onChange(of: selectedTab) { _, _ in
             // Tab-switch auto-sync removed — both tabs share SearchResultStore.

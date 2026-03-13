@@ -21,7 +21,14 @@ class SpotService: ObservableObject {
                 .getDocuments()
 
             spots = snapshot.documents.compactMap { doc in
-                try? doc.data(as: Spot.self)
+                do {
+                    return try doc.data(as: Spot.self)
+                } catch {
+                    #if DEBUG
+                    print("[SpotService] ⚠️ Failed to decode doc \(doc.documentID): \(error)")
+                    #endif
+                    return nil
+                }
             }
 
             // Clean up comma-separated mezcal entries, then deduplicate spots

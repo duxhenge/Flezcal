@@ -189,29 +189,10 @@ struct EditSpotSearchView: View {
 
     private func resetToDefaults() {
         wasResetToDefaults = true
-        // For built-in picks, restore original hardcoded mapSearchTerms.
-        // For custom picks, regenerate using the same logic as CustomCategory.create.
-        if let original = FoodCategory.allCategories.first(where: { $0.id == category.id }) {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                searchTerms = original.mapSearchTerms
-            }
-        } else {
-            let lower = category.displayName.lowercased()
-            let terms: [String]
-            if CustomCategory.isLikelyAlcoholic(lower) {
-                var t = [lower, "bar", "liquor store", "restaurant"]
-                if CustomCategory.isLikelyWine(lower) {
-                    t.insert("wine shop", at: 2)
-                } else if CustomCategory.isLikelyBeer(lower) {
-                    t.insert("brewery", at: 2)
-                }
-                terms = t
-            } else {
-                terms = [lower, "\(lower) restaurant", "restaurant", "cafe"]
-            }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                searchTerms = terms
-            }
+        // Single source of truth: Firestore override > hardcoded static > generated fallback.
+        let canonical = SearchTermOverrideService.shared.defaultCategory(for: category)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            searchTerms = canonical.mapSearchTerms
         }
     }
 

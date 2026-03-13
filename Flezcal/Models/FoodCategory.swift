@@ -118,7 +118,7 @@ extension FoodCategory {
         displayName: "Mezcal",
         emoji: "🥃",
         color: .green,
-        mapSearchTerms: ["mezcal", "mezcal bar", "tequila bar", "liquor store", "wine spirits"],
+        mapSearchTerms: ["mezcal", "mezcal bar", "tequila bar", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["mezcal", "mezcalería", "mezcales",
                           "mezcal list", "mezcal menu", "mezcal selection",
                           "agave spirits"],
@@ -430,7 +430,7 @@ extension FoodCategory {
         displayName: "Whiskey",
         emoji: "🥃",
         color: Color(red: 0.65, green: 0.38, blue: 0.08),
-        mapSearchTerms: ["whiskey bar", "bourbon bar", "distillery", "whiskey", "liquor store", "wine spirits"],
+        mapSearchTerms: ["whiskey bar", "bourbon bar", "distillery", "whiskey", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["whiskey", "whisky", "bourbon", "scotch", "rye whiskey",
                           "single malt", "whiskey selection", "whiskey list"],
         relatedKeywords: ["spirits", "brown spirits", "dram"],
@@ -442,7 +442,7 @@ extension FoodCategory {
         displayName: "Amaro",
         emoji: "🌿",
         color: Color(red: 0.1, green: 0.35, blue: 0.15),
-        mapSearchTerms: ["amaro", "cocktail bar", "liquor store", "wine spirits"],
+        mapSearchTerms: ["amaro", "cocktail bar", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["amaro", "amari", "digestif", "digestivo",
                           "fernet", "averna", "montenegro"],
         relatedKeywords: ["bitter", "aperitif", "italian liqueur"],
@@ -454,7 +454,7 @@ extension FoodCategory {
         displayName: "New England IPA",
         emoji: "🍺",
         color: Color(red: 0.85, green: 0.65, blue: 0.15),
-        mapSearchTerms: ["craft beer", "brewery", "taproom", "beer bar", "brewpub", "liquor store", "wine spirits"],
+        mapSearchTerms: ["craft beer", "brewery", "taproom", "beer bar", "brewpub", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["new england ipa", "neipa", "hazy ipa",
                           "juicy ipa", "hazy pale ale"],
         relatedKeywords: ["ipa", "craft beer", "hazy"],
@@ -466,7 +466,7 @@ extension FoodCategory {
         displayName: "Craft Beer",
         emoji: "🍺",
         color: Color(red: 0.8, green: 0.5, blue: 0.1),
-        mapSearchTerms: ["craft beer", "brewery", "taproom", "beer bar", "brewpub", "liquor store", "wine spirits"],
+        mapSearchTerms: ["craft beer", "brewery", "taproom", "beer bar", "brewpub", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["craft beer", "microbrewery", "taproom", "craft ale",
                           "local brew", "on tap", "draft list"],
         relatedKeywords: ["brewery", "beer garden", "tap list"],
@@ -478,7 +478,7 @@ extension FoodCategory {
         displayName: "Natural Wine",
         emoji: "🍷",
         color: Color(red: 0.6, green: 0.1, blue: 0.3),
-        mapSearchTerms: ["natural wine", "wine bar", "wine shop", "wine store", "liquor store", "wine spirits"],
+        mapSearchTerms: ["natural wine", "wine bar", "wine shop", "wine store", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["natural wine", "natty wine", "orange wine",
                           "biodynamic wine", "skin contact", "low intervention"],
         relatedKeywords: ["organic wine", "pet-nat", "minimal intervention"],
@@ -490,7 +490,7 @@ extension FoodCategory {
         displayName: "Sake",
         emoji: "🍶",
         color: Color(red: 0.2, green: 0.5, blue: 0.7),
-        mapSearchTerms: ["sake", "sake bar", "izakaya", "liquor store", "wine spirits"],
+        mapSearchTerms: ["sake", "sake bar", "izakaya", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["sake", "nihonshu", "junmai", "sake selection",
                           "sake list", "sake bar", "daiginjo"],
         relatedKeywords: ["japanese rice wine", "sake pairing"],
@@ -502,7 +502,7 @@ extension FoodCategory {
         displayName: "Craft Cocktails",
         emoji: "🍸",
         color: Color(red: 0.2, green: 0.3, blue: 0.7),
-        mapSearchTerms: ["cocktail bar", "craft cocktails", "speakeasy", "cocktail lounge", "liquor store", "wine spirits"],
+        mapSearchTerms: ["cocktail bar", "craft cocktails", "speakeasy", "cocktail lounge", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["craft cocktail", "mixology", "artisan cocktail",
                           "cocktail menu", "signature cocktail", "house cocktail"],
         relatedKeywords: ["speakeasy", "cocktail lounge", "mixologist"],
@@ -575,7 +575,7 @@ extension FoodCategory {
         displayName: "Cider",
         emoji: "🍎",
         color: Color(red: 0.7, green: 0.3, blue: 0.15),
-        mapSearchTerms: ["cider", "cidery", "cider house", "hard cider", "liquor store", "wine spirits"],
+        mapSearchTerms: ["cider", "cidery", "cider house", "hard cider", "nightlife", "liquor store", "wine spirits"],
         websiteKeywords: ["cider", "hard cider", "craft cider", "cidery",
                           "cider house", "cider on tap"],
         relatedKeywords: ["apple cider", "perry", "cider tasting"],
@@ -797,9 +797,11 @@ extension FoodCategory {
     static let pierogi = FoodCategory(
         id: "pierogi", displayName: "Pierogi", emoji: "🥟",
         color: Color(red: 0.8, green: 0.6, blue: 0.15),
-        mapSearchTerms: ["pierogi", "polish restaurant", "polish food"],
-        websiteKeywords: ["pierogi", "pierog", "pierogy", "pierogies", "polish dumplings", "ruskie"],
-        relatedKeywords: ["polish food", "dumplings"],
+        mapSearchTerms: ["pierogi", "polish restaurant", "polish food",
+                         "ukrainian restaurant", "eastern european restaurant"],
+        websiteKeywords: ["pierogi", "pierog", "pierogy", "pierogies", "polish dumplings",
+                          "ruskie", "varenyky", "vareniki"],
+        relatedKeywords: ["polish food", "ukrainian food", "dumplings"],
         addSpotPrompt: "Search for a restaurant that serves pierogi."
     )
     static let smashburgers = FoodCategory(
@@ -905,10 +907,12 @@ extension FoodCategory {
     /// Used by WebsiteCheckService.scanForCategories() to include user-edited
     /// keywords and user-created categories in HTML keyword matching.
     @MainActor static var allScannable: [FoodCategory] {
+        let overrideService = SearchTermOverrideService.shared
         let builtIn = allCategories.map { cat in
-            modifiedBuiltInPicks[cat.id] ?? cat
+            // User modifications take priority over admin overrides
+            modifiedBuiltInPicks[cat.id] ?? overrideService.applyOverride(to: cat)
         }
-        return builtIn + activeCustomPicks
+        return builtIn + activeCustomPicks.map { overrideService.applyOverride(to: $0) }
     }
 
     /// Registers the user's picks so modified keywords are included in website scanning.

@@ -538,8 +538,14 @@ enum SpotCategory: Hashable, Identifiable {
         }
     }
 
-    /// Keywords scanned on a venue's homepage (mirrors FoodCategory.websiteKeywords)
+    /// Keywords scanned on a venue's homepage (mirrors FoodCategory.websiteKeywords).
+    /// Checks admin Firestore overrides first, then falls back to hardcoded values.
     var websiteKeywords: [String] {
+        // Admin override takes precedence over hardcoded values
+        if let override = SearchTermOverrideService.overridesSnapshot[rawValue],
+           let keywords = override.websiteKeywords {
+            return keywords
+        }
         switch self {
         // ── Food ──
         case .mezcal:
@@ -715,7 +721,7 @@ enum SpotCategory: Hashable, Identifiable {
             return ["fugu", "pufferfish", "blowfish", "fugu sashimi", "tessa"]
         case .pierogi:
             return ["pierogi", "pierog", "pierogy", "pierogies",
-                    "polish dumplings", "ruskie"]
+                    "polish dumplings", "ruskie", "varenyky", "vareniki"]
         case .smashburgers:
             return ["smashburger", "smash burger", "smashed burger",
                     "smash patty", "crispy edges"]

@@ -34,7 +34,7 @@ class LocationSearchService: ObservableObject {
     /// POI set (e.g. "Duxbury Wine and Spirits" may not be tagged as `.store`).
     /// Without this, the POI filter silently drops liquor stores, wine shops, etc.
     private static let unfiltered: Set<String> = [
-        "liquor store", "wine shop", "bottle shop", "wine spirits",
+        "liquor store", "wine shop", "bottle shop", "wine spirits", "nightlife",
     ]
 
     private static func makeRegion(center: CLLocationCoordinate2D?, radius: Double = 0.5) -> MKCoordinateRegion {

@@ -106,7 +106,7 @@ NOMINATIM_DELAY_SEC = 1.1         # Nominatim rate-limit: 1 request/second
 BRAVE_BASE_URL = "https://api.search.brave.com/res/v1/web/search"
 BRAVE_DELAY_SEC = 0.5
 
-VALID_CATEGORIES = {"mezcal", "flan"}
+VALID_CATEGORIES = {"mezcal", "flan", "natural_wine", "pierogi"}
 SUPPORTED_COUNTRIES = {"US", "CA", "MX"}
 
 

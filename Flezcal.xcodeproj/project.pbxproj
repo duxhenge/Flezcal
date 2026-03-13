@@ -92,6 +92,7 @@
 		UT0000010000000000000004 /* ClosureReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UT0000020000000000000004 /* ClosureReportTests.swift */; };
 		UT0000010000000000000005 /* SpotCategoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UT0000020000000000000005 /* SpotCategoryTests.swift */; };
 		FF0000010000000000000001 /* FeatureFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000020000000000000001 /* FeatureFlagService.swift */; };
+		ST0000010000000000000001 /* SearchTermOverrideService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST0000020000000000000001 /* SearchTermOverrideService.swift */; };
 		FB0000010000000000000001 /* BetaFeedbackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000001 /* BetaFeedbackModel.swift */; };
 		FB0000010000000000000002 /* BetaFeedbackService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000002 /* BetaFeedbackService.swift */; };
 		FB0000010000000000000003 /* BetaFeedbackFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000020000000000000003 /* BetaFeedbackFormView.swift */; };
@@ -104,6 +105,7 @@
 		TU0000010000000000000004 /* TutorialCurriculumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TU0000020000000000000004 /* TutorialCurriculumView.swift */; };
 		RK0000010000000000000001 /* RankingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = RK0000020000000000000001 /* RankingService.swift */; };
 		AR0000010000000000000001 /* AdminRankingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AR0000020000000000000001 /* AdminRankingsView.swift */; };
+		AS0000010000000000000001 /* AdminSearchTermsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AS0000020000000000000001 /* AdminSearchTermsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -211,6 +213,7 @@
 		UT0000020000000000000005 /* SpotCategoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotCategoryTests.swift; sourceTree = "<group>"; };
 		UT0000030000000000000001 /* FlezcalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlezcalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF0000020000000000000001 /* FeatureFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
+		ST0000020000000000000001 /* SearchTermOverrideService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTermOverrideService.swift; sourceTree = "<group>"; };
 		FB0000020000000000000001 /* BetaFeedbackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackModel.swift; sourceTree = "<group>"; };
 		FB0000020000000000000002 /* BetaFeedbackService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackService.swift; sourceTree = "<group>"; };
 		FB0000020000000000000003 /* BetaFeedbackFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackFormView.swift; sourceTree = "<group>"; };
@@ -223,6 +226,7 @@
 		TU0000020000000000000004 /* TutorialCurriculumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialCurriculumView.swift; sourceTree = "<group>"; };
 		RK0000020000000000000001 /* RankingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingService.swift; sourceTree = "<group>"; };
 		AR0000020000000000000001 /* AdminRankingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminRankingsView.swift; sourceTree = "<group>"; };
+		AS0000020000000000000001 /* AdminSearchTermsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminSearchTermsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -281,6 +285,7 @@
 				AF0000020000000000000001 /* AdminFeatureFlagsView.swift */,
 				AF0000020000000000000002 /* AdminFeedbackListView.swift */,
 				AR0000020000000000000001 /* AdminRankingsView.swift */,
+				AS0000020000000000000001 /* AdminSearchTermsView.swift */,
 			);
 			path = Admin;
 			sourceTree = "<group>";
@@ -391,6 +396,7 @@
 				GH0000020000000000000001 /* Geohash.swift */,
 				RL0000020000000000000001 /* RateLimiter.swift */,
 				FF0000020000000000000001 /* FeatureFlagService.swift */,
+				ST0000020000000000000001 /* SearchTermOverrideService.swift */,
 				RK0000020000000000000001 /* RankingService.swift */,
 			);
 			path = Services;
@@ -718,6 +724,7 @@
 				FR0000010000000000000001 /* FlezcalRowView.swift in Sources */,
 				FR0000010000000000000002 /* InlineRatingPicker.swift in Sources */,
 				FF0000010000000000000001 /* FeatureFlagService.swift in Sources */,
+				ST0000010000000000000001 /* SearchTermOverrideService.swift in Sources */,
 				FB0000010000000000000001 /* BetaFeedbackModel.swift in Sources */,
 				FB0000010000000000000002 /* BetaFeedbackService.swift in Sources */,
 				FB0000010000000000000003 /* BetaFeedbackFormView.swift in Sources */,
@@ -730,6 +737,7 @@
 				TU0000010000000000000004 /* TutorialCurriculumView.swift in Sources */,
 				RK0000010000000000000001 /* RankingService.swift in Sources */,
 				AR0000010000000000000001 /* AdminRankingsView.swift in Sources */,
+				AS0000010000000000000001 /* AdminSearchTermsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -909,7 +917,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 19;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -946,7 +954,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 19;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

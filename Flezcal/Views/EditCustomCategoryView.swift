@@ -51,19 +51,10 @@ struct EditCustomCategoryView: View {
                                 .font(.headline)
                             Spacer()
                             Button {
-                                // For built-in picks, restore original hardcoded keywords.
-                                // For custom picks, regenerate from the display name.
-                                if let original = FoodCategory.allCategories.first(where: { $0.id == category.id }) {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        searchTerms = original.websiteKeywords
-                                    }
-                                } else {
-                                    let suggested = CustomCategory.suggestedKeywords(
-                                        for: category.displayName
-                                    )
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        searchTerms = suggested
-                                    }
+                                // Single source of truth: Firestore override > hardcoded static > generated fallback.
+                                let canonical = SearchTermOverrideService.shared.defaultCategory(for: category)
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    searchTerms = canonical.websiteKeywords
                                 }
                             } label: {
                                 Text("Reset to defaults")

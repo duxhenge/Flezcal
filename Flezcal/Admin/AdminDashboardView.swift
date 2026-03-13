@@ -40,6 +40,10 @@ struct AdminDashboardView: View {
                 AdminRankingsView()
                     .tabItem { Label("Rankings", systemImage: "chart.line.uptrend.xyaxis") }
                     .tag(7)
+
+                AdminSearchTermsView()
+                    .tabItem { Label("Terms", systemImage: "magnifyingglass") }
+                    .tag(8)
             }
             .tint(.orange)
             .navigationTitle("Admin")
