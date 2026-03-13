@@ -27,6 +27,7 @@
 		AN0000010000000000000001 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AN0000020000000000000001 /* AnalyticsService.swift */; };
 		CR0000040000000000000001 /* CrashReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CR0000050000000000000001 /* CrashReporter.swift */; };
 		LC0000010000000000000001 /* LocationCompleterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = LC0000020000000000000001 /* LocationCompleterService.swift */; };
+		VC0000010000000000000001 /* VenueCompleterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VC0000020000000000000001 /* VenueCompleterService.swift */; };
 		B10000010000000000000001 /* FlezcalApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* FlezcalApp.swift */; };
 		B10000010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000002 /* ContentView.swift */; };
 		B10000010000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000003 /* Assets.xcassets */; };
@@ -143,6 +144,7 @@
 		AN0000020000000000000001 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		CR0000050000000000000001 /* CrashReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporter.swift; sourceTree = "<group>"; };
 		LC0000020000000000000001 /* LocationCompleterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationCompleterService.swift; sourceTree = "<group>"; };
+		VC0000020000000000000001 /* VenueCompleterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueCompleterService.swift; sourceTree = "<group>"; };
 		B20000010000000000000001 /* FlezcalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlezcalApp.swift; sourceTree = "<group>"; };
 		B20000010000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B20000010000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -393,6 +395,7 @@
 				AN0000020000000000000001 /* AnalyticsService.swift */,
 				CR0000050000000000000001 /* CrashReporter.swift */,
 				LC0000020000000000000001 /* LocationCompleterService.swift */,
+				VC0000020000000000000001 /* VenueCompleterService.swift */,
 				GH0000020000000000000001 /* Geohash.swift */,
 				RL0000020000000000000001 /* RateLimiter.swift */,
 				FF0000020000000000000001 /* FeatureFlagService.swift */,
@@ -719,6 +722,7 @@
 				AN0000010000000000000001 /* AnalyticsService.swift in Sources */,
 				CR0000040000000000000001 /* CrashReporter.swift in Sources */,
 				LC0000010000000000000001 /* LocationCompleterService.swift in Sources */,
+				VC0000010000000000000001 /* VenueCompleterService.swift in Sources */,
 				GH0000010000000000000001 /* Geohash.swift in Sources */,
 				RL0000010000000000000001 /* RateLimiter.swift in Sources */,
 				FR0000010000000000000001 /* FlezcalRowView.swift in Sources */,
@@ -917,7 +921,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -954,7 +958,7 @@
 				CODE_SIGN_ENTITLEMENTS = Flezcal/Flezcal.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = W8WUWZ5DJU;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

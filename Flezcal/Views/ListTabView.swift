@@ -362,6 +362,7 @@ private struct ExplorePanel: View {
     @State private var deeperScanPool: [SuggestedSpot] = []
     @State private var deeperScanPicks: [FoodCategory] = []
     @State private var wave1Results: [String: Set<String>] = [:]
+    @State private var deeperScanTask: Task<Void, Never>? = nil
 
     /// True when the current search is a venue-name search (user typed text).
     private var isVenueSearch: Bool {
@@ -578,6 +579,7 @@ private struct ExplorePanel: View {
                 searchResultStore.fullPool = []
                 searchResultStore.preScreenComplete = false
                 isPreScreening = false
+                isSearchActive = false
                 return
             }
 
@@ -601,7 +603,10 @@ private struct ExplorePanel: View {
                 guard !Task.isCancelled else { return }
                 isSearchActive = true
                 await searchService.search(query: query, userLocation: effectiveLocation)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    isSearchActive = false
+                    return
+                }
                 let foodCat = primaryFoodCategory
                 venueSearchResults = searchService.searchResults.map {
                     SuggestedSpot(mapItem: $0, suggestedCategory: foodCat)
@@ -624,7 +629,10 @@ private struct ExplorePanel: View {
                     existingSpots: [],
                     picks: picks
                 )
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    isSearchActive = false
+                    return
+                }
             }
 
             // Pre-screen: scan homepages to re-rank results (matched venues first).
@@ -647,6 +655,7 @@ private struct ExplorePanel: View {
             let w1Results = await websiteChecker.batchPreScreen(suggestions: wave1, picks: picks)
             guard !Task.isCancelled else {
                 isPreScreening = false
+                isSearchActive = false
                 return
             }
             // Bake pre-screen results into the data
@@ -680,10 +689,12 @@ private struct ExplorePanel: View {
             if !val { isSearchActive = false }
         }
         .onDisappear {
-            // Cancel any in-flight website check so it doesn't write
+            // Cancel any in-flight tasks so they don't write
             // back to @State after the view is gone.
             websiteCheckTask?.cancel()
             websiteCheckTask = nil
+            deeperScanTask?.cancel()
+            deeperScanTask = nil
             multiCheckResult = nil
             isPreScreening = false
             showDeeperScanPrompt = false
@@ -701,7 +712,8 @@ private struct ExplorePanel: View {
         let picks = deeperScanPicks
         let w1 = wave1Results
 
-        Task {
+        deeperScanTask?.cancel()
+        deeperScanTask = Task {
             let w2Results = await websiteChecker.batchPreScreen(suggestions: pool, picks: picks)
             guard !Task.isCancelled else {
                 isPreScreening = false
@@ -889,8 +901,11 @@ struct ListTabView: View {
     @State private var isEditingLocation = false
     @State private var locationInputText = ""
     @StateObject private var locationCompleter = LocationCompleterService()
+    @StateObject private var venueCompleter = VenueCompleterService()
+    @State private var pinnedVenue: SuggestedSpot? = nil
     @State private var isResolvingLocation = false
     @FocusState private var isLocationFieldFocused: Bool
+    @FocusState private var isSearchFieldFocused: Bool
 
     /// The coordinate to use for all searches. Custom location if set, otherwise GPS.
     private var effectiveLocation: CLLocationCoordinate2D? {
@@ -1039,10 +1054,17 @@ struct ListTabView: View {
             items += deduped.map { .potentialMatched($0) }
         }
 
-        // Sort everything by distance
-        return items.sorted {
+        // Sort by distance
+        items.sort {
             $0.distanceMeters(from: effectiveLocation) < $1.distanceMeters(from: effectiveLocation)
         }
+
+        // Pinned venue from direct search — always at the very top
+        if let pinned = pinnedVenue {
+            items.insert(.potentialMatched(pinned), at: 0)
+        }
+
+        return items
     }
 
     // MARK: Potential-spot tap handling
@@ -1082,6 +1104,24 @@ struct ListTabView: View {
         )
     }
 
+    /// Resolves a venue autocomplete suggestion and pins it at the top of the list.
+    private func selectVenueFromCompleter(_ completion: MKLocalSearchCompletion) {
+        venueCompleter.cancel()
+        let query = searchText
+        searchText = ""
+        isSearchFieldFocused = false
+        let category = activePicks.first ?? picksService.picks.first ?? FoodCategory.mezcal
+        Task {
+            guard let spot = await venueCompleter.resolve(completion, suggestedCategory: category) else {
+                #if DEBUG
+                print("[VenueSearch] Failed to resolve: \(query)")
+                #endif
+                return
+            }
+            pinnedVenue = spot
+        }
+    }
+
     // MARK: Body
 
     var body: some View {
@@ -1100,6 +1140,7 @@ struct ListTabView: View {
                             showExploreSearch ? explorePlaceholder : "Search spots, mezcals…",
                             text: $searchText
                         )
+                        .focused($isSearchFieldFocused)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
                         if !searchText.isEmpty {
@@ -1151,6 +1192,46 @@ struct ListTabView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
+
+                // ── Venue autocomplete dropdown ──────────────────────────────
+                if isSearchFieldFocused && !venueCompleter.suggestions.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(venueCompleter.suggestions.prefix(5), id: \.self) { completion in
+                            Button {
+                                selectVenueFromCompleter(completion)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .foregroundStyle(.orange)
+                                        .font(.subheadline)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(completion.title)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        if !completion.subtitle.isEmpty {
+                                            Text(completion.subtitle)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider()
+                                .padding(.leading, 36)
+                        }
+                    }
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 // Location bar — shared between both tabs
                 locationBar
@@ -1362,6 +1443,12 @@ struct ListTabView: View {
                     isLocationSearchPending = false
                 }
             }
+            .onChange(of: searchText) { _, newValue in
+                venueCompleter.updateQuery(newValue)
+                if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                    venueCompleter.cancel()
+                }
+            }
         }
     }
 
@@ -1489,6 +1576,7 @@ struct ListTabView: View {
                     .padding(.vertical, 8)
 
                 case .potentialMatched(let suggestion):
+                    let isPinned = pinnedVenue?.id == suggestion.id
                     HStack(spacing: 0) {
                         Button {
                             selectPotentialResult(suggestion)
@@ -1501,16 +1589,29 @@ struct ListTabView: View {
                         }
                         .buttonStyle(.plain)
 
-                        Button {
-                            showPotentialOnMap(suggestion)
-                        } label: {
-                            Image(systemName: "map")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
+                        if isPinned {
+                            Button {
+                                pinnedVenue = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                showPotentialOnMap(suggestion)
+                            } label: {
+                                Image(systemName: "map")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
