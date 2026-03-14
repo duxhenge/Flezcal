@@ -56,6 +56,13 @@ class SearchResultStore: ObservableObject {
     @Published var isLoading = false
     /// True once the batch homepage pre-screen has finished for the current suggestions.
     @Published var preScreenComplete = false
+    /// True while the homepage pre-screen scan is running (Wave 1 or Wave 2).
+    @Published var isPreScreening = false
+    /// Status banner shown after Wave 1 completes: "X possible Flezcal spots"
+    /// or "No quick matches." Auto-dismissed after 8 seconds.
+    @Published var preScreenBannerMessage: String? = nil
+    /// True when Wave 2 pool exists and user can tap "Search Wider Area?"
+    @Published var showDeeperScanButton = false
 
     /// Full pool of venues found by the last fetchSuggestions call, before
     /// trimming to `maxDisplayPins`. Stored so `batchPreScreen` can scan all
@@ -82,6 +89,25 @@ class SearchResultStore: ObservableObject {
 
     /// Maximum ghost pins shown on the map / in the annotation set.
     private static let maxDisplayPins = 25
+
+    // ── Task management (private — views cannot cancel these) ───────────
+
+    /// The current fetch + Wave 1 pre-screen task. Only replaced by a new
+    /// fetchAndPreScreen call or cancelled by explicit cancelInFlight().
+    private var fetchTask: Task<Void, Never>?
+    /// The current pre-screen scanning task (Wave 1 or Wave 2).
+    private var preScreenTask: Task<Void, Never>?
+    /// Auto-dismiss task for the banner message.
+    private var bannerDismissTask: Task<Void, Never>?
+    /// Wave 2 pool — remaining venues beyond the closest 25.
+    private var deeperScanPool: [SuggestedSpot] = []
+    /// Picks used for the current Wave 2 scan.
+    private var deeperScanPicks: [FoodCategory] = []
+    /// Wave 1 pre-screen results — merged with Wave 2 when user initiates deeper scan.
+    private var wave1Results: [String: Set<String>] = [:]
+    /// Pick IDs from the last completed or in-flight fetchAndPreScreen call.
+    /// Combined with `lastFetchCenter` to detect redundant fetch requests.
+    private var lastFetchPickIDs: Set<String> = []
 
     // MARK: - Fetch suggestions
 
@@ -228,7 +254,7 @@ class SearchResultStore: ObservableObject {
     /// - Non-empty set → homepage matched keywords for user's picks (green pin)
     /// - Empty set → URL was scanned but no keywords matched (dimmed yellow pin)
     /// - Not in dict → venue had no URL / social media only (stays yellow "?" pin)
-    func applyPreScreenResults(_ results: [String: Set<String>]) {
+    func applyPreScreenResults(_ results: [String: Set<String>], markComplete: Bool = true) {
         // Apply pre-screen results to the full pool first.
         // Merge with existing matches (e.g. name-match) rather than replacing,
         // so a venue that was green from its name stays green even if the
@@ -281,13 +307,16 @@ class SearchResultStore: ObservableObject {
         for s in allGreen {
             print("[SearchResultStore]   GREEN: \(s.name) → \(s.preScreenMatches!) dist=\(Int(distance(s)))m")
         }
-        print("[SearchResultStore] Promotion cap: \(Int(promotionCap))m, Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
+        let capStr = promotionCap == .greatestFiniteMagnitude ? "∞" : "\(Int(promotionCap))m"
+        print("[SearchResultStore] Promotion cap: \(capStr), Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
         #endif
 
         // Update fullPool with pre-screen data so subsequent reads see it
         fullPool = updatedPool
         suggestions = trimmed
-        preScreenComplete = true
+        if markComplete {
+            preScreenComplete = true
+        }
     }
 
     // MARK: - Dismiss / Confirm
@@ -414,5 +443,237 @@ class SearchResultStore: ObservableObject {
             }
         }
         return SplitResults(matched: matched, other: other)
+    }
+
+    // MARK: - Fetch + Pre-Screen (owned by the store)
+
+    /// Set to `true` when a fetchAndPreScreen requested zoom-to-fit, then
+    /// flipped back to `false` after the map zooms. MapTabView observes both
+    /// `preScreenComplete` and `pendingZoomToFit` to trigger the zoom.
+    @Published var pendingZoomToFit = false
+
+    /// Fetches ghost pin suggestions then kicks off the batch homepage pre-screen.
+    /// Both tabs call this — the store manages its own tasks internally.
+    /// Views cannot cancel these tasks; only `cancelInFlight()` can.
+    func fetchAndPreScreen(
+        in region: MKCoordinateRegion,
+        picks: [FoodCategory],
+        existingSpots: [Spot],
+        radius: Double = 0.5,
+        websiteChecker: WebsiteCheckService,
+        extraSuggestions: [SuggestedSpot] = [],
+        zoomToFit: Bool = false
+    ) {
+        // ── Redundant-fetch guard ──────────────────────────────────────
+        // If we already have results (or an in-flight fetch) for the same
+        // picks and nearby center, skip. This prevents boot re-fires and
+        // programmatic camera settles from destroying completed results.
+        let incomingPickIDs = Set(picks.map(\.id))
+        let hasResultsOrInFlight = !suggestions.isEmpty || fetchTask != nil
+        if hasResultsOrInFlight,
+           incomingPickIDs == lastFetchPickIDs,
+           let prev = lastFetchCenter {
+            let incoming = CLLocation(latitude: region.center.latitude,
+                                      longitude: region.center.longitude)
+            // < 500m = same search area
+            if prev.distance(from: incoming) < 500 {
+                #if DEBUG
+                print("[SearchResultStore] Skipping redundant fetch — same picks + center (distance \(String(format: "%.0f", prev.distance(from: incoming)))m)")
+                #endif
+                // Honor zoom request even though we're skipping the fetch —
+                // the data is already here, so signal the map to zoom.
+                if zoomToFit, !suggestions.isEmpty {
+                    pendingZoomToFit = true
+                }
+                return
+            }
+        }
+
+        // Cancel any in-flight fetch + pre-screen so a new call doesn't
+        // race with the previous one and overwrite green pin results.
+        fetchTask?.cancel()
+        preScreenTask?.cancel()
+        bannerDismissTask?.cancel()
+        showDeeperScanButton = false
+        deeperScanPool = []
+        preScreenBannerMessage = nil
+        pendingZoomToFit = zoomToFit
+        lastFetchPickIDs = incomingPickIDs
+        lastFetchCenter = CLLocation(latitude: region.center.latitude,
+                                      longitude: region.center.longitude)
+
+        fetchTask = Task {
+            #if DEBUG
+            print("[SearchResultStore] fetchAndPreScreen called with \(picks.count) picks, radius \(radius)")
+            #endif
+            await fetchSuggestions(
+                in: region,
+                existingSpots: existingSpots,
+                picks: picks,
+                radius: radius
+            )
+            guard !Task.isCancelled else {
+                isPreScreening = false
+                return
+            }
+
+            // Instant pass: apply any cached pre-screen results immediately.
+            let pool = fullPool
+            let cachedResults = await websiteChecker.cachedPreScreen(
+                suggestions: pool,
+                picks: picks
+            )
+            if !cachedResults.isEmpty {
+                // markComplete: false — this is a preview pass from cache.
+                // Don't set preScreenComplete yet; Wave 1 will set it when
+                // the full scan finishes. Setting it here would consume
+                // pendingZoomToFit before the real results are ready.
+                applyPreScreenResults(cachedResults, markComplete: false)
+                #if DEBUG
+                let greenCount = cachedResults.values.filter { !$0.isEmpty }.count
+                print("[SearchResultStore] Instant cache hit: \(greenCount) green out of \(cachedResults.count) cached")
+                #endif
+            }
+
+            // Kick off Wave 1: scan the closest 25 venues (the displayed set)
+            // so green pins appear fast. Wave 2 (remaining pool) is deferred
+            // until the user taps "Search Wider Area?"
+            preScreenBannerMessage = nil
+            preScreenComplete = false
+            isPreScreening = true
+            var poolToScan = fullPool
+            for extra in extraSuggestions {
+                if !poolToScan.contains(where: { $0.id == extra.id }) {
+                    poolToScan.append(extra)
+                }
+            }
+
+            preScreenTask = Task {
+                let wave1Count = min(25, poolToScan.count)
+                let wave1 = Array(poolToScan.prefix(wave1Count))
+                let wave2 = Array(poolToScan.dropFirst(wave1Count))
+
+                // ── Wave 1: closest venues (fast results) ──
+                let w1Results = await websiteChecker.batchPreScreen(
+                    suggestions: wave1,
+                    picks: picks
+                )
+                guard !Task.isCancelled else {
+                    isPreScreening = false
+                    return
+                }
+                applyPreScreenResults(w1Results)
+                #if DEBUG
+                let w1Green = w1Results.values.filter { !$0.isEmpty }.count
+                print("[SearchResultStore] Wave 1 done: \(w1Green) green out of \(wave1.count) closest venues")
+                #endif
+
+                isPreScreening = false
+
+                // Show Wave 1 result banner
+                let likelyCount = suggestions.filter {
+                    $0.preScreenMatches?.isEmpty == false
+                }.count
+                let totalCount = suggestions.count
+                #if DEBUG
+                print("[SearchResultStore] Wave 1 complete. \(likelyCount) likely out of \(totalCount) suggestions. \(wave2.count) venues deferred.")
+                #endif
+                if totalCount > 0 {
+                    if likelyCount == 0 {
+                        preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
+                    } else {
+                        preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
+                    }
+                    bannerDismissTask = Task {
+                        try? await Task.sleep(for: .seconds(8))
+                        guard !Task.isCancelled else { return }
+                        preScreenBannerMessage = nil
+                    }
+                }
+
+                // Store Wave 2 pool for the "Search Wider Area?" button.
+                if !wave2.isEmpty {
+                    wave1Results = w1Results
+                    deeperScanPool = wave2
+                    deeperScanPicks = picks
+                    showDeeperScanButton = true
+                }
+            }
+        }
+    }
+
+    /// Wave 2: runs only when the user taps "Scan More Spots?".
+    /// Scans the remaining pool beyond the closest 25 and promotes
+    /// any green matches into the displayed set.
+    func runDeeperScan(websiteChecker: WebsiteCheckService) {
+        showDeeperScanButton = false
+        preScreenTask?.cancel()
+        bannerDismissTask?.cancel()
+        preScreenBannerMessage = nil
+        isPreScreening = true
+        pendingZoomToFit = true
+
+        let pool = deeperScanPool
+        let picks = deeperScanPicks
+        let w1 = wave1Results
+
+        preScreenTask = Task {
+            let w2Results = await websiteChecker.batchPreScreen(
+                suggestions: pool,
+                picks: picks
+            )
+            guard !Task.isCancelled else {
+                isPreScreening = false
+                return
+            }
+            // Merge Wave 2 into Wave 1 results and re-apply for promotion.
+            var allResults = w1
+            for (key, value) in w2Results {
+                allResults[key] = value
+            }
+            applyPreScreenResults(allResults)
+            #if DEBUG
+            let w2Green = w2Results.values.filter { !$0.isEmpty }.count
+            print("[SearchResultStore] Wave 2 done: \(w2Green) green out of \(pool.count) remaining venues")
+            #endif
+
+            isPreScreening = false
+            deeperScanPool = []
+
+            // Show final result banner
+            let likelyCount = suggestions.filter {
+                $0.preScreenMatches?.isEmpty == false
+            }.count
+            let totalCount = suggestions.count
+            #if DEBUG
+            print("[SearchResultStore] Deeper scan complete. \(likelyCount) likely out of \(totalCount) suggestions.")
+            #endif
+            if totalCount > 0 {
+                if likelyCount == 0 {
+                    preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
+                } else {
+                    preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
+                }
+                bannerDismissTask = Task {
+                    try? await Task.sleep(for: .seconds(8))
+                    guard !Task.isCancelled else { return }
+                    preScreenBannerMessage = nil
+                }
+            }
+        }
+    }
+
+    /// Cancel in-flight fetch + pre-screen tasks.
+    /// Only call this for explicit user actions (e.g. "Search This Area" button tap).
+    /// Camera events, tab switches, and programmatic moves should NEVER call this.
+    func cancelInFlight() {
+        fetchTask?.cancel()
+        preScreenTask?.cancel()
+        bannerDismissTask?.cancel()
+        isPreScreening = false
+        showDeeperScanButton = false
+        preScreenBannerMessage = nil
+        // Clear last-fetch identity so the next fetchAndPreScreen always runs.
+        lastFetchPickIDs = []
     }
 }

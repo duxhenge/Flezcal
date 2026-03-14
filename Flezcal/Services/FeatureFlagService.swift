@@ -21,6 +21,14 @@ final class FeatureFlagService: ObservableObject {
     /// Fail-closed default matches Constants.FeatureFlags.defaultCategories.
     @Published var defaultCategories = ["mezcal", "flan", "tacos"]
 
+    /// When true, the voice search mic button is visible on the Spots tab.
+    /// Fail-closed default: false (hidden until explicitly enabled from admin).
+    @Published var voiceSearchEnabled = false
+
+    /// When true, the Concierge tab is visible and becomes the app's default landing screen.
+    /// Fail-closed default: false (hidden until explicitly enabled from admin).
+    @Published var conciergeEnabled = false
+
     /// Default emoji for all trending/custom Flezcals. Changeable from admin.
     /// Fail-closed default: 🐛 (worm).
     @Published var trendingEmoji = "🐛" {
@@ -60,6 +68,8 @@ final class FeatureFlagService: ObservableObject {
                         self.broadSearchEnabled = true
                         self.defaultCategories = ["mezcal", "flan", "tacos"]
                         self.trendingEmoji = "🐛"
+                        self.voiceSearchEnabled = false
+                        self.conciergeEnabled = false
                     }
                     return
                 }
@@ -68,6 +78,8 @@ final class FeatureFlagService: ObservableObject {
                 let broad = data["broadSearchEnabled"] as? Bool ?? true
                 let defaults = data["defaultCategories"] as? [String] ?? ["mezcal", "flan", "tacos"]
                 let trending = data["trendingEmoji"] as? String ?? "🐛"
+                let voice = data["voiceSearchEnabled"] as? Bool ?? false
+                let concierge = data["conciergeEnabled"] as? Bool ?? false
                 Task { @MainActor in
                     self.betaFeedbackEnabled = enabled
                     if !prompt.isEmpty {
@@ -80,9 +92,11 @@ final class FeatureFlagService: ObservableObject {
                     if !trending.isEmpty {
                         self.trendingEmoji = trending
                     }
+                    self.voiceSearchEnabled = voice
+                    self.conciergeEnabled = concierge
                 }
                 #if DEBUG
-                print("[FeatureFlags] Updated: betaFeedback=\(enabled) broadSearch=\(broad) defaults=\(defaults) trendingEmoji=\(trending)")
+                print("[FeatureFlags] Updated: betaFeedback=\(enabled) broadSearch=\(broad) defaults=\(defaults) trendingEmoji=\(trending) voiceSearch=\(voice) concierge=\(concierge)")
                 #endif
             }
     }
@@ -118,9 +132,21 @@ final class FeatureFlagService: ObservableObject {
             .setData(["defaultCategories": categories], merge: true)
     }
 
+    /// Toggles voice search visibility. Admin-only.
+    func setVoiceSearchEnabled(_ enabled: Bool) async throws {
+        try await db.collection("app_config").document("feature_flags")
+            .setData(["voiceSearchEnabled": enabled], merge: true)
+    }
+
     /// Updates the default emoji for trending/custom Flezcals. Admin-only.
     func setTrendingEmoji(_ emoji: String) async throws {
         try await db.collection("app_config").document("feature_flags")
             .setData(["trendingEmoji": emoji], merge: true)
+    }
+
+    /// Toggles Concierge Mode visibility. Admin-only.
+    func setConciergeEnabled(_ enabled: Bool) async throws {
+        try await db.collection("app_config").document("feature_flags")
+            .setData(["conciergeEnabled": enabled], merge: true)
     }
 }

@@ -88,6 +88,68 @@ struct AdminFeatureFlagsView: View {
                 }
             }
 
+            // MARK: - Voice Search toggle
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Voice Search")
+                            .font(.headline)
+                        Text(featureFlags.voiceSearchEnabled ? "Visible" : "Hidden")
+                            .font(.caption)
+                            .foregroundStyle(featureFlags.voiceSearchEnabled ? .green : .secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { featureFlags.voiceSearchEnabled },
+                        set: { newValue in
+                            Task {
+                                do {
+                                    try await featureFlags.setVoiceSearchEnabled(newValue)
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            } header: {
+                Text("Voice Search")
+            } footer: {
+                Text("Shows the mic button on the Spots tab. Hidden by default until voice search is ready.")
+            }
+
+            // MARK: - Concierge Mode toggle
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Concierge Mode")
+                            .font(.headline)
+                        Text(featureFlags.conciergeEnabled ? "Visible" : "Hidden")
+                            .font(.caption)
+                            .foregroundStyle(featureFlags.conciergeEnabled ? .green : .secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { featureFlags.conciergeEnabled },
+                        set: { newValue in
+                            Task {
+                                do {
+                                    try await featureFlags.setConciergeEnabled(newValue)
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                }
+            } header: {
+                Text("Concierge")
+            } footer: {
+                Text("Shows the Concierge tab and makes it the default landing screen. Hidden by default.")
+            }
+
             // MARK: - Trending Emoji
             Section {
                 HStack {

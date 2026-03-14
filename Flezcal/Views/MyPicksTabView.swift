@@ -23,11 +23,13 @@ struct MyPicksTabView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     // Subtitle
-                    Text("These drive your map pins, ghost suggestions, and filters.")
+                    Text("Choose up to \(UserPicksService.maxPicks). These drive your map pins, ghost suggestions, and filters.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
                         .tutorialTarget("pickSubtitle")
+
+                    counterBadge
 
                     if FeatureFlagService.shared.broadSearchEnabled {
                         broadSearchContent
@@ -148,6 +150,24 @@ struct MyPicksTabView: View {
                                  tier: rankingService.tier(for: cat.id),
                                  onEdit: { editingCategory = cat })
             }
+        }
+    }
+
+    // MARK: - Counter Badge
+
+    private var counterBadge: some View {
+        HStack {
+            Spacer()
+            let atMax = picksService.picks.count >= UserPicksService.maxPicks
+            Text("\(picksService.picks.count) / \(UserPicksService.maxPicks) selected")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(atMax ? Color.orange.opacity(0.15) : Color(.systemGray5))
+                .foregroundStyle(atMax ? Color.orange : Color.secondary)
+                .clipShape(Capsule())
+            Spacer()
         }
     }
 

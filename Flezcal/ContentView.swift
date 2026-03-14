@@ -6,6 +6,7 @@ struct ContentView: View {
     /// Stores the version string of the last welcome screen the user dismissed.
     /// When Firestore's "version" field changes, the welcome screen re-appears.
     @AppStorage("lastSeenWelcomeVersion") private var lastSeenWelcomeVersion: String = ""
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var networkMonitor: NetworkMonitor
     /// Used ONLY for the display-name prompt — `needsDisplayNamePrompt` changes at
     /// most once per session, so this does NOT cause continuous re-renders like
@@ -28,6 +29,10 @@ struct ContentView: View {
     /// Set by the .showAreaOnMap notification when the Spots tab includes its
     /// search results. MapTabView injects these directly instead of fetching fresh.
     @State private var pendingMapResults: [SuggestedSpot]? = nil
+    /// Set by the .showAreaOnMap notification when the Concierge tab sends a
+    /// specific category. MapTabView uses these as a one-shot picks override
+    /// instead of resolving from activePickIDs (which can't resolve trending categories).
+    @State private var pendingMapPicks: [FoodCategory]? = nil
     /// Set by the .showSpotsAtLocation notification — ListTabView picks this up
     /// and sets its customLocation so the Spots tab searches from that area.
     @State private var pendingSpotsLocation: CustomSearchLocation? = nil
@@ -58,226 +63,288 @@ struct ContentView: View {
     @ObservedObject private var featureFlags = FeatureFlagService.shared
 
     var body: some View {
-        ZStack(alignment: .top) {
-            TabView(selection: $selectedTab) {
-                MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
-                          pendingMapCenter: $pendingMapCenter,
-                          pendingMapResults: $pendingMapResults,
-                          activePickIDs: $activePickIDs,
-                          showCommunityMap: $showCommunityMap,
-                          websiteChecker: websiteChecker)
-                    .environmentObject(picksService)
-                    .environmentObject(searchResultStore)
-                    .tabItem { Label("Explore", systemImage: "map") }
-                    .tag(AppTab.explore)
-
-                ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, websiteChecker: websiteChecker)
-                    .environmentObject(searchResultStore)
-                    .tabItem { Label("Spots", systemImage: "list.bullet") }
-                    .tag(AppTab.spots)
-
-                MyPicksTabView()
-                    .environmentObject(picksService)
-                    .tabItem { Label("My Flezcals", systemImage: "heart.circle") }
-                    .tag(AppTab.myPicks)
-
-                LeaderboardView()
-                    .tabItem { Label("Leaderboard", systemImage: "trophy") }
-                    .tag(AppTab.leaderboard)
-
-                ProfileView(
-                    onShowWhatsNew: { showWelcome = true },
-                    onShowTutorials: { showTutorialCurriculum = true }
-                )
-                    .environmentObject(picksService)
-                    .environmentObject(searchResultStore)
-                    .tabItem { Label("Profile", systemImage: "person.circle") }
-                    .tag(AppTab.profile)
+        mainContent
+            .environmentObject(rankingService)
+            .onAppear(perform: handleAppear)
+            .onDisappear(perform: handleDisappear)
+            .onChange(of: picksService.picks) { _, newPicks in
+                activePickIDs = Set(newPicks.map(\.id))
+                Task { await websiteChecker.clearHTMLCache() }
             }
-            .tint(.orange)
-
-            // Offline banner
-            if !networkMonitor.isConnected {
-                HStack(spacing: 6) {
-                    Image(systemName: "wifi.slash")
-                        .font(.caption2)
-                    Text("You're offline. Changes will sync when you reconnect.")
-                        .font(.caption2)
+            .onReceive(SearchTermOverrideService.shared.$overrides.dropFirst()) { _ in
+                Task { await websiteChecker.clearHTMLCache() }
+            }
+            .onChange(of: selectedTab) { _, _ in }
+            .overlayPreferenceValue(TutorialTargetKey.self) { anchors in
+                tutorialAnchorOverlay(anchors: anchors)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .switchToSpots)) { _ in
+                selectedTab = AppTab.spots
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showOnMap)) { notification in
+                handleShowOnMap(notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showAreaOnMap)) { notification in
+                handleShowAreaOnMap(notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showSpotsAtLocation)) { notification in
+                handleShowSpotsAtLocation(notification)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active && featureFlags.conciergeEnabled {
+                    selectedTab = AppTab.concierge
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(Color.secondary)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.easeInOut(duration: 0.3), value: networkMonitor.isConnected)
-                .accessibilityLabel("You are offline. Changes will sync when you reconnect.")
             }
+            .onChange(of: featureFlags.conciergeEnabled) { _, enabled in
+                if enabled && selectedTab == AppTab.explore {
+                    selectedTab = AppTab.concierge
+                }
+            }
+            .wormEasterEgg()
+            .sheet(isPresented: $showWelcome) {
+                WelcomeView { version in
+                    lastSeenWelcomeVersion = version
+                    showWelcome = false
+                }
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showTutorialCurriculum) {
+                TutorialCurriculumView(tutorialService: tutorialService)
+                    .presentationDetents([.large])
+            }
+            .onChange(of: tutorialService.shouldShowCurriculum) { _, show in
+                if show {
+                    tutorialService.shouldShowCurriculum = false
+                    showTutorialCurriculum = true
+                }
+            }
+            .onChange(of: showWelcome) { _, isShowing in
+                if !isShowing && !tutorialService.hasShownCurriculum {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showTutorialCurriculum = true
+                        tutorialService.markCurriculumShown()
+                    }
+                }
+            }
+            .task { await handleInitialLoad() }
+            .onChange(of: authService.isSignedIn) { _, _ in }
+            .onChange(of: authService.needsDisplayNamePrompt) { _, needsPrompt in
+                if needsPrompt {
+                    promptedName = ""
+                    showDisplayNamePrompt = true
+                }
+            }
+            .alert("What should we call you?", isPresented: $showDisplayNamePrompt) {
+                TextField("Your name", text: $promptedName)
+                    .autocorrectionDisabled()
+                Button("Save") {
+                    Task { await authService.saveDisplayNameToFirestore(promptedName) }
+                }
+                .disabled(promptedName.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Skip", role: .cancel) {
+                    authService.needsDisplayNamePrompt = false
+                }
+            } message: {
+                Text("This name appears on the leaderboard. You can change it later in Profile.")
+            }
+    }
 
-            // Beta feedback floating button — controlled by FeatureFlagService.
-            // Not shown on admin dashboard (it's a fullScreenCover above this).
+    // MARK: - Extracted Body Components
+
+    private var mainContent: some View {
+        ZStack(alignment: .top) {
+            mainTabView
+            offlineBanner
             BetaFeedbackButton(
                 featureFlags: featureFlags,
                 userPickNames: picksService.picks.map(\.displayName)
             )
-
-            // Tutorial spotlight overlay — renders above everything when active
             TutorialOverlay(tutorialService: tutorialService)
         }
-        .environmentObject(rankingService)
-        .onAppear {
-            featureFlags.startListening()
-            SearchTermOverrideService.shared.startListening()
-            OfferingListService.shared.startListening()
-            ValidationRuleService.shared.startListening()
-            tutorialService.switchTab = { tab in selectedTab = tab }
-            // Initialize shared filter state with all picks active
-            if !activePickIDsInitialized {
-                activePickIDs = Set(picksService.picks.map(\.id))
-                activePickIDsInitialized = true
+    }
+
+    private var mainTabView: some View {
+        TabView(selection: $selectedTab) {
+            conciergeTab
+            exploreTab
+            spotsTab
+            myPicksTab
+            leaderboardTab
+            profileTab
+        }
+        .tint(.orange)
+    }
+
+    private var exploreTab: some View {
+        MapTabView(pendingMapSuggestion: $pendingMapSuggestion,
+                  pendingMapCenter: $pendingMapCenter,
+                  pendingMapResults: $pendingMapResults,
+                  pendingMapPicks: $pendingMapPicks,
+                  activePickIDs: $activePickIDs,
+                  showCommunityMap: $showCommunityMap,
+                  websiteChecker: websiteChecker)
+            .environmentObject(picksService)
+            .environmentObject(searchResultStore)
+            .tabItem { Label("Explore", systemImage: "map") }
+            .tag(AppTab.explore)
+    }
+
+    private var spotsTab: some View {
+        ListTabView(locationManager: locationManager, picksService: picksService, activePickIDs: $activePickIDs, showCommunityMap: $showCommunityMap, pendingSpotsLocation: $pendingSpotsLocation, websiteChecker: websiteChecker)
+            .environmentObject(searchResultStore)
+            .tabItem { Label("Spots", systemImage: "list.bullet") }
+            .tag(AppTab.spots)
+    }
+
+    private var myPicksTab: some View {
+        MyPicksTabView()
+            .environmentObject(picksService)
+            .tabItem { Label("My Flezcals", systemImage: "heart.circle") }
+            .tag(AppTab.myPicks)
+    }
+
+    private var leaderboardTab: some View {
+        LeaderboardView()
+            .tabItem { Label("Leaderboard", systemImage: "trophy") }
+            .tag(AppTab.leaderboard)
+    }
+
+    private var profileTab: some View {
+        ProfileView(
+            onShowWhatsNew: { showWelcome = true },
+            onShowTutorials: { showTutorialCurriculum = true }
+        )
+            .environmentObject(picksService)
+            .environmentObject(searchResultStore)
+            .tabItem { Label("Profile", systemImage: "person.circle") }
+            .tag(AppTab.profile)
+    }
+
+    @ViewBuilder private var conciergeTab: some View {
+        if featureFlags.conciergeEnabled {
+            ConciergeTabView(
+                locationManager: locationManager,
+                activePickIDs: $activePickIDs,
+                selectedTab: $selectedTab,
+                pendingSpotsLocation: $pendingSpotsLocation,
+                pendingMapCenter: $pendingMapCenter,
+                pendingMapPicks: $pendingMapPicks
+            )
+                .environmentObject(picksService)
+                .environmentObject(searchResultStore)
+                .environmentObject(authService)
+                .tabItem { Label("Concierge", systemImage: "sparkles") }
+                .tag(AppTab.concierge)
+        }
+    }
+
+    @ViewBuilder private var offlineBanner: some View {
+        if !networkMonitor.isConnected {
+            HStack(spacing: 6) {
+                Image(systemName: "wifi.slash")
+                    .font(.caption2)
+                Text("You're offline. Changes will sync when you reconnect.")
+                    .font(.caption2)
             }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(Color.secondary)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.easeInOut(duration: 0.3), value: networkMonitor.isConnected)
+            .accessibilityLabel("You are offline. Changes will sync when you reconnect.")
         }
-        .onDisappear {
-            featureFlags.stopListening()
-            SearchTermOverrideService.shared.stopListening()
-            OfferingListService.shared.stopListening()
-            ValidationRuleService.shared.stopListening()
+    }
+
+    // MARK: - Extracted Handlers
+
+    private func handleAppear() {
+        featureFlags.startListening()
+        SearchTermOverrideService.shared.startListening()
+        OfferingListService.shared.startListening()
+        ValidationRuleService.shared.startListening()
+        tutorialService.switchTab = { tab in selectedTab = tab }
+        if !activePickIDsInitialized {
+            activePickIDs = Set(picksService.picks.map(\.id))
+            activePickIDsInitialized = true
         }
-        .onChange(of: picksService.picks) { _, newPicks in
-            // When picks change (added/removed/swapped), reset all to active
-            activePickIDs = Set(newPicks.map(\.id))
-            // Clear HTML cache so pages are re-scanned with updated keywords
-            Task { await websiteChecker.clearHTMLCache() }
+        if featureFlags.conciergeEnabled {
+            selectedTab = AppTab.concierge
         }
-        .onReceive(SearchTermOverrideService.shared.$overrides.dropFirst()) { _ in
-            // Admin changed search terms in Firestore — clear scan cache
-            Task { await websiteChecker.clearHTMLCache() }
+    }
+
+    private func handleDisappear() {
+        featureFlags.stopListening()
+        SearchTermOverrideService.shared.stopListening()
+        OfferingListService.shared.stopListening()
+        ValidationRuleService.shared.stopListening()
+    }
+
+    private func handleShowOnMap(_ notification: Notification) {
+        if let suggestion = notification.userInfo?["suggestion"] as? SuggestedSpot {
+            pendingMapSuggestion = suggestion
         }
-        .onChange(of: selectedTab) { _, _ in
-            // Tab-switch auto-sync removed — both tabs share SearchResultStore.
-            // No need to inject results when switching tabs.
+        selectedTab = AppTab.explore
+    }
+
+    private func handleShowAreaOnMap(_ notification: Notification) {
+        if let info = notification.userInfo,
+           let lat = info["latitude"] as? Double,
+           let lon = info["longitude"] as? Double {
+            pendingMapCenter = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            pendingMapResults = info["suggestions"] as? [SuggestedSpot]
+            pendingMapPicks = info["picks"] as? [FoodCategory]
         }
-        .overlayPreferenceValue(TutorialTargetKey.self) { anchors in
-            GeometryReader { geo in
-                Color.clear
-                    .onChange(of: anchors.count) { _, _ in
+        selectedTab = AppTab.explore
+    }
+
+    private func handleShowSpotsAtLocation(_ notification: Notification) {
+        if let info = notification.userInfo,
+           let lat = info["latitude"] as? Double,
+           let lon = info["longitude"] as? Double {
+            let name = info["name"] as? String ?? "Map Area"
+            pendingSpotsLocation = CustomSearchLocation(
+                name: name,
+                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            )
+        }
+        selectedTab = AppTab.spots
+    }
+
+    private func tutorialAnchorOverlay(anchors: [String: Anchor<CGRect>]) -> some View {
+        GeometryReader { geo in
+            Color.clear
+                .onChange(of: anchors.count) { _, _ in
+                    updateTargetFrames(anchors: anchors, geo: geo)
+                }
+                .onChange(of: selectedTab) { _, _ in
+                    updateTargetFrames(anchors: anchors, geo: geo)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         updateTargetFrames(anchors: anchors, geo: geo)
                     }
-                    .onChange(of: selectedTab) { _, _ in
-                        // Re-resolve anchors when tab changes — different targets become visible
-                        updateTargetFrames(anchors: anchors, geo: geo)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            updateTargetFrames(anchors: anchors, geo: geo)
-                        }
-                    }
-                    .onChange(of: tutorialService.currentStepIndex) { _, _ in
-                        // Re-resolve when the tutorial advances — target may have just appeared
-                        updateTargetFrames(anchors: anchors, geo: geo)
-                    }
-                    .onAppear {
-                        updateTargetFrames(anchors: anchors, geo: geo)
-                    }
-            }
-            .allowsHitTesting(false)
+                }
+                .onChange(of: tutorialService.currentStepIndex) { _, _ in
+                    updateTargetFrames(anchors: anchors, geo: geo)
+                }
+                .onAppear {
+                    updateTargetFrames(anchors: anchors, geo: geo)
+                }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToSpots)) { _ in
-            selectedTab = AppTab.spots
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showOnMap)) { notification in
-            if let suggestion = notification.userInfo?["suggestion"] as? SuggestedSpot {
-                pendingMapSuggestion = suggestion
-            }
-            selectedTab = AppTab.explore
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showAreaOnMap)) { notification in
-            if let info = notification.userInfo,
-               let lat = info["latitude"] as? Double,
-               let lon = info["longitude"] as? Double {
-                pendingMapCenter = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-                pendingMapResults = info["suggestions"] as? [SuggestedSpot]
-            }
-            selectedTab = AppTab.explore
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showSpotsAtLocation)) { notification in
-            if let info = notification.userInfo,
-               let lat = info["latitude"] as? Double,
-               let lon = info["longitude"] as? Double {
-                let name = info["name"] as? String ?? "Map Area"
-                pendingSpotsLocation = CustomSearchLocation(
-                    name: name,
-                    coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)
-                )
-            }
-            selectedTab = AppTab.spots
-        }
-        .wormEasterEgg()
-        .sheet(isPresented: $showWelcome) {
-            WelcomeView { version in
-                lastSeenWelcomeVersion = version
-                showWelcome = false
-            }
-            .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showTutorialCurriculum) {
-            TutorialCurriculumView(tutorialService: tutorialService)
-                .presentationDetents([.large])
-        }
-        .onChange(of: tutorialService.shouldShowCurriculum) { _, show in
-            if show {
-                tutorialService.shouldShowCurriculum = false
+        .allowsHitTesting(false)
+    }
+
+    private func handleInitialLoad() async {
+        await welcomeService.fetchWelcomeContent()
+        if let version = welcomeService.content?.version, version != lastSeenWelcomeVersion {
+            showWelcome = true
+        } else if !tutorialService.hasShownCurriculum {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 showTutorialCurriculum = true
+                tutorialService.markCurriculumShown()
             }
         }
-        .onChange(of: showWelcome) { _, isShowing in
-            // After the welcome sheet is dismissed for the first time, show the tutorial curriculum
-            if !isShowing && !tutorialService.hasShownCurriculum {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    showTutorialCurriculum = true
-                    tutorialService.markCurriculumShown()
-                }
-            }
-        }
-        .task {
-            // Fetch welcome content version — WelcomeService is a @StateObject so it
-            // persists for the lifetime of ContentView and won't be re-created on re-renders.
-            await welcomeService.fetchWelcomeContent()
-            if let version = welcomeService.content?.version, version != lastSeenWelcomeVersion {
-                showWelcome = true
-            } else if !tutorialService.hasShownCurriculum {
-                // Welcome didn't trigger (already seen or network error) but curriculum
-                // hasn't been shown yet — show it directly on first launch.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    showTutorialCurriculum = true
-                    tutorialService.markCurriculumShown()
-                }
-            }
-            // Fetch category rankings (Top 50 / Trending tiers).
-            // Falls back to hardcoded defaults if offline or doc missing.
-            await rankingService.fetchRankings()
-        }
-        .onChange(of: authService.isSignedIn) { _, _ in
-            // Pick tracking now fires only on deliberate user actions
-            // (toggle/add), not on sign-in. No sync needed here.
-        }
-        .onChange(of: authService.needsDisplayNamePrompt) { _, needsPrompt in
-            if needsPrompt {
-                promptedName = ""
-                showDisplayNamePrompt = true
-            }
-        }
-        .alert("What should we call you?", isPresented: $showDisplayNamePrompt) {
-            TextField("Your name", text: $promptedName)
-                .autocorrectionDisabled()
-            Button("Save") {
-                Task { await authService.saveDisplayNameToFirestore(promptedName) }
-            }
-            .disabled(promptedName.trimmingCharacters(in: .whitespaces).isEmpty)
-            Button("Skip", role: .cancel) {
-                authService.needsDisplayNamePrompt = false
-            }
-        } message: {
-            Text("This name appears on the leaderboard. You can change it later in Profile.")
-        }
+        await rankingService.fetchRankings()
     }
 
     /// Resolves anchor preferences from tutorial target views into CGRect frames.

@@ -12,6 +12,9 @@ struct MapTabView: View {
     /// Pre-built results from the Spots tab — when non-nil, injected directly
     /// into searchResultStore instead of running a fresh search.
     @Binding var pendingMapResults: [SuggestedSpot]?
+    /// One-shot picks override from Concierge — when non-nil, used instead of
+    /// activePicks so trending/custom categories resolve correctly.
+    @Binding var pendingMapPicks: [FoodCategory]?
     /// Shared Flezcal filter state — synced with Spots tab via ContentView.
     @Binding var activePickIDs: Set<String>
     /// Community Map mode — shows all verified spots, hides ghost pins.
@@ -40,12 +43,6 @@ struct MapTabView: View {
     /// before the user's real location resolves (skipped by the >5° guard),
     /// then again with the real location. Two ensures ghost pins appear.
     @State private var bootFetchesRemaining = 2
-    /// Suppresses the next "Search This Area" button appearance.  Set true
-    /// before an auto-zoom so the camera settle doesn't show the button.
-    @State private var suppressSearchButton = false
-    /// True when "Search This Area" appeared because the user toggled pills,
-    /// not because they panned. When true, the button searches with the
-    /// currently active picks instead of resetting to all-on.
     // Pill selections are user-controlled only — never reset programmatically.
     /// Pin-type visibility toggles — all on by default.
     @State private var showVerifiedPins = true
@@ -59,12 +56,6 @@ struct MapTabView: View {
     /// Set true when picks change while the map tab is off-screen.
     /// Triggers an auto-fetch when the user returns to the map.
     @State private var picksChangedWhileAway = false
-
-    /// Deeper scan state — Wave 2 is deferred until the user taps "Do a Deeper Scan?"
-    @State private var showDeeperScanButton = false
-    @State private var deeperScanPool: [SuggestedSpot] = []
-    @State private var deeperScanPicks: [FoodCategory] = []
-    @State private var wave1Results: [String: Set<String>] = [:]
 
     // On-demand website check — runs when the user taps a ghost pin
     @State private var multiCheckResult: MultiCategoryCheckResult? = nil
@@ -126,12 +117,6 @@ struct MapTabView: View {
         }
     }
 
-    // Batch fetch + pre-screen — homepage-only scan triggered after ghost pin fetch
-    @State private var fetchAndPreScreenTask: Task<Void, Never>? = nil
-    @State private var preScreenTask: Task<Void, Never>? = nil
-    @State private var preScreenBannerMessage: String? = nil
-    @State private var isPreScreening = false
-
     // MARK: - Helpers
 
     /// Shows alert when all pin toggles are turned off.
@@ -142,9 +127,41 @@ struct MapTabView: View {
     }
 
     /// The picks currently active for fetching / filtering.
-    /// Only includes picks whose IDs are in activePickIDs.
+    /// Resolves IDs from the user's picks first, then falls back to
+    /// `allKnownCategories` so voice-injected categories (not in the
+    /// user's 3 picks) still produce search results.
     private var activePicks: [FoodCategory] {
-        picksService.picks.filter { activePickIDs.contains($0.id) }
+        let fromPicks = picksService.picks.filter { activePickIDs.contains($0.id) }
+        let pickIDs = Set(fromPicks.map(\.id))
+        let extraIDs = activePickIDs.subtracting(pickIDs)
+        guard !extraIDs.isEmpty else { return fromPicks }
+        // Check built-in + legacy categories first, then custom/trending picks
+        let extras = FoodCategory.allKnownCategories.filter { extraIDs.contains($0.id) }
+        let resolvedIDs = Set(extras.map(\.id))
+        let stillMissing = extraIDs.subtracting(resolvedIDs)
+        let customExtras = FoodCategory.activeCustomPicksSnapshot.filter { stillMissing.contains($0.id) }
+        return fromPicks + extras + customExtras
+    }
+
+    /// The picks to show in the filter bar. Includes the user's normal picks
+    /// plus any extra categories injected by Concierge or voice search so the
+    /// user can see what's being searched (e.g. "Brisket" pill appears even if
+    /// Brisket isn't in their My Flezcals list).
+    private var displayPicks: [FoodCategory] {
+        let userPicks = picksService.picks
+        let userPickIDs = Set(userPicks.map(\.id))
+        let extraIDs = activePickIDs.subtracting(userPickIDs)
+        guard !extraIDs.isEmpty else { return userPicks }
+        // Resolve the extra IDs into FoodCategory objects
+        var extras: [FoodCategory] = []
+        for id in extraIDs {
+            if let cat = FoodCategory.allKnownCategories.first(where: { $0.id == id }) {
+                extras.append(cat)
+            } else if let cat = FoodCategory.activeCustomPicksSnapshot.first(where: { $0.id == id }) {
+                extras.append(cat)
+            }
+        }
+        return extras + userPicks
     }
 
     private typealias RegionBounds = (minLat: Double, maxLat: Double,
@@ -229,7 +246,6 @@ struct MapTabView: View {
         // Single pin: center on it with a comfortable zoom level
         if coordinates.count == 1 {
             let center = coordinates[0]
-            suppressSearchButton = true
             lastFetchedCenter = center
             withAnimation(.easeInOut(duration: 0.5)) {
                 cameraPosition = .region(MKCoordinateRegion(
@@ -264,10 +280,9 @@ struct MapTabView: View {
             longitude: (minLon + maxLon) / 2
         )
 
-        // Suppress the "Search This Area" button that would otherwise
-        // appear when the camera settles at the new position, and update
-        // lastFetchedCenter so shouldFetch returns false.
-        suppressSearchButton = true
+        // Update lastFetchedCenter so shouldFetch returns false when the
+        // camera settles at the new position — prevents "Search This Area"
+        // from appearing after a programmatic zoom.
         lastFetchedCenter = center
 
         withAnimation(.easeInOut(duration: 0.5)) {
@@ -275,191 +290,25 @@ struct MapTabView: View {
         }
     }
 
-    /// Fetches ghost pin suggestions then kicks off the batch homepage pre-screen.
-    /// Call this everywhere that `fetchSuggestions` is called to ensure the
-    /// pre-screen always follows.
-    /// - Parameter zoomToFit: When true, auto-zooms the map to fit all pins after
-    ///   suggestions load. Pass false for boot auto-fetches where the camera
-    ///   should stay at the user's location.
+    /// Convenience wrapper — delegates to the store, passing map-specific extras
+    /// (showOnMapPin, communityMap guard) and wiring the zoom + pre-screen callbacks.
     private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory], zoomToFit: Bool = false) {
         // Community Map mode — no ghost pin fetches needed
         guard !showCommunityMap else { return }
-        // Cancel any in-flight fetch + pre-screen so a new call doesn't
-        // race with the previous one and overwrite green pin results.
-        fetchAndPreScreenTask?.cancel()
-        preScreenTask?.cancel()
-        showDeeperScanButton = false
-        deeperScanPool = []
+        showSearchHereButton = false
 
-        fetchAndPreScreenTask = Task {
-            #if DEBUG
-            print("[MapTab] fetchAndPreScreen called with \(picks.count) picks, radius \(picksService.searchRadiusDegrees)")
-            #endif
-            await searchResultStore.fetchSuggestions(
-                in: region,
-                existingSpots: spotService.spots,
-                picks: picks,
-                radius: picksService.searchRadiusDegrees
-            )
-            guard !Task.isCancelled else {
-                isPreScreening = false
-                return
-            }
+        var extras: [SuggestedSpot] = []
+        if let pinned = showOnMapPin { extras.append(pinned) }
 
-            // Instant pass: apply any cached pre-screen results immediately.
-            // When the shared htmlCache already has results (e.g. from Explore tab),
-            // green pins appear the moment ghost pins load — no waiting for fetches.
-            let pool = searchResultStore.fullPool
-            let cachedResults = await websiteChecker.cachedPreScreen(
-                suggestions: pool,
-                picks: picks
-            )
-            if !cachedResults.isEmpty {
-                searchResultStore.applyPreScreenResults(cachedResults)
-                #if DEBUG
-                let greenCount = cachedResults.values.filter { !$0.isEmpty }.count
-                print("[MapTab] Instant cache hit: \(greenCount) green out of \(cachedResults.count) cached")
-                #endif
-            }
-
-            // Kick off Wave 1: scan the closest 25 venues (the displayed set)
-            // so green pins appear fast. Wave 2 (remaining pool) is deferred
-            // until the user taps "Do a Deeper Scan?".
-            preScreenBannerMessage = nil
-            searchResultStore.preScreenComplete = false
-            isPreScreening = true
-            var poolToScan = searchResultStore.fullPool
-            // Include showOnMapPin in the pre-screen batch so it gets
-            // scanned along with the other ghost pins.
-            if let pinned = showOnMapPin,
-               !poolToScan.contains(where: { $0.id == pinned.id }) {
-                poolToScan.append(pinned)
-            }
-            preScreenTask = Task {
-                let wave1Count = min(25, poolToScan.count)
-                let wave1 = Array(poolToScan.prefix(wave1Count))
-                let wave2 = Array(poolToScan.dropFirst(wave1Count))
-
-                // ── Wave 1: closest venues (fast results) ──
-                let w1Results = await websiteChecker.batchPreScreen(
-                    suggestions: wave1,
-                    picks: picks
-                )
-                guard !Task.isCancelled else {
-                    isPreScreening = false
-                    return
-                }
-                searchResultStore.applyPreScreenResults(w1Results)
-                if let pinned = showOnMapPin,
-                   let matched = w1Results[pinned.id] {
-                    showOnMapPin?.preScreenMatches = matched
-                }
-                #if DEBUG
-                let w1Green = w1Results.values.filter { !$0.isEmpty }.count
-                print("[PreScreen] Wave 1 done: \(w1Green) green out of \(wave1.count) closest venues")
-                #endif
-
-                isPreScreening = false
-
-                // Zoom to fit the Wave 1 pin set so the user sees results.
-                if zoomToFit {
-                    zoomToFitPins()
-                }
-
-                // Show Wave 1 result banner
-                let likelyCount = searchResultStore.suggestions.filter {
-                    $0.preScreenMatches?.isEmpty == false
-                }.count
-                let totalCount = searchResultStore.suggestions.count
-                #if DEBUG
-                print("[PreScreen] Wave 1 complete. \(likelyCount) likely out of \(totalCount) suggestions. \(wave2.count) venues deferred.")
-                #endif
-                if totalCount > 0 {
-                    if likelyCount == 0 {
-                        preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
-                    } else {
-                        preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
-                    }
-                    Task {
-                        try? await Task.sleep(for: .seconds(8))
-                        preScreenBannerMessage = nil
-                    }
-                }
-
-                // Store Wave 2 pool for the "Do a Deeper Scan?" button.
-                if !wave2.isEmpty {
-                    wave1Results = w1Results
-                    deeperScanPool = wave2
-                    deeperScanPicks = picks
-                    showDeeperScanButton = true
-                }
-            }
-        }
-    }
-
-    /// Wave 2: runs only when the user taps "Do a Deeper Scan?".
-    /// Scans the remaining pool beyond the closest 25 and promotes
-    /// any green matches into the displayed set.
-    private func runDeeperScan() {
-        showDeeperScanButton = false
-        preScreenTask?.cancel()
-        preScreenBannerMessage = nil
-        isPreScreening = true
-
-        let pool = deeperScanPool
-        let picks = deeperScanPicks
-        let w1 = wave1Results
-
-        preScreenTask = Task {
-            let w2Results = await websiteChecker.batchPreScreen(
-                suggestions: pool,
-                picks: picks
-            )
-            guard !Task.isCancelled else {
-                isPreScreening = false
-                return
-            }
-            // Merge Wave 2 into Wave 1 results and re-apply for promotion.
-            var allResults = w1
-            for (key, value) in w2Results {
-                allResults[key] = value
-            }
-            searchResultStore.applyPreScreenResults(allResults)
-            if let pinned = showOnMapPin,
-               let matched = w2Results[pinned.id] {
-                showOnMapPin?.preScreenMatches = matched
-            }
-            #if DEBUG
-            let w2Green = w2Results.values.filter { !$0.isEmpty }.count
-            print("[PreScreen] Wave 2 done: \(w2Green) green out of \(pool.count) remaining venues")
-            #endif
-
-            isPreScreening = false
-            deeperScanPool = []
-
-            // Zoom to fit the wider pin set (including promoted pins).
-            zoomToFitPins()
-
-            // Show final result banner
-            let likelyCount = searchResultStore.suggestions.filter {
-                $0.preScreenMatches?.isEmpty == false
-            }.count
-            let totalCount = searchResultStore.suggestions.count
-            #if DEBUG
-            print("[PreScreen] Deeper scan complete. \(likelyCount) likely out of \(totalCount) suggestions.")
-            #endif
-            if totalCount > 0 {
-                if likelyCount == 0 {
-                    preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
-                } else {
-                    preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
-                }
-                Task {
-                    try? await Task.sleep(for: .seconds(8))
-                    preScreenBannerMessage = nil
-                }
-            }
-        }
+        searchResultStore.fetchAndPreScreen(
+            in: region,
+            picks: picks,
+            existingSpots: spotService.spots,
+            radius: picksService.searchRadiusDegrees,
+            websiteChecker: websiteChecker,
+            extraSuggestions: extras,
+            zoomToFit: zoomToFit
+        )
     }
 
     private func bounds(for region: MKCoordinateRegion) -> RegionBounds {
@@ -632,7 +481,6 @@ struct MapTabView: View {
             .onAppear {
                 if picksChangedWhileAway {
                     picksChangedWhileAway = false
-                    // Picks were modified while the map was off-screen — fetch now
                     guard let region = visibleRegion else { return }
                     lastFetchedCenter = region.center
                     fetchAndPreScreen(in: region, picks: picksService.picks, zoomToFit: true)
@@ -740,14 +588,6 @@ struct MapTabView: View {
                 visibleRegion = context.region
                 initialRegionSeen = true
 
-                // Consume suppress flag — auto-zoom moved the camera,
-                // so don't show "Search This Area" for this settle.
-                if suppressSearchButton {
-                    suppressSearchButton = false
-                    lastFetchedCenter = context.region.center
-                    return
-                }
-
                 if bootFetchesRemaining > 0 {
                     // Skip MapKit's initial fallback region (continent-scale)
                     if context.region.span.latitudeDelta > 5.0 {
@@ -762,13 +602,10 @@ struct MapTabView: View {
                     lastFetchedCenter = context.region.center
                     fetchAndPreScreen(in: context.region, picks: activePicks, zoomToFit: true)
                 } else {
-                    // User moved after boot — cancel stale searches so
-                    // zoomToFitPins doesn't snap the camera back, and
-                    // show the "Search This Area" button.
-                    fetchAndPreScreenTask?.cancel()
-                    preScreenTask?.cancel()
-                    isPreScreening = false
-                    showDeeperScanButton = false
+                    // User panned/zoomed after boot — show "Search This Area" button.
+                    // NEVER cancel store tasks or wipe deeper scan state here.
+                    // The store owns its own task lifecycle; camera events are irrelevant.
+                    guard shouldFetch(for: context.region.center) else { return }
                     showSearchHereButton = true
                 }
             }
@@ -785,6 +622,28 @@ struct MapTabView: View {
                 if bootFetchesRemaining == 0 {
                     showSearchHereButton = true
                 }
+            }
+            .onChange(of: searchResultStore.preScreenComplete) { _, complete in
+                guard complete else { return }
+                // Zoom to fit pins after Wave 1 or Wave 2 completes, if requested
+                if searchResultStore.pendingZoomToFit {
+                    searchResultStore.pendingZoomToFit = false
+                    zoomToFitPins()
+                }
+                // Update showOnMapPin's pre-screen matches from the store
+                if let pinned = showOnMapPin,
+                   let poolMatch = searchResultStore.fullPool.first(where: { $0.id == pinned.id }),
+                   let matches = poolMatch.preScreenMatches {
+                    showOnMapPin?.preScreenMatches = matches
+                }
+            }
+            .onChange(of: searchResultStore.pendingZoomToFit) { _, pending in
+                // Handles the case where the redundant-fetch guard skipped
+                // a new fetch but the caller requested zoom-to-fit.
+                // The data is already in the store, so zoom immediately.
+                guard pending, searchResultStore.preScreenComplete else { return }
+                searchResultStore.pendingZoomToFit = false
+                zoomToFitPins()
             }
             .onChange(of: showVerifiedPins) { _, _ in checkAllPinsOff() }
             .onChange(of: showPossiblePins) { _, _ in checkAllPinsOff() }
@@ -817,18 +676,21 @@ struct MapTabView: View {
                 pendingMapCenter = nil   // consume immediately
                 let incomingResults = pendingMapResults
                 pendingMapResults = nil
+                // One-shot picks override from Concierge — use these instead
+                // of activePicks so trending/custom categories resolve correctly.
+                let overridePicks = pendingMapPicks
+                pendingMapPicks = nil
 
                 lastFetchedCenter = center
                 showSearchHereButton = false
                 bootFetchesRemaining = 0
+                // Clear any pending zoom from a boot fetch so it doesn't
+                // overwrite the camera position we're about to set.
+                searchResultStore.pendingZoomToFit = false
 
                 if let results = incomingResults, !results.isEmpty {
                     // Injected from Spots tab — show these exact results, no fresh search.
-                    // Cancel any in-flight fetch/pre-screen so they don't override our data.
-                    fetchAndPreScreenTask?.cancel()
-                    preScreenTask?.cancel()
-                    isPreScreening = false
-                    showDeeperScanButton = false
+                    searchResultStore.cancelInFlight()
                     // Clear any stale "Show on Map" pin so it doesn't overlap
                     // with the same venue in the injected results.
                     showOnMapPin = nil
@@ -842,50 +704,40 @@ struct MapTabView: View {
                     }
                     #endif
 
-                    // Suppress "Search This Area" immediately so any .onEnd
-                    // that fires during the tab switch doesn't show the button
-                    // or trigger a fresh search that overwrites green pins.
-                    suppressSearchButton = true
-                    showSearchHereButton = false
-
-                    // Zoom to fit the injected green pins directly. We use the
-                    // raw injected results' green-match coordinates instead of
-                    // visibleGhostPins to avoid any timing issues with computed
-                    // property recalculation and boot event races.
+                    // Zoom to fit the injected green pins.
                     let greenCoords = results
                         .filter { $0.preScreenMatches?.isEmpty == false }
                         .map(\.coordinate)
                     let allCoords = results.map(\.coordinate)
                     let fallbackCenter = center
-                    // Short delay so the zoom happens AFTER any queued boot .onEnd
-                    // events, preventing a boot fetch from overriding the camera.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        // Re-suppress for the zoom-settle .onEnd
-                        self.suppressSearchButton = true
-                        self.showSearchHereButton = false
-                        if !greenCoords.isEmpty {
-                            self.zoomToFitPins(overridePins: greenCoords)
-                        } else if !allCoords.isEmpty {
-                            self.zoomToFitPins(overridePins: allCoords)
-                        } else {
-                            self.zoomToFitPins(overridePins: [fallbackCenter])
-                        }
+                    if !greenCoords.isEmpty {
+                        zoomToFitPins(overridePins: greenCoords)
+                    } else if !allCoords.isEmpty {
+                        zoomToFitPins(overridePins: allCoords)
+                    } else {
+                        zoomToFitPins(overridePins: [fallbackCenter])
                     }
                 } else {
-                    // No results provided — fresh fetch for this area
+                    // No results provided — fresh fetch for this area.
+                    // Use override picks from Concierge when available,
+                    // otherwise fall back to the normal activePicks resolution.
+                    let picks = overridePicks ?? activePicks
                     let span = picksService.searchRadiusDegrees
                     let region = MKCoordinateRegion(
                         center: center,
                         span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
                     )
                     cameraPosition = .region(region)
-                    fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
+                    // Explicit location change — clear the redundant-fetch guard
+                    // so the store runs a fresh search at the new location.
+                    searchResultStore.cancelInFlight()
+                    fetchAndPreScreen(in: region, picks: picks, zoomToFit: true)
                 }
             }
 
             // Filter pills — one toggleable pill per pick
             VStack(spacing: 8) {
-                PicksFilterBar(picks: picksService.picks,
+                PicksFilterBar(picks: displayPicks,
                                activeIDs: $activePickIDs)
                     .tutorialTarget("filterPills")
 
@@ -957,6 +809,9 @@ struct MapTabView: View {
                             // Never reset pills — the user's explicit filter is sacred.
                             guard let region = visibleRegion else { return }
                             lastFetchedCenter = region.center
+                            // Explicit user action — clear the redundant-fetch guard
+                            // so the store always runs a fresh search.
+                            searchResultStore.cancelInFlight()
                             fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
                         } label: {
                             Label("Search This Area", systemImage: "magnifyingglass")
@@ -975,12 +830,12 @@ struct MapTabView: View {
                 .animation(.easeInOut(duration: 0.25), value: showSearchHereButton)
             }
 
-            // "Do a Deeper Scan?" + result banner — stacked at the bottom.
+            // "Search Wider Area?" + result banner — stacked at the bottom.
             // The banner sits above the button so they don't overlap.
-            if showDeeperScanButton && !showSearchHereButton || preScreenBannerMessage != nil {
+            if searchResultStore.showDeeperScanButton && !showSearchHereButton || searchResultStore.preScreenBannerMessage != nil {
                 VStack(spacing: 8) {
                     Spacer()
-                    if let message = preScreenBannerMessage {
+                    if let message = searchResultStore.preScreenBannerMessage {
                         Text(message)
                             .font(.caption)
                             .fontWeight(.medium)
@@ -989,14 +844,14 @@ struct MapTabView: View {
                             .background(.ultraThinMaterial)
                             .clipShape(Capsule())
                             .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                            .onTapGesture { preScreenBannerMessage = nil }
+                            .onTapGesture { searchResultStore.preScreenBannerMessage = nil }
                             .transition(.opacity)
                     }
-                    if showDeeperScanButton && !showSearchHereButton {
+                    if searchResultStore.showDeeperScanButton && !showSearchHereButton {
                         Button {
-                            runDeeperScan()
+                            searchResultStore.runDeeperScan(websiteChecker: websiteChecker)
                         } label: {
-                            Label("Search Wider Area?", systemImage: "magnifyingglass")
+                            Label("Scan More Spots?", systemImage: "magnifyingglass")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 20)
@@ -1009,13 +864,13 @@ struct MapTabView: View {
                     }
                 }
                 .padding(.bottom, 24)
-                .animation(.easeInOut(duration: 0.25), value: showDeeperScanButton)
-                .animation(.easeInOut(duration: 0.3), value: preScreenBannerMessage)
+                .animation(.easeInOut(duration: 0.25), value: searchResultStore.showDeeperScanButton)
+                .animation(.easeInOut(duration: 0.3), value: searchResultStore.preScreenBannerMessage)
             }
 
             // Ghost pin fetch indicator — shows while SearchResultStore is
             // querying Apple Maps, before the pre-screen phase begins.
-            if searchResultStore.isLoading && !isPreScreening {
+            if searchResultStore.isLoading && !searchResultStore.isPreScreening {
                 VStack {
                     Spacer()
                     HStack(spacing: 6) {
@@ -1038,7 +893,7 @@ struct MapTabView: View {
             }
 
             // Pre-screen scanning indicator
-            if isPreScreening {
+            if searchResultStore.isPreScreening {
                 VStack {
                     Spacer()
                     HStack(spacing: 6) {
@@ -1057,7 +912,7 @@ struct MapTabView: View {
                     .padding(.bottom, 24)
                 }
                 .transition(.opacity)
-                .animation(.easeInOut(duration: 0.25), value: isPreScreening)
+                .animation(.easeInOut(duration: 0.25), value: searchResultStore.isPreScreening)
             }
 
             // Loading overlay
@@ -1265,6 +1120,7 @@ struct PicksFilterBar: View {
                 }
             }
             .padding(.horizontal)
+            .frame(minWidth: UIScreen.main.bounds.width)
         }
     }
 
@@ -1385,6 +1241,7 @@ private struct MapEmptyBanner: View {
     MapTabView(pendingMapSuggestion: .constant(nil),
                pendingMapCenter: .constant(nil),
                pendingMapResults: .constant(nil),
+               pendingMapPicks: .constant(nil),
                activePickIDs: .constant(Set(["mezcal", "flan", "tacos"])),
                showCommunityMap: .constant(false),
                websiteChecker: WebsiteCheckService())

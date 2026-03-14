@@ -35,6 +35,7 @@
 		B10000010000000000000005 /* Review.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000005 /* Review.swift */; };
 		B10000010000000000000006 /* AppUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* AppUser.swift */; };
 		B10000010000000000000007 /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000007 /* MapTabView.swift */; };
+		CC0000010000000000000001 /* ConciergeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000020000000000000001 /* ConciergeTabView.swift */; };
 		B10000010000000000000009 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000009 /* ProfileView.swift */; };
 		B1000001000000000000000A /* SpotCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000A /* SpotCategory.swift */; };
 		B1000001000000000000000B /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000B /* Constants.swift */; };
@@ -109,6 +110,9 @@
 		AS0000010000000000000001 /* AdminSearchTermsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AS0000020000000000000001 /* AdminSearchTermsView.swift */; };
 		OL0000010000000000000001 /* OfferingListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OL0000020000000000000001 /* OfferingListService.swift */; };
 		VR0000010000000000000001 /* ValidationRuleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = VR0000020000000000000001 /* ValidationRuleService.swift */; };
+		VS0000010000000000000001 /* VoiceSearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VS0000020000000000000001 /* VoiceSearchManager.swift */; };
+		VS0000010000000000000002 /* QueryParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = VS0000020000000000000002 /* QueryParser.swift */; };
+		VS0000010000000000000003 /* VoiceSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VS0000020000000000000003 /* VoiceSearchView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -154,6 +158,7 @@
 		B20000010000000000000005 /* Review.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Review.swift; sourceTree = "<group>"; };
 		B20000010000000000000006 /* AppUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUser.swift; sourceTree = "<group>"; };
 		B20000010000000000000007 /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
+		CC0000020000000000000001 /* ConciergeTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeTabView.swift; sourceTree = "<group>"; };
 		B20000010000000000000009 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		B2000001000000000000000A /* SpotCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotCategory.swift; sourceTree = "<group>"; };
 		B2000001000000000000000B /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
@@ -233,6 +238,9 @@
 		AS0000020000000000000001 /* AdminSearchTermsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminSearchTermsView.swift; sourceTree = "<group>"; };
 		OL0000020000000000000001 /* OfferingListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferingListService.swift; sourceTree = "<group>"; };
 		VR0000020000000000000001 /* ValidationRuleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidationRuleService.swift; sourceTree = "<group>"; };
+		VS0000020000000000000001 /* VoiceSearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSearchManager.swift; sourceTree = "<group>"; };
+		VS0000020000000000000002 /* QueryParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryParser.swift; sourceTree = "<group>"; };
+		VS0000020000000000000003 /* VoiceSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSearchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -343,6 +351,7 @@
 				BEB135D53650572B2339AC0B /* CustomCategory.swift */,
 				VF0000020000000000000001 /* Verification.swift */,
 				VF0000020000000000000002 /* ClosureReport.swift */,
+				VS0000020000000000000002 /* QueryParser.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -351,6 +360,7 @@
 			isa = PBXGroup;
 			children = (
 				B20000010000000000000007 /* MapTabView.swift */,
+				CC0000020000000000000001 /* ConciergeTabView.swift */,
 				B20000010000000000000025 /* ListTabView.swift */,
 				B20000010000000000000009 /* ProfileView.swift */,
 				B20000010000000000000013 /* SpotDetailView.swift */,
@@ -374,6 +384,7 @@
 
 				FR0000020000000000000001 /* FlezcalRowView.swift */,
 				FR0000020000000000000002 /* InlineRatingPicker.swift */,
+				VS0000020000000000000003 /* VoiceSearchView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -407,6 +418,7 @@
 				RK0000020000000000000001 /* RankingService.swift */,
 				OL0000020000000000000001 /* OfferingListService.swift */,
 				VR0000020000000000000001 /* ValidationRuleService.swift */,
+				VS0000020000000000000001 /* VoiceSearchManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -669,6 +681,7 @@
 				B10000010000000000000005 /* Review.swift in Sources */,
 				B10000010000000000000006 /* AppUser.swift in Sources */,
 				B10000010000000000000007 /* MapTabView.swift in Sources */,
+				CC0000010000000000000001 /* ConciergeTabView.swift in Sources */,
 				B10000010000000000000026 /* ListTabView.swift in Sources */,
 				B10000010000000000000009 /* ProfileView.swift in Sources */,
 				B1000001000000000000000F /* AuthService.swift in Sources */,
@@ -750,6 +763,9 @@
 				AS0000010000000000000001 /* AdminSearchTermsView.swift in Sources */,
 				OL0000010000000000000001 /* OfferingListService.swift in Sources */,
 				VR0000010000000000000001 /* ValidationRuleService.swift in Sources */,
+				VS0000010000000000000001 /* VoiceSearchManager.swift in Sources */,
+				VS0000010000000000000002 /* QueryParser.swift in Sources */,
+				VS0000010000000000000003 /* VoiceSearchView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

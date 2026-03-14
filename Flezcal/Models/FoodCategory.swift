@@ -1163,7 +1163,12 @@ extension FoodCategory {
     /// Custom picks (custom_ prefix) are added alongside the built-in categories.
     /// Modified built-in picks override their static counterparts during scanning.
     @MainActor static func registerUserPicks(_ picks: [FoodCategory]) {
-        activeCustomPicks = picks.filter { $0.id.hasPrefix("custom_") }
+        // Preserve any temporary categories (registered by Concierge) that
+        // aren't in the user's picks — otherwise the picks-changed handler
+        // would wipe them and break the Concierge → Map handoff.
+        let userCustomIDs = Set(picks.filter { $0.id.hasPrefix("custom_") }.map(\.id))
+        let temporaryExtras = activeCustomPicks.filter { !userCustomIDs.contains($0.id) }
+        activeCustomPicks = picks.filter { $0.id.hasPrefix("custom_") } + temporaryExtras
         activeCustomPicksSnapshot = activeCustomPicks
         modifiedBuiltInPicks = [:]
         for pick in picks where !pick.id.hasPrefix("custom_") {
@@ -1171,6 +1176,17 @@ extension FoodCategory {
                original.websiteKeywords != pick.websiteKeywords {
                 modifiedBuiltInPicks[pick.id] = pick
             }
+        }
+    }
+
+    /// Ensures a category is resolvable by `by(id:)` and `activeCustomPicksSnapshot`.
+    /// Used by Concierge mode to register a trending category for map search
+    /// without modifying the user's actual picks.
+    @MainActor static func registerTemporaryCategory(_ category: FoodCategory) {
+        guard category.id.hasPrefix("custom_") else { return }
+        if !activeCustomPicks.contains(where: { $0.id == category.id }) {
+            activeCustomPicks.append(category)
+            activeCustomPicksSnapshot = activeCustomPicks
         }
     }
 

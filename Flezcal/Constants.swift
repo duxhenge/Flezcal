@@ -118,6 +118,7 @@ enum AppTab {
     static let spots       = 2
     static let leaderboard = 3
     static let profile     = 4
+    static let concierge   = 5
 }
 
 extension Notification.Name {
