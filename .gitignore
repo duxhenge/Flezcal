@@ -27,3 +27,8 @@ seed-welcome*.py
 seed-welcome*.js
 .firebase/
 .wrangler/
+
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
