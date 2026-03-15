@@ -192,7 +192,7 @@ struct AdminOverviewView: View {
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Spots by Flezcal", systemImage: "mappin.and.ellipse")
+                Label("Spots by \(AppBranding.name)", systemImage: "mappin.and.ellipse")
                     .font(.headline)
                 Spacer()
                 Text("confirmed spots")
@@ -247,7 +247,7 @@ struct AdminOverviewView: View {
     private func categoriesSection(metrics: SpotMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Flezcal Picks (\(categoryPickCounts.count))", systemImage: "square.grid.2x2")
+                Label("\(AppBranding.name) Picks (\(categoryPickCounts.count))", systemImage: "square.grid.2x2")
                     .font(.headline)
                 Spacer()
             }

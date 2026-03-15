@@ -1,6 +1,9 @@
 import Foundation
 @preconcurrency import MapKit
 import CoreLocation
+import os
+
+private let searchLog = Logger(subsystem: "com.flezcal.app", category: "SearchResultStore")
 
 // MARK: - SuggestedSpot
 
@@ -90,6 +93,27 @@ class SearchResultStore: ObservableObject {
     /// Maximum ghost pins shown on the map / in the annotation set.
     private static let maxDisplayPins = 25
 
+    /// Chain venues that are almost never relevant for specialty food searches.
+    /// Filtered out unless the venue name also contains a pick keyword.
+    private static let chainExclusions: Set<String> = [
+        "dunkin", "starbucks", "mcdonald's", "burger king", "wendy's",
+        "taco bell", "subway", "chick-fil-a", "popeyes", "five guys",
+    ]
+
+    /// Returns true if `nameLower` contains any pick's websiteKeyword (word-boundary match).
+    /// Used as an escape hatch so relevant chains/cafes aren't over-filtered.
+    private static func venueNameMatchesAnyPick(_ nameLower: String, picks: [FoodCategory]) -> Bool {
+        for pick in picks {
+            for keyword in pick.websiteKeywords where keyword.count >= 3 {
+                let escaped = NSRegularExpression.escapedPattern(for: keyword.lowercased())
+                if nameLower.range(of: "\\b\(escaped)\\b", options: .regularExpression) != nil {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     // ── Task management (private — views cannot cancel these) ───────────
 
     /// The current fetch + Wave 1 pre-screen task. Only replaced by a new
@@ -105,6 +129,10 @@ class SearchResultStore: ObservableObject {
     private var deeperScanPicks: [FoodCategory] = []
     /// Wave 1 pre-screen results — merged with Wave 2 when user initiates deeper scan.
     private var wave1Results: [String: Set<String>] = [:]
+    /// IDs from the initial `fetchSuggestions` closest-25 — set once per fetch,
+    /// never mutated by `applyPreScreenResults`. This ensures the "original 25"
+    /// identity is stable across cached pre-screen → Wave 1 → Wave 2 passes.
+    private var originalSuggestionIDs: Set<String> = []
     /// Pick IDs from the last completed or in-flight fetchAndPreScreen call.
     /// Combined with `lastFetchCenter` to detect redundant fetch requests.
     private var lastFetchPickIDs: Set<String> = []
@@ -146,9 +174,19 @@ class SearchResultStore: ObservableObject {
         print("[SearchResultStore] Fetching for region center (\(String(format: "%.4f", region.center.latitude)), \(String(format: "%.4f", region.center.longitude))), picks: \(picks.map(\.id)), \(taggedQueries.count) unique queries: \(taggedQueries.map(\.query))")
         #endif
 
-        // Existing confirmed spot names — never re-suggest these.
+        // Existing confirmed spot names whose categories OVERLAP with current picks.
+        // Only these are filtered out — spots with non-overlapping categories stay in
+        // the pool as ghost pins, so users can discover new categories at known venues.
         // Exclude hidden spots so ghost pins reappear when user removes all categories.
-        let existingNames = Set(existingSpots.filter { !$0.isHidden }.map { $0.name.lowercased() })
+        let pickIDs = Set(picks.map(\.id))
+        let existingNames = Set(
+            existingSpots
+                .filter { spot in
+                    !spot.isHidden &&
+                    spot.categories.contains { cat in pickIDs.contains(cat.rawValue) }
+                }
+                .map { $0.name.lowercased() }
+        )
 
         // Reference point for distance sorting in applyPreScreenResults
         let regionCenter = CLLocation(latitude: region.center.latitude,
@@ -167,15 +205,56 @@ class SearchResultStore: ObservableObject {
         for result in taggedResults {
             guard let name = result.item.name else { continue }
             let key = name.lowercased()
-            if existingNames.contains(key) {
+            // Bidirectional substring match — aligns with SpotService.findExistingSpot()
+            // which uses localizedCaseInsensitiveContains. Either name containing the
+            // other catches "The Winsor House" vs "Winsor House" and similar variants.
+            if existingNames.contains(where: { existing in
+                key.contains(existing) || existing.contains(key)
+            }) {
                 #if DEBUG
-                print("[SearchResultStore] Skipped \"\(name)\" — already a confirmed spot")
+                print("[SearchResultStore] Skipped \"\(name)\" — already a confirmed spot for active picks")
                 #endif
                 continue
             }
             if !seenNames.insert(key).inserted { continue }
             let category = picksByID[result.tag] ?? picks[0]
             pool.append(SuggestedSpot(mapItem: result.item, suggestedCategory: category))
+        }
+
+        // ── Irrelevant venue filter ────────────────────────────────────
+        // Remove obviously wrong venues that Apple Maps returns due to
+        // broad POI matching (e.g. Dunkin Donuts for "lobster rolls").
+        // Conservative: keeps any venue whose name matches a pick keyword.
+        let cafeNaturalPickIDs: Set<String> = [
+            "tea", "coffee", "pastry", "matcha", "bubble_tea",
+        ]
+        let anyCafePick = !pickIDs.isDisjoint(with: cafeNaturalPickIDs)
+
+        pool = pool.filter { suggestion in
+            let nameLower = suggestion.name.lowercased()
+
+            // 1. POI category filter: remove .cafe venues unless a pick is
+            //    cafe-related or the venue name contains a pick keyword.
+            if !anyCafePick,
+               suggestion.mapItem.pointOfInterestCategory == .cafe {
+                if Self.venueNameMatchesAnyPick(nameLower, picks: picks) { return true }
+                #if DEBUG
+                print("[SearchResultStore] Filtered café \"\(suggestion.name)\" — no pick keyword in name")
+                #endif
+                return false
+            }
+
+            // 2. Chain name filter: remove known chains unless venue name
+            //    contains a pick keyword (e.g. a chain that added your pick).
+            if Self.chainExclusions.contains(where: { nameLower.contains($0) }) {
+                if Self.venueNameMatchesAnyPick(nameLower, picks: picks) { return true }
+                #if DEBUG
+                print("[SearchResultStore] Filtered chain \"\(suggestion.name)\" — no pick keyword in name")
+                #endif
+                return false
+            }
+
+            return true
         }
 
         // Name-match pass: if a venue's name contains any of a pick's keywords
@@ -215,7 +294,21 @@ class SearchResultStore: ObservableObject {
 
         #if DEBUG
         print("[SearchResultStore] Pool: \(pool.count) unique venues → closest \(found.count) kept (full pool: \(validPool.count))")
-        print("[SearchResultStore] Venues: \(found.map(\.name).joined(separator: ", "))")
+        // Distance distribution: show distance for each of the first 25 + a few beyond
+        let debugCenter = CLLocation(latitude: region.center.latitude, longitude: region.center.longitude)
+        let debugLimit = min(30, validPool.count)
+        for i in 0..<debugLimit {
+            let s = validPool[i]
+            let dist = CLLocation(latitude: s.coordinate.latitude, longitude: s.coordinate.longitude).distance(from: debugCenter)
+            let isGreen = s.preScreenMatches?.isEmpty == false
+            let marker = i < Self.maxDisplayPins ? "W1" : "W2"
+            print("[SearchResultStore]   [\(marker)] #\(i+1) \(s.name) — \(String(format: "%.1f", dist / 1000))km \(isGreen ? "🟢" : "🟡")")
+        }
+        if validPool.count > debugLimit {
+            let lastS = validPool[validPool.count - 1]
+            let lastDist = CLLocation(latitude: lastS.coordinate.latitude, longitude: lastS.coordinate.longitude).distance(from: debugCenter)
+            print("[SearchResultStore]   ... #\(validPool.count) \(lastS.name) — \(String(format: "%.1f", lastDist / 1000))km")
+        }
         #endif
 
         // A newer fetch started while we were running — discard our results entirely.
@@ -226,6 +319,9 @@ class SearchResultStore: ObservableObject {
             suggestions = found
             fullPool = validPool
             lastFetchCenter = regionCenter
+            // Lock in the "original 25" identity — stable across all
+            // applyPreScreenResults passes (cached, Wave 1, Wave 2).
+            originalSuggestionIDs = Set(found.map(\.id))
         }
         isLoading = false
     }
@@ -236,11 +332,22 @@ class SearchResultStore: ObservableObject {
     /// Replaces any existing suggestions and marks pre-screen complete
     /// since the data already has `preScreenMatches` baked in.
     /// Deduplicates by venue name (lowercased) to prevent overlapping pins.
+    /// Preserves Wave 2 greens: the closest 25 are the "originals", plus all
+    /// green pins from beyond the 25 (same logic as applyPreScreenResults).
     func injectResults(_ results: [SuggestedSpot]) {
         var seenIDs = Set<String>()
         let unique = results.filter { seenIDs.insert($0.id).inserted }
-        suggestions = Array(unique.prefix(Self.maxDisplayPins))
+        let originals = Array(unique.prefix(Self.maxDisplayPins))
+        let originalIDs = Set(originals.map(\.id))
+        // Keep green pins from beyond the original 25 (Wave 2 promotions)
+        let extraGreens = Array(unique.dropFirst(Self.maxDisplayPins).filter {
+            $0.preScreenMatches?.isEmpty == false
+        })
+        let displayed = originals + extraGreens
+        searchLog.info("injectResults: \(unique.count) unique → \(originals.count) originals + \(extraGreens.count) extra greens = \(displayed.count) displayed")
+        suggestions = displayed
         fullPool = unique
+        originalSuggestionIDs = originalIDs
         preScreenComplete = true
         isLoading = false
     }
@@ -254,7 +361,15 @@ class SearchResultStore: ObservableObject {
     /// - Non-empty set → homepage matched keywords for user's picks (green pin)
     /// - Empty set → URL was scanned but no keywords matched (dimmed yellow pin)
     /// - Not in dict → venue had no URL / social media only (stays yellow "?" pin)
-    func applyPreScreenResults(_ results: [String: Set<String>], markComplete: Bool = true) {
+    /// - Parameters:
+    ///   - results: Pre-screen results dict (venue ID → matched category IDs)
+    ///   - markComplete: Whether to set `preScreenComplete = true`
+    ///   - promotePoolGreens: Whether to add new greens from the wider pool beyond
+    ///     the original 25. `false` for cached pre-screen and Wave 1 (keep exactly 25),
+    ///     `true` for Wave 2 (add discovered greens on top of the original 25).
+    func applyPreScreenResults(_ results: [String: Set<String>],
+                               markComplete: Bool = true,
+                               promotePoolGreens: Bool = false) {
         // Apply pre-screen results to the full pool first.
         // Merge with existing matches (e.g. name-match) rather than replacing,
         // so a venue that was green from its name stays green even if the
@@ -280,35 +395,40 @@ class SearchResultStore: ObservableObject {
             return loc.distance(from: center)
         }
 
-        // Determine the promotion distance cap: 1.5× the distance of the
-        // 25th-closest venue (i.e. the initial display edge).
-        let sortedByDistance = updatedPool.sorted { distance($0) < distance($1) }
-        let capIndex = min(Self.maxDisplayPins - 1, sortedByDistance.count - 1)
-        let promotionCap = capIndex >= 0
-            ? distance(sortedByDistance[capIndex]) * 1.5
-            : Double.greatestFiniteMagnitude
+        // Wave 1 (promotePoolGreens=false): exactly maxDisplayPins (25) total.
+        // The original 25 get updated with pre-screen data (some turn green,
+        // rest stay yellow). No new pins are added from the wider pool.
+        //
+        // Wave 2 (promotePoolGreens=true): ADDS green pins from the wider pool
+        // on top of the original 25. Yellows from the original 25 stay.
+        //
+        // CRITICAL: `originalSuggestionIDs` (stable, set once per fetch) tracks
+        // the original 25. Without this, each pass inflates the set.
 
-        // "Nearby green" = green matches within the promotion cap → sorted first
-        // "Far green" + non-green → interleaved by distance
-        let nearbyGreen = updatedPool
-            .filter { $0.preScreenMatches?.isEmpty == false && distance($0) <= promotionCap }
-            .sorted { distance($0) < distance($1) }
-        let rest = updatedPool
-            .filter { !($0.preScreenMatches?.isEmpty == false && distance($0) <= promotionCap) }
-            .sorted { distance($0) < distance($1) }
+        // Update the original 25 with pre-screen results, preserving distance order.
+        let updatedOriginals = updatedPool.filter { originalSuggestionIDs.contains($0.id) }
 
-        let combined = nearbyGreen + rest
-        let trimmed = Array(combined.prefix(Self.maxDisplayPins))
-
-        #if DEBUG
-        print("[SearchResultStore] Applying \(results.count) pre-screen results to pool of \(fullPool.count)")
-        let allGreen = updatedPool.filter { $0.preScreenMatches?.isEmpty == false }
-        print("[SearchResultStore] Green matches in pool: \(allGreen.count) (\(nearbyGreen.count) nearby, \(allGreen.count - nearbyGreen.count) beyond cap)")
-        for s in allGreen {
-            print("[SearchResultStore]   GREEN: \(s.name) → \(s.preScreenMatches!) dist=\(Int(distance(s)))m")
+        // New green pins from wider pool (only included when promotePoolGreens=true)
+        let newGreens: [SuggestedSpot]
+        if promotePoolGreens {
+            newGreens = updatedPool
+                .filter { $0.preScreenMatches?.isEmpty == false && !originalSuggestionIDs.contains($0.id) }
+                .sorted { distance($0) < distance($1) }
+        } else {
+            newGreens = []
         }
-        let capStr = promotionCap == .greatestFiniteMagnitude ? "∞" : "\(Int(promotionCap))m"
-        print("[SearchResultStore] Promotion cap: \(capStr), Final display: \(trimmed.count) pins (\(trimmed.filter { $0.preScreenMatches?.isEmpty == false }.count) green)")
+
+        let trimmed = updatedOriginals + newGreens
+
+        let originalGreen = updatedOriginals.filter { $0.preScreenMatches?.isEmpty == false }.count
+        let originalYellow = updatedOriginals.count - originalGreen
+        searchLog.info("Original 25: \(originalGreen) green + \(originalYellow) yellow. New greens: \(newGreens.count). Total: \(trimmed.count) [promote=\(promotePoolGreens)]")
+        #if DEBUG
+        print("[SearchResultStore] Applying \(results.count) pre-screen results to pool of \(fullPool.count) [promote=\(promotePoolGreens)]")
+        print("[SearchResultStore] Original 25: \(originalGreen) green + \(originalYellow) yellow. New greens from pool: \(newGreens.count). Total: \(trimmed.count)")
+        for s in newGreens {
+            print("[SearchResultStore]   NEW GREEN: \(s.name) → \(s.preScreenMatches!) dist=\(Int(distance(s)))m")
+        }
         #endif
 
         // Update fullPool with pre-screen data so subsequent reads see it
@@ -330,6 +450,26 @@ class SearchResultStore: ObservableObject {
     /// User confirmed a suggestion was added — remove it from suggestions
     func confirm(_ suggestion: SuggestedSpot) {
         suggestions.removeAll { $0.id == suggestion.id }
+    }
+
+    /// Updates preScreenMatches for a specific suggestion after a website check.
+    /// Used when tapping an existing-spot ghost pin triggers checkAllPicks —
+    /// if the check confirms categories, the ghost pin turns green on the map.
+    func updatePreScreenMatches(for id: String, matches: Set<String>) {
+        suggestions = suggestions.map { suggestion in
+            guard suggestion.id == id else { return suggestion }
+            var updated = suggestion
+            let existing = updated.preScreenMatches ?? Set()
+            updated.preScreenMatches = existing.union(matches)
+            return updated
+        }
+        fullPool = fullPool.map { suggestion in
+            guard suggestion.id == id else { return suggestion }
+            var updated = suggestion
+            let existing = updated.preScreenMatches ?? Set()
+            updated.preScreenMatches = existing.union(matches)
+            return updated
+        }
     }
 
     // MARK: - Restore Ghost Pin
@@ -412,7 +552,7 @@ class SearchResultStore: ObservableObject {
     /// computed properties on MapTabView.
     struct SplitResults {
         let matched: [SuggestedSpot]    // green — preScreenMatches overlaps activePickIDs
-        let other: [SuggestedSpot]      // yellow/gray — not matched or not yet scanned
+        let other: [SuggestedSpot]      // yellow — unconfirmed or not yet scanned
     }
 
     /// Splits suggestions by pre-screen match status.
@@ -455,6 +595,16 @@ class SearchResultStore: ObservableObject {
     /// Fetches ghost pin suggestions then kicks off the batch homepage pre-screen.
     /// Both tabs call this — the store manages its own tasks internally.
     /// Views cannot cancel these tasks; only `cancelInFlight()` can.
+    ///
+    /// ## SEARCH STABILITY CONTRACT — PROTECTED
+    /// No search may run without explicit user action. The three allowed triggers:
+    /// 1. **Boot** — one auto-fetch at user location (MapTabView, bootFetchesRemaining)
+    /// 2. **"Search This Area" button** — user taps explicitly
+    /// 3. **Custom location set** — user typed a location or used Concierge (first time only)
+    ///
+    /// Tab switches, camera settles, pill toggles, and `.task(id:)` re-fires
+    /// must NEVER trigger a new search. If you add a new call site, you must
+    /// prove it only fires from direct user input.
     func fetchAndPreScreen(
         in region: MKCoordinateRegion,
         picks: [FoodCategory],
@@ -477,6 +627,7 @@ class SearchResultStore: ObservableObject {
                                       longitude: region.center.longitude)
             // < 500m = same search area
             if prev.distance(from: incoming) < 500 {
+                searchLog.info("Skipping redundant fetch — same picks + center (\(String(format: "%.0f", prev.distance(from: incoming)))m)")
                 #if DEBUG
                 print("[SearchResultStore] Skipping redundant fetch — same picks + center (distance \(String(format: "%.0f", prev.distance(from: incoming)))m)")
                 #endif
@@ -489,6 +640,10 @@ class SearchResultStore: ObservableObject {
             }
         }
 
+        // ── Diagnostic: which guard condition failed? ────────────────────
+        let guardIncoming = CLLocation(latitude: region.center.latitude, longitude: region.center.longitude)
+        let guardDist = lastFetchCenter.map { guardIncoming.distance(from: $0) } ?? -1
+        searchLog.info("NEW FETCH starting — hasResults=\(hasResultsOrInFlight) picksMatch=\(incomingPickIDs == self.lastFetchPickIDs) hasCenter=\(self.lastFetchCenter != nil) dist=\(String(format: "%.0f", guardDist))m suggestions=\(self.suggestions.count) lastPickIDs=\(self.lastFetchPickIDs.sorted()) incomingPickIDs=\(incomingPickIDs.sorted())")
         // Cancel any in-flight fetch + pre-screen so a new call doesn't
         // race with the previous one and overwrite green pin results.
         fetchTask?.cancel()
@@ -497,6 +652,9 @@ class SearchResultStore: ObservableObject {
         showDeeperScanButton = false
         deeperScanPool = []
         preScreenBannerMessage = nil
+        preScreenComplete = false  // Reset before setting pendingZoomToFit to prevent
+                                   // the .onChange(of: pendingZoomToFit) observer from
+                                   // firing zoomToFitPins() with stale suggestions.
         pendingZoomToFit = zoomToFit
         lastFetchPickIDs = incomingPickIDs
         lastFetchCenter = CLLocation(latitude: region.center.latitude,
@@ -538,8 +696,8 @@ class SearchResultStore: ObservableObject {
             // Kick off Wave 1: scan the closest 25 venues (the displayed set)
             // so green pins appear fast. Wave 2 (remaining pool) is deferred
             // until the user taps "Search Wider Area?"
+            // (preScreenComplete already reset synchronously in fetchAndPreScreen)
             preScreenBannerMessage = nil
-            preScreenComplete = false
             isPreScreening = true
             var poolToScan = fullPool
             for extra in extraSuggestions {
@@ -575,6 +733,7 @@ class SearchResultStore: ObservableObject {
                     $0.preScreenMatches?.isEmpty == false
                 }.count
                 let totalCount = suggestions.count
+                searchLog.info("Wave 1 complete. \(likelyCount) likely out of \(totalCount) total. \(wave2.count) deferred.")
                 #if DEBUG
                 print("[SearchResultStore] Wave 1 complete. \(likelyCount) likely out of \(totalCount) suggestions. \(wave2.count) venues deferred.")
                 #endif
@@ -582,7 +741,7 @@ class SearchResultStore: ObservableObject {
                     if likelyCount == 0 {
                         preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
                     } else {
-                        preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
+                        preScreenBannerMessage = "\(likelyCount) possible \(AppBranding.name) spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
                     }
                     bannerDismissTask = Task {
                         try? await Task.sleep(for: .seconds(8))
@@ -611,6 +770,12 @@ class SearchResultStore: ObservableObject {
         bannerDismissTask?.cancel()
         preScreenBannerMessage = nil
         isPreScreening = true
+        // Reset preScreenComplete so it transitions false→true when Wave 2
+        // finishes, triggering the .onChange observer in MapTabView.
+        preScreenComplete = false
+        // Zoom to fit after Wave 2 so the map expands to show new green pins
+        // from the wider pool. Without this, Wave 2 greens are outside the
+        // viewport and the map appears to revert to Wave 1 on tab switch.
         pendingZoomToFit = true
 
         let pool = deeperScanPool
@@ -631,7 +796,7 @@ class SearchResultStore: ObservableObject {
             for (key, value) in w2Results {
                 allResults[key] = value
             }
-            applyPreScreenResults(allResults)
+            applyPreScreenResults(allResults, promotePoolGreens: true)
             #if DEBUG
             let w2Green = w2Results.values.filter { !$0.isEmpty }.count
             print("[SearchResultStore] Wave 2 done: \(w2Green) green out of \(pool.count) remaining venues")
@@ -645,6 +810,7 @@ class SearchResultStore: ObservableObject {
                 $0.preScreenMatches?.isEmpty == false
             }.count
             let totalCount = suggestions.count
+            searchLog.info("Wave 2 complete. \(likelyCount) likely out of \(totalCount) total.")
             #if DEBUG
             print("[SearchResultStore] Deeper scan complete. \(likelyCount) likely out of \(totalCount) suggestions.")
             #endif
@@ -652,7 +818,7 @@ class SearchResultStore: ObservableObject {
                 if likelyCount == 0 {
                     preScreenBannerMessage = "No quick matches. Tap any pin to search deeper."
                 } else {
-                    preScreenBannerMessage = "\(likelyCount) possible Flezcal spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
+                    preScreenBannerMessage = "\(likelyCount) possible \(AppBranding.name) spot\(likelyCount == 1 ? "" : "s"). Tap green pins to review."
                 }
                 bannerDismissTask = Task {
                     try? await Task.sleep(for: .seconds(8))
@@ -666,6 +832,11 @@ class SearchResultStore: ObservableObject {
     /// Cancel in-flight fetch + pre-screen tasks.
     /// Only call this for explicit user actions (e.g. "Search This Area" button tap).
     /// Camera events, tab switches, and programmatic moves should NEVER call this.
+    ///
+    /// **IMPORTANT:** Does NOT clear `lastFetchPickIDs` or `lastFetchCenter`.
+    /// Those protect the redundant-fetch guard. Clearing them here previously
+    /// caused phantom re-searches on tab switch. The next `fetchAndPreScreen`
+    /// call overwrites them with new values anyway.
     func cancelInFlight() {
         fetchTask?.cancel()
         preScreenTask?.cancel()
@@ -673,7 +844,9 @@ class SearchResultStore: ObservableObject {
         isPreScreening = false
         showDeeperScanButton = false
         preScreenBannerMessage = nil
-        // Clear last-fetch identity so the next fetchAndPreScreen always runs.
-        lastFetchPickIDs = []
+        // Keep lastFetchPickIDs and lastFetchCenter intact — they protect
+        // the redundant-fetch guard. The next fetchAndPreScreen call will
+        // overwrite them with the new values anyway.
+        originalSuggestionIDs = []
     }
 }

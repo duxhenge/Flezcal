@@ -81,15 +81,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .switchToSpots)) { _ in
                 selectedTab = AppTab.spots
             }
-            .onReceive(NotificationCenter.default.publisher(for: .showOnMap)) { notification in
-                handleShowOnMap(notification)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .showAreaOnMap)) { notification in
-                handleShowAreaOnMap(notification)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .showSpotsAtLocation)) { notification in
-                handleShowSpotsAtLocation(notification)
-            }
+            .onReceive(NotificationCenter.default.publisher(for: .showOnMap), perform: handleShowOnMap)
+            .onReceive(NotificationCenter.default.publisher(for: .showAreaOnMap), perform: handleShowAreaOnMap)
+            .onReceive(NotificationCenter.default.publisher(for: .showSpotsAtLocation), perform: handleShowSpotsAtLocation)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active && featureFlags.conciergeEnabled {
                     selectedTab = AppTab.concierge
@@ -199,7 +193,7 @@ struct ContentView: View {
     private var myPicksTab: some View {
         MyPicksTabView()
             .environmentObject(picksService)
-            .tabItem { Label("My Flezcals", systemImage: "heart.circle") }
+            .tabItem { Label("My \(AppBranding.namePlural)", systemImage: "heart.circle") }
             .tag(AppTab.myPicks)
     }
 

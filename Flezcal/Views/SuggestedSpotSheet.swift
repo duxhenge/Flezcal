@@ -399,7 +399,7 @@ struct SuggestedSpotSheet: View {
                     showSignIn = true
                 }
             } label: {
-                Label("Add to Flezcal", systemImage: "plus.circle.fill")
+                Label("Add to \(AppBranding.name)", systemImage: "plus.circle.fill")
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
@@ -459,18 +459,15 @@ struct SuggestedSpotSheet: View {
 
 // MARK: - Ghost Pin View
 
-/// Three-tier ghost pin shown on the map for unconfirmed suggestions.
+/// Two-tier ghost pin shown on the map for unconfirmed suggestions.
 ///
-/// **Yellow (default):** Dashed outline, "?" center — not yet scanned.
-/// **Green (`isLikely`):** Solid outline, pulse animation, category badge — homepage
-/// HTML matched keywords for the user's active picks.
-/// **Gray (`isScanned` but not likely):** Solid outline, "−" center — scanned, no match found.
+/// **Yellow (default):** Solid outline, "?" center — plausible venue, unconfirmed.
+/// **Green (`isLikely`):** Solid outline, pulse animation, category badge — website
+/// confirmed keywords matching the user's active picks.
 struct GhostPinView: View {
     let category: FoodCategory
     /// Set to true when the batch homepage pre-screen found keywords for this venue.
     var isLikely: Bool = false
-    /// Set to true when the pre-screen has run (regardless of result).
-    var isScanned: Bool = false
     /// Categories matched during pre-screen — used for the badge icon on green pins.
     var likelyCategories: [FoodCategory] = []
 
@@ -479,56 +476,27 @@ struct GhostPinView: View {
     var body: some View {
         if isLikely {
             greenPin
-        } else if isScanned {
-            grayPin
         } else {
             yellowPin
         }
     }
 
-    // MARK: - Yellow pin (not yet scanned)
+    // MARK: - Yellow pin (plausible venue, unconfirmed)
 
     private var yellowPin: some View {
         ZStack {
             Circle()
-                .fill(Color.yellow.opacity(0.2))
-                .frame(width: 36, height: 36)
+                .fill(Color.yellow.opacity(0.45))
+                .frame(width: 38, height: 38)
 
             Circle()
-                .strokeBorder(
-                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
-                )
-                .foregroundStyle(Color.yellow.opacity(0.85))
-                .frame(width: 36, height: 36)
+                .strokeBorder(lineWidth: 2.0)
+                .foregroundStyle(Color.yellow)
+                .frame(width: 38, height: 38)
 
             Text("?")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color.yellow.opacity(0.85))
-        }
-    }
-
-    // MARK: - Scanned pin (checked, no match on homepage)
-    // Keeps the yellow color to stay visually present on the map,
-    // but swaps "?" for "−" so users can tell it was already scanned.
-    // Still tappable — the full 3-pass check may find matches that
-    // the quick homepage scan missed.
-
-    private var grayPin: some View {
-        ZStack {
-            Circle()
-                .fill(Color.yellow.opacity(0.12))
-                .frame(width: 34, height: 34)
-
-            Circle()
-                .strokeBorder(
-                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
-                )
-                .foregroundStyle(Color.yellow.opacity(0.5))
-                .frame(width: 34, height: 34)
-
-            Image(systemName: "minus")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.yellow.opacity(0.5))
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundStyle(Color.yellow.opacity(0.95))
         }
     }
 

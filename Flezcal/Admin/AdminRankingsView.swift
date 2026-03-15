@@ -52,7 +52,7 @@ struct AdminRankingsView: View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Flezcal Rankings")
+                    Text("\(AppBranding.name) Rankings")
                         .font(.headline)
                     Spacer()
                     if let date = rankingService.lastUpdated {
@@ -134,7 +134,7 @@ struct AdminRankingsView: View {
             // Top 50
             let top50 = rankedList.filter { $0.tier == .top50 }
             if !top50.isEmpty {
-                Section("Top 50 Flezcals") {
+                Section("Top 50 \(AppBranding.namePlural)") {
                     ForEach(top50) { entry in
                         rankingRow(entry)
                     }
@@ -144,7 +144,7 @@ struct AdminRankingsView: View {
             // Trending
             let trending = rankedList.filter { $0.tier == .trending }
             if !trending.isEmpty {
-                Section("Trending Flezcals") {
+                Section("Trending \(AppBranding.namePlural)") {
                     ForEach(trending) { entry in
                         rankingRow(entry)
                     }

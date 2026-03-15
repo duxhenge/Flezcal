@@ -40,7 +40,7 @@ struct MyPicksTabView: View {
 }
                 .padding(.vertical)
             }
-            .navigationTitle("My Flezcals")
+            .navigationTitle("My \(AppBranding.namePlural)")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showCreateCustom) {
                 CreateCustomCategoryView()
@@ -55,7 +55,7 @@ struct MyPicksTabView: View {
             .alert("Sign In Required", isPresented: $showSignInPrompt) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Sign in from the Profile tab to create trending Flezcals.")
+                Text("Sign in from the Profile tab to create trending \(AppBranding.namePlural).")
             }
         }
     }

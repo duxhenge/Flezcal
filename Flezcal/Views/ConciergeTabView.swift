@@ -408,9 +408,9 @@ struct ConciergeCategoryDropdown: View {
         let lower = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !lower.isEmpty else { return category.displayName }
         // Trending / custom categories have IDs starting with "custom_"
-        if category.id.hasPrefix("custom_") { return "Trending Flezcal" }
+        if category.id.hasPrefix("custom_") { return "Trending \(AppBranding.name)" }
         let catName = category.displayName.lowercased()
-        if catName.hasPrefix(lower) || catName.contains(lower) { return "Top 50 Flezcal" }
+        if catName.hasPrefix(lower) || catName.contains(lower) { return "Top 50 \(AppBranding.name)" }
         if let kw = category.websiteKeywords.first(where: { $0.lowercased().contains(lower) }) {
             return "Includes \(kw.lowercased()) varieties"
         }
@@ -441,7 +441,7 @@ struct ConciergeCategoryNotFoundScreen: View {
                 Text("That offering isn't available yet")
                     .font(.title3.weight(.medium))
                     .multilineTextAlignment(.center)
-                Text("\"\(query)\" doesn't match any existing Flezcal categories.")
+                Text("\"\(query)\" doesn't match any existing \(AppBranding.name) categories.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -464,7 +464,7 @@ struct ConciergeCategoryNotFoundScreen: View {
                     .foregroundStyle(.white)
             }
             Button(action: onCreateNew) {
-                Label("Create a New Flezcal", systemImage: "plus.circle")
+                Label("Create a New \(AppBranding.name)", systemImage: "plus.circle")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)

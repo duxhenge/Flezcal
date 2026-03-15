@@ -7,6 +7,8 @@ struct LeaderboardView: View {
     @StateObject private var reviewService = ReviewService()
     @StateObject private var verificationService = VerificationService()
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     @State private var contributors: [ContributorStats] = []
     @State private var myStats: ContributorStats?
     @State private var myRank: Int?
@@ -52,11 +54,19 @@ struct LeaderboardView: View {
             Section("Top Contributors") {
                 let isAdmin = AdminAccess.isAdmin(uid: authService.userID)
                 ForEach(Array(contributors.enumerated()), id: \.element.id) { index, stats in
-                    ContributorRow(
-                        stats: stats,
-                        rank: index + 1,
-                        email: isAdmin ? userEmails[stats.id] : nil
-                    )
+                    NavigationLink {
+                        ContributorDetailView(
+                            stats: stats,
+                            rank: index + 1,
+                            email: isAdmin ? userEmails[stats.id] : nil
+                        )
+                    } label: {
+                        ContributorRow(
+                            stats: stats,
+                            rank: index + 1,
+                            email: isAdmin ? userEmails[stats.id] : nil
+                        )
+                    }
                 }
             }
 
@@ -67,29 +77,63 @@ struct LeaderboardView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
 
-                    HStack(spacing: 12) {
-                        ScoringBadge(label: "Spot", points: "+10") {
-                            Image(systemName: "mappin.circle.fill")
-                                .foregroundStyle(.orange)
+                    if sizeClass == .compact {
+                        VStack(spacing: 8) {
+                            HStack {
+                                ScoringBadge(label: "Spot", points: "+10") {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .foregroundStyle(.orange)
+                                }
+                                Spacer()
+                                ScoringBadge(label: "Rating", points: "+5") {
+                                    Image(systemName: "flame.fill")
+                                        .foregroundStyle(.orange)
+                                }
+                                Spacer()
+                                ScoringBadge(label: "Find", points: "+3") {
+                                    Image(systemName: "tag.fill")
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                            HStack {
+                                ScoringBadge(label: "Brand", points: "+1") {
+                                    Image(systemName: "list.bullet")
+                                        .foregroundStyle(.orange)
+                                }
+                                Spacer()
+                                ScoringBadge(label: "Confirm", points: "+1") {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundStyle(.green)
+                                }
+                                Spacer()
+                            }
                         }
-                        ScoringBadge(label: "Rating", points: "+5") {
-                            Image(systemName: "flame.fill")
-                                .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        HStack(spacing: 12) {
+                            ScoringBadge(label: "Spot", points: "+10") {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            ScoringBadge(label: "Rating", points: "+5") {
+                                Image(systemName: "flame.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            ScoringBadge(label: "Find", points: "+3") {
+                                Image(systemName: "tag.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            ScoringBadge(label: "Brand", points: "+1") {
+                                Image(systemName: "list.bullet")
+                                    .foregroundStyle(.orange)
+                            }
+                            ScoringBadge(label: "Confirm", points: "+1") {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(.green)
+                            }
                         }
-                        ScoringBadge(label: "Find", points: "+3") {
-                            Image(systemName: "tag.fill")
-                                .foregroundStyle(.orange)
-                        }
-                        ScoringBadge(label: "Brand", points: "+1") {
-                            Image(systemName: "list.bullet")
-                                .foregroundStyle(.orange)
-                        }
-                        ScoringBadge(label: "Confirm", points: "+1") {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(.green)
-                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
                 }
                 .padding(.vertical, 4)
             }
@@ -215,6 +259,7 @@ struct LeaderboardView: View {
 struct MyRankCard: View {
     let stats: ContributorStats
     let rank: Int
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         VStack(spacing: 12) {
@@ -244,45 +289,64 @@ struct MyRankCard: View {
 
             Divider()
 
-            // Row 1: Spots + top 2 categories
-            HStack(spacing: 0) {
-                StatPill(value: "\(stats.spotsAdded)", label: "Spots") {
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(stats.topCategories(2), id: \.id) { entry in
-                    Spacer()
-                    let cat = SpotCategory(rawValue: entry.id)
-                    StatPill(value: "\(entry.count)", label: cat.displayName) {
-                        CategoryIcon(category: cat, size: 16)
+            // Stats: same 5 as shown for all contributors
+            if sizeClass == .compact {
+                VStack(spacing: 8) {
+                    HStack(spacing: 0) {
+                        StatPill(value: "\(stats.spotsAdded)", label: "Spots") {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.categoriesIdentified)", label: "Finds") {
+                            Image(systemName: "tag")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.brandsLogged)", label: "Brands") {
+                            Image(systemName: "list.bullet")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    HStack(spacing: 0) {
+                        StatPill(value: "\(stats.ratingsGiven)", label: "Ratings") {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.verificationsGiven)", label: "Verified") {
+                            Image(systemName: "checkmark.seal")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
                     }
                 }
-                // Pad with spacers if fewer than 2 top categories
-                if stats.topCategories(2).count < 2 {
+            } else {
+                HStack(spacing: 0) {
+                    StatPill(value: "\(stats.spotsAdded)", label: "Spots") {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
-                }
-            }
-
-            // Row 2: Finds, Brands, Ratings, Verified
-            HStack(spacing: 0) {
-                StatPill(value: "\(stats.categoriesIdentified)", label: "Finds") {
-                    Image(systemName: "tag")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                StatPill(value: "\(stats.brandsLogged)", label: "Brands") {
-                    Image(systemName: "list.bullet")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                StatPill(value: "\(stats.ratingsGiven)", label: "Ratings") {
-                    Image(systemName: "flame.fill")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                StatPill(value: "\(stats.verificationsGiven)", label: "Verified") {
-                    Image(systemName: "checkmark.seal")
-                        .foregroundStyle(.secondary)
+                    StatPill(value: "\(stats.categoriesIdentified)", label: "Finds") {
+                        Image(systemName: "tag")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    StatPill(value: "\(stats.brandsLogged)", label: "Brands") {
+                        Image(systemName: "list.bullet")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    StatPill(value: "\(stats.ratingsGiven)", label: "Ratings") {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    StatPill(value: "\(stats.verificationsGiven)", label: "Verified") {
+                        Image(systemName: "checkmark.seal")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -304,16 +368,19 @@ struct StatPill<Icon: View>: View {
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.semibold)
+                .monospacedDigit()
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(value) \(label)")
     }
 }
 
-// MARK: - Contributor Row
+// MARK: - Contributor Row (compact single-line; tap for detail)
 
 struct ContributorRow: View {
     let stats: ContributorStats
@@ -322,75 +389,193 @@ struct ContributorRow: View {
     var email: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Top row: rank badge, name, points
-            HStack(spacing: 10) {
-                // Rank badge
-                ZStack {
-                    Circle()
-                        .fill(rankColor.opacity(0.15))
-                        .frame(width: 32, height: 32)
-                    Text("\(rank)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(rankColor)
-                }
+        HStack(spacing: 10) {
+            // Rank badge
+            ZStack {
+                Circle()
+                    .fill(rankColor.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                Text("\(rank)")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(rankColor)
+            }
 
-                // Name and title
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
-                        Text(stats.displayName)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        if stats.isBrandCollector {
-                            Text("🫙")
-                                .font(.caption)
-                                .help("Brand Collector — 10+ mezcal brands logged!")
-                                .accessibilityLabel("Brand Collector")
+            // Name, rank title, and admin email
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(stats.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    if stats.isBrandCollector {
+                        Text("🫙")
+                            .font(.caption)
+                            .accessibilityLabel("Brand Collector")
+                    }
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: stats.rankIcon)
+                        .font(.caption2)
+                    Text(stats.rankTitle)
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+
+                if let email {
+                    Text(email)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            Text("\(stats.score) pts")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.orange)
+                .fixedSize()
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var rankColor: Color {
+        switch rank {
+        case 1: return .yellow
+        case 2: return .gray
+        case 3: return .orange
+        default: return .secondary
+        }
+    }
+}
+
+// MARK: - Contributor Detail View
+
+struct ContributorDetailView: View {
+    let stats: ContributorStats
+    let rank: Int
+    var email: String? = nil
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        List {
+            // Header: rank, name, points
+            Section {
+                VStack(spacing: 12) {
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(rankColor.opacity(0.15))
+                                .frame(width: 44, height: 44)
+                            Text("\(rank)")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundStyle(rankColor)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Text(stats.displayName)
+                                    .font(.headline)
+                                if stats.isBrandCollector {
+                                    Text("🫙")
+                                        .font(.caption)
+                                        .accessibilityLabel("Brand Collector")
+                                }
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: stats.rankIcon)
+                                    .font(.caption2)
+                                Text(stats.rankTitle)
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(.secondary)
+
+                            if let email {
+                                Text(email)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Text("\(stats.score) pts")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+
+            // Stats breakdown
+            Section("Breakdown") {
+                if sizeClass == .compact {
+                    VStack(spacing: 8) {
+                        HStack(spacing: 0) {
+                            StatPill(value: "\(stats.spotsAdded)", label: "Spots") {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            StatPill(value: "\(stats.categoriesIdentified)", label: "Finds") {
+                                Image(systemName: "tag")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            StatPill(value: "\(stats.brandsLogged)", label: "Brands") {
+                                Image(systemName: "list.bullet")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack(spacing: 0) {
+                            StatPill(value: "\(stats.ratingsGiven)", label: "Ratings") {
+                                Image(systemName: "flame.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            StatPill(value: "\(stats.verificationsGiven)", label: "Verified") {
+                                Image(systemName: "checkmark.seal")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
                         }
                     }
-
-                    HStack(spacing: 4) {
-                        Image(systemName: stats.rankIcon)
-                            .font(.caption2)
-                        Text(stats.rankTitle)
-                            .font(.caption)
+                    .padding(.vertical, 4)
+                } else {
+                    HStack(spacing: 0) {
+                        StatPill(value: "\(stats.spotsAdded)", label: "Spots") {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.categoriesIdentified)", label: "Finds") {
+                            Image(systemName: "tag")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.brandsLogged)", label: "Brands") {
+                            Image(systemName: "list.bullet")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.ratingsGiven)", label: "Ratings") {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatPill(value: "\(stats.verificationsGiven)", label: "Verified") {
+                            Image(systemName: "checkmark.seal")
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .foregroundStyle(.secondary)
-
-                    // Admin-only: email address
-                    if let email {
-                        Text(email)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
+                    .padding(.vertical, 4)
                 }
-
-                Spacer()
-
-                Text("\(stats.score) pts")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.orange)
-                    .fixedSize()
             }
-
-            // Bottom row: stats chips
-            HStack(spacing: 12) {
-                Label("\(stats.spotsAdded)", systemImage: "mappin.circle")
-                Label("\(stats.categoriesIdentified)", systemImage: "tag")
-                Label("\(stats.brandsLogged)", systemImage: "list.bullet")
-                Label("\(stats.ratingsGiven)", systemImage: "flame")
-                Label("\(stats.verificationsGiven)", systemImage: "checkmark.seal")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.leading, 42) // align with name (32 badge + 10 spacing)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(stats.spotsAdded) spots, \(stats.categoriesIdentified) finds, \(stats.brandsLogged) brands, \(stats.ratingsGiven) ratings, \(stats.verificationsGiven) verifications")
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+        .navigationTitle(stats.displayName)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var rankColor: Color {

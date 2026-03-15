@@ -69,7 +69,7 @@ struct VoiceSearchView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Flezcal needs microphone access to use voice search.")
+            Text("\(AppBranding.name) needs microphone access to use voice search.")
         }
     }
 

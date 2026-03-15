@@ -35,15 +35,15 @@ struct WelcomeContent: Codable {
     // MARK: - Fallback content shown when Firestore is unreachable
     static let fallback = WelcomeContent(
         version: "3.0",
-        title: "Welcome to Flezcal!",
+        title: "Welcome to \(AppBranding.name)!",
         subtitle: "50 categories and growing, from mezcal and birria to natural wine and high-end tequila. "
             + "Pick the ones you care about and help build the guide.",
-        tagline: "A Flezcal is your favorite food or drink, the thing you'll drive across town for. "
-            + "The name started as Flan + Mezcal, but a Flezcal is now anything you're passionate about finding and sharing.",
+        tagline: "A \(AppBranding.name) is your favorite food or drink, the thing you'll drive across town for. "
+            + "The name started as Flan + Mezcal, but a \(AppBranding.name) is now anything you're passionate about finding and sharing.",
         items: [
             WelcomeItem(
                 icon: "fork.knife",
-                text: "🍽️ Pick your Flezcals. Choose up to 3 foods or drinks you're passionate about. "
+                text: "🍽️ Pick your \(AppBranding.namePlural). Choose up to 3 foods or drinks you're passionate about. "
                     + "These drive your map and search results."
             ),
             WelcomeItem(
@@ -59,12 +59,12 @@ struct WelcomeContent: Codable {
             WelcomeItem(
                 icon: "star.fill",
                 text: "⭐ Rate and verify. Who does it best? "
-                    + "Rate Flezcals at your spots and verify what others have found."
+                    + "Rate \(AppBranding.namePlural) at your spots and verify what others have found."
             ),
             WelcomeItem(
                 icon: "sparkles",
-                text: "✨ Create your own. Don't see your Flezcal? Create a trending one. "
-                    + "Popular trending Flezcals may be promoted to the Top 50."
+                text: "✨ Create your own. Don't see your \(AppBranding.name)? Create a trending one. "
+                    + "Popular trending \(AppBranding.namePlural) may be promoted to the Top 50."
             ),
         ],
         pages: [
@@ -77,7 +77,7 @@ struct WelcomeContent: Codable {
             WelcomePage(
                 icon: "map.fill",
                 headline: "The Map Works for You",
-                description: "Pick your Flezcals and the map highlights matches nearby. Verified pins are community-confirmed. "
+                description: "Pick your \(AppBranding.namePlural) and the map highlights matches nearby. Verified pins are community-confirmed. "
                     + "Likely pins (green ghost pins) are menu-scanned matches. Nearby pins (yellow) haven't been checked yet. "
                     + "Use the toggle pills to control which pins you see.",
                 color: "blue"
@@ -91,7 +91,7 @@ struct WelcomeContent: Codable {
             WelcomePage(
                 icon: "heart.circle.fill",
                 headline: "Categories Evolve",
-                description: "The Top 50 Flezcals are just the start. Trending searches get tracked, and when a pattern emerges, it joins the Top 50. The community decides what matters.",
+                description: "The Top 50 \(AppBranding.namePlural) are just the start. Trending searches get tracked, and when a pattern emerges, it joins the Top 50. The community decides what matters.",
                 color: "pink"
             ),
             WelcomePage(
@@ -103,7 +103,7 @@ struct WelcomeContent: Codable {
             WelcomePage(
                 icon: "person.circle.fill",
                 headline: "Track Your Impact",
-                description: "Every spot you add, every rating, every verification counts toward your rank. Check your profile to see your score, your progress, and your top Flezcals.",
+                description: "Every spot you add, every rating, every verification counts toward your rank. Check your profile to see your score, your progress, and your top \(AppBranding.namePlural).",
                 color: "purple"
             ),
         ],

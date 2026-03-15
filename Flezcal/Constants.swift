@@ -18,8 +18,8 @@ enum APIKeys {
 }
 
 enum AppConstants {
-    /// Change this value to rename the app throughout the UI
-    static let appName = "Flezcal"
+    /// Delegates to AppBranding.name — change name there to rebrand everywhere.
+    static let appName = AppBranding.name
     static let bundleID = "com.flezcal.app"
 
     /// Bump this when shipping a new build — shown in Profile → About
@@ -94,10 +94,12 @@ enum FirestoreCollections {
 }
 
 /// Single source of truth for the app's display name.
-/// Change these two values to rebrand all UI strings at once.
+/// Change these values to rebrand all UI strings at once.
+/// Every user-facing string in the app references these constants — never hardcode the app name.
 enum AppBranding {
     static let name = "Flezcal"
     static let namePlural = "Flezcals"
+    static let contactEmail = "contact@flezcal.app"
 }
 
 /// Feature flags for phased rollout.

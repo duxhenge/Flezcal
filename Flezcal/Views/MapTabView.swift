@@ -39,10 +39,11 @@ struct MapTabView: View {
     /// Ghost pin placed via "Show on Map" from Explore. Stored separately from
     /// selectedSuggestion so it persists after the sheet is dismissed.
     @State private var showOnMapPin: SuggestedSpot? = nil
-    /// Auto-fetches on boot. MapKit fires .onEnd once with a fallback region
-    /// before the user's real location resolves (skipped by the >5° guard),
-    /// then again with the real location. Two ensures ghost pins appear.
-    @State private var bootFetchesRemaining = 2
+    /// Auto-fetches once on boot. MapKit fires .onEnd with a fallback region
+    /// (continent-scale, skipped by the >5° guard) then again with the real
+    /// user location — which triggers the one and only boot fetch.
+    /// Set to 0 immediately after firing so tab switches can never re-trigger.
+    @State private var bootFetchesRemaining = 1
     // Pill selections are user-controlled only — never reset programmatically.
     /// Pin-type visibility toggles — all on by default.
     @State private var showVerifiedPins = true
@@ -53,10 +54,6 @@ struct MapTabView: View {
     @State private var showCommunityEasterEgg = false
     /// Which categories to show in Community Map mode.
     @State private var communityMapFilter: CommunityMapFilter = .top50
-    /// Set true when picks change while the map tab is off-screen.
-    /// Triggers an auto-fetch when the user returns to the map.
-    @State private var picksChangedWhileAway = false
-
     // On-demand website check — runs when the user taps a ghost pin
     @State private var multiCheckResult: MultiCategoryCheckResult? = nil
     @State private var websiteCheckTask: Task<Void, Never>? = nil
@@ -74,7 +71,8 @@ struct MapTabView: View {
     }
 
     /// Handles tapping a ghost pin or show-on-map pin.
-    /// If the venue already exists in Firestore, opens SpotDetailView directly.
+    /// If the venue already exists in Firestore, opens SpotDetailView and runs a
+    /// website check for the current picks (ghost pin stays on the map and may turn green).
     /// Otherwise opens SuggestedSpotSheet for the Add Spot / Add Flezcal flow.
     private func handleSuggestionTap(_ suggestion: SuggestedSpot) {
         // Shift camera so the pin sits 3/4 up the map, above the slide-up sheet.
@@ -94,10 +92,30 @@ struct MapTabView: View {
                     )
                 }
             }
-            // Remove the ghost pin since we're showing the real spot
-            searchResultStore.confirm(suggestion)
-            // Open SpotDetailView — same experience as tapping a spot in the list
+            // Open SpotDetailView — ghost pin STAYS on the map (no confirm() call).
+            // The pin persists so the user can see it turn green if the check succeeds.
             selectedSpot = existing
+
+            // Run website check for current picks against this existing spot.
+            // If matches are found, update the ghost pin's preScreenMatches → green.
+            websiteCheckTask?.cancel()
+            let primaryPick = bestPrimaryPick(for: suggestion)
+            let allPicks = activePicks
+            let suggestionID = suggestion.id
+            websiteCheckTask = Task {
+                let result = await websiteChecker.checkAllPicks(
+                    suggestion.mapItem,
+                    picks: allPicks,
+                    primaryPick: primaryPick
+                )
+                guard !Task.isCancelled else { return }
+                let matchedCats = Set(result.confirmed.map(\.id))
+                if !matchedCats.isEmpty {
+                    searchResultStore.updatePreScreenMatches(
+                        for: suggestionID, matches: matchedCats
+                    )
+                }
+            }
         } else {
             // New venue — open SuggestedSpotSheet with website check
             websiteCheckTask?.cancel()
@@ -247,6 +265,9 @@ struct MapTabView: View {
         if coordinates.count == 1 {
             let center = coordinates[0]
             lastFetchedCenter = center
+            searchResultStore.lastFetchCenter = CLLocation(
+                latitude: center.latitude, longitude: center.longitude
+            )
             withAnimation(.easeInOut(duration: 0.5)) {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: center,
@@ -284,6 +305,12 @@ struct MapTabView: View {
         // camera settles at the new position — prevents "Search This Area"
         // from appearing after a programmatic zoom.
         lastFetchedCenter = center
+        // Also sync the store's center so the redundant-fetch guard sees the
+        // zoom-to-fit position, not just the original search origin. This prevents
+        // tab-switch .onEnd fires from bypassing the 500m guard.
+        searchResultStore.lastFetchCenter = CLLocation(
+            latitude: center.latitude, longitude: center.longitude
+        )
 
         withAnimation(.easeInOut(duration: 0.5)) {
             cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
@@ -292,10 +319,16 @@ struct MapTabView: View {
 
     /// Convenience wrapper — delegates to the store, passing map-specific extras
     /// (showOnMapPin, communityMap guard) and wiring the zoom + pre-screen callbacks.
-    private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory], zoomToFit: Bool = false) {
+    private func fetchAndPreScreen(in region: MKCoordinateRegion, picks: [FoodCategory], zoomToFit: Bool = false, caller: String = "unknown") {
         // Community Map mode — no ghost pin fetches needed
         guard !showCommunityMap else { return }
+        #if DEBUG
+        print("[MapTab] fetchAndPreScreen called by: \(caller) bootRemaining=\(bootFetchesRemaining)")
+        #endif
         showSearchHereButton = false
+        // Boot is complete once any fetch starts. Prevents tab-switch .onEnd
+        // fires from re-entering the boot branch and triggering phantom searches.
+        bootFetchesRemaining = 0
 
         var extras: [SuggestedSpot] = []
         if let pinned = showOnMapPin { extras.append(pinned) }
@@ -479,11 +512,12 @@ struct MapTabView: View {
                 await spotService.fetchSpots()
             }
             .onAppear {
-                if picksChangedWhileAway {
-                    picksChangedWhileAway = false
-                    guard let region = visibleRegion else { return }
-                    lastFetchedCenter = region.center
-                    fetchAndPreScreen(in: region, picks: picksService.picks, zoomToFit: true)
+                // Consume any pending zoom that was set while the Map tab was off-screen
+                // (e.g. Wave 2 completed on the Spots tab). The .onChange observers missed
+                // the transition because the view wasn't active, so catch it here.
+                if searchResultStore.pendingZoomToFit, searchResultStore.preScreenComplete {
+                    searchResultStore.pendingZoomToFit = false
+                    zoomToFitPins()
                 }
             }
             .onDisappear {
@@ -491,17 +525,17 @@ struct MapTabView: View {
                 websiteCheckTask = nil
                 multiCheckResult = nil
             }
-            .alert("No Flezcals selected", isPresented: $showNoPinsAlert) {
+            .alert("No \(AppBranding.namePlural) selected", isPresented: $showNoPinsAlert) {
                 Button("OK", role: .cancel) { }
             }
             .confirmationDialog("Easter Egg! 🐛", isPresented: $showCommunityEasterEgg, titleVisibility: .visible) {
-                Button("Top 50 Flezcals") {
+                Button("Top 50 \(AppBranding.namePlural)") {
                     communityMapFilter = .top50
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showCommunityMap = true
                     }
                 }
-                Button("All Verified Flezcals") {
+                Button("All Verified \(AppBranding.namePlural)") {
                     communityMapFilter = .all
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showCommunityMap = true
@@ -509,7 +543,7 @@ struct MapTabView: View {
                 }
                 Button("Cancel", role: .cancel) { }
             } message: {
-                Text("Show verified Flezcal spots in your search area.")
+                Text("Show verified \(AppBranding.name) spots in your search area.")
             }
         }
     }
@@ -532,18 +566,16 @@ struct MapTabView: View {
                 }
 
                 // Ghost pins — unconfirmed Apple Maps suggestions
-                // Green = pre-screen found keywords ("possible").
-                // Yellow/gray = not yet scanned or no match ("unchecked").
+                // Green = website confirmed keywords for user's picks.
+                // Yellow = plausible venue, unconfirmed.
                 // Filtered to exclude any that overlap with a verified spot,
                 // and respects pin-type toggle visibility.
                 ForEach(visibleGhostPins) { suggestion in
                     let isGreen = suggestion.preScreenMatches?.isEmpty == false
-                    let isScanned = suggestion.preScreenMatches != nil
                     Annotation(suggestion.name, coordinate: suggestion.coordinate) {
                         GhostPinView(
                             category: suggestion.suggestedCategory,
                             isLikely: isGreen,
-                            isScanned: isScanned,
                             likelyCategories: (suggestion.preScreenMatches ?? [])
                                 .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                         )
@@ -564,7 +596,6 @@ struct MapTabView: View {
                             GhostPinView(
                                 category: pinned.suggestedCategory,
                                 isLikely: pinnedIsGreen,
-                                isScanned: pinned.preScreenMatches != nil,
                                 likelyCategories: (pinned.preScreenMatches ?? [])
                                     .compactMap { id in FoodCategory.allCategories.first { $0.id == id } }
                             )
@@ -574,7 +605,7 @@ struct MapTabView: View {
                                 .foregroundStyle(
                                     pinnedIsGreen
                                         ? Color.green.opacity(0.85)
-                                        : Color.yellow.opacity(0.85)
+                                        : Color.yellow
                                 )
                                 .offset(y: -2)
                         }
@@ -584,6 +615,11 @@ struct MapTabView: View {
                     }
                 }
             }
+            // ── SEARCH STABILITY CONTRACT — PROTECTED ──────────────────
+            // .onEnd fires on EVERY camera settle including tab switches.
+            // After boot (bootFetchesRemaining == 0), .onEnd must ONLY show
+            // the "Search This Area" button — NEVER call fetchAndPreScreen.
+            // See SearchResultStore.fetchAndPreScreen doc for the full contract.
             .onMapCameraChange(frequency: .onEnd) { context in
                 visibleRegion = context.region
                 initialRegionSeen = true
@@ -598,9 +634,12 @@ struct MapTabView: View {
                     }
                     // Ignore micro-settles during boot (<50m)
                     guard shouldFetch(for: context.region.center) else { return }
-                    bootFetchesRemaining -= 1
+                    // Set to 0 immediately — one boot fetch is all we need.
+                    // The store's redundant-fetch guard handles duplicates.
+                    // MUST be 0 before the fetch so tab-switch .onEnd can never re-trigger.
+                    bootFetchesRemaining = 0
                     lastFetchedCenter = context.region.center
-                    fetchAndPreScreen(in: context.region, picks: activePicks, zoomToFit: true)
+                    fetchAndPreScreen(in: context.region, picks: activePicks, zoomToFit: true, caller: "boot.onEnd")
                 } else {
                     // User panned/zoomed after boot — show "Search This Area" button.
                     // NEVER cancel store tasks or wipe deeper scan state here.
@@ -649,20 +688,13 @@ struct MapTabView: View {
             .onChange(of: showPossiblePins) { _, _ in checkAllPinsOff() }
             .onChange(of: showUncheckedPins) { _, _ in checkAllPinsOff() }
             .onChange(of: picksService.picks) { _, _ in
-                // User changed their picks in My Flezcals tab — clear cache and re-fetch.
-                // Cache must be cleared because it only contains scan results for the
-                // previous picks, not the new ones.
+                // User changed their picks — clear cache so a future search uses
+                // the new picks' keywords. Don't auto-fetch; show the button instead
+                // so the user controls when a new search runs.
                 Task { await websiteChecker.clearHTMLCache() }
-                // activePickIDs is reset by ContentView's onChange(of: picksService.picks)
-                showSearchHereButton = false
-                bootFetchesRemaining = 0  // prevent boot auto-fetch from racing
-                guard let region = visibleRegion else {
-                    // Map tab is off-screen — defer the fetch until the user returns
-                    picksChangedWhileAway = true
-                    return
-                }
-                lastFetchedCenter = region.center
-                fetchAndPreScreen(in: region, picks: picksService.picks, zoomToFit: true)
+                bootFetchesRemaining = 0
+                emptyStateDismissed = false
+                showSearchHereButton = true
             }
             .onChange(of: pendingMapSuggestion) { _, newValue in
                 guard let suggestion = newValue else { return }
@@ -717,21 +749,29 @@ struct MapTabView: View {
                     } else {
                         zoomToFitPins(overridePins: [fallbackCenter])
                     }
-                } else {
-                    // No results provided — fresh fetch for this area.
-                    // Use override picks from Concierge when available,
-                    // otherwise fall back to the normal activePicks resolution.
-                    let picks = overridePicks ?? activePicks
+                } else if overridePicks != nil {
+                    // Concierge or explicit location change — user requested a search
+                    // at a new area with specific picks. This is the only case where
+                    // the pendingMapCenter handler should trigger a fresh fetch.
+                    let picks = overridePicks!
                     let span = picksService.searchRadiusDegrees
                     let region = MKCoordinateRegion(
                         center: center,
                         span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
                     )
                     cameraPosition = .region(region)
-                    // Explicit location change — clear the redundant-fetch guard
-                    // so the store runs a fresh search at the new location.
                     searchResultStore.cancelInFlight()
-                    fetchAndPreScreen(in: region, picks: picks, zoomToFit: true)
+                    fetchAndPreScreen(in: region, picks: picks, zoomToFit: true, caller: "pendingMapCenter.concierge")
+                } else {
+                    // Normal "Show on Map" from Spots tab — store already has the data.
+                    // Just center the camera and zoom to fit existing pins. No fetch.
+                    cameraPosition = .camera(MapCamera(
+                        centerCoordinate: center,
+                        distance: 50000  // ~50km view
+                    ))
+                    if !searchResultStore.suggestions.isEmpty {
+                        zoomToFitPins()
+                    }
                 }
             }
 
@@ -812,7 +852,7 @@ struct MapTabView: View {
                             // Explicit user action — clear the redundant-fetch guard
                             // so the store always runs a fresh search.
                             searchResultStore.cancelInFlight()
-                            fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true)
+                            fetchAndPreScreen(in: region, picks: activePicks, zoomToFit: true, caller: "searchThisAreaButton")
                         } label: {
                             Label("Search This Area", systemImage: "magnifyingglass")
                                 .font(.subheadline)

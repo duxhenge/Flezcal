@@ -96,7 +96,7 @@ struct FlezcalPickerView: View {
                 .padding(.vertical)
             }
             .searchable(text: $searchText, prompt: "Search categories...")
-            .navigationTitle("Add a Flezcal")
+            .navigationTitle("Add a \(AppBranding.name)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -112,7 +112,7 @@ struct FlezcalPickerView: View {
     private var defaultSections: some View {
         // User's picks at the top
         if !userPicks.isEmpty {
-            Text("Your Flezcals")
+            Text("Your \(AppBranding.namePlural)")
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
@@ -194,7 +194,7 @@ struct FlezcalPickerView: View {
                     .font(.title3)
                     .foregroundStyle(.cyan)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Create a Trending Flezcal")
+                    Text("Create a Trending \(AppBranding.name)")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     Text("Can't find what you're looking for? Create your own.")

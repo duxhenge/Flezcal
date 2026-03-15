@@ -118,8 +118,15 @@ class LocationSearchService: ObservableObject {
         var results: [TaggedSearchResult] = []
         var seenNames: Set<String> = []
 
-        for entry in queries {
+        for (index, entry) in queries.enumerated() {
             guard !Task.isCancelled else { break }
+
+            // Brief pause between queries to avoid Apple Maps rate limiting.
+            // Without this, queries 4+ in a 7-query batch often get throttled,
+            // silently losing closer venues and causing distant outliers.
+            if index > 0 {
+                try? await Task.sleep(for: .milliseconds(250))
+            }
 
             let skipFilter = Self.unfiltered.contains(entry.query.lowercased())
             let request = MKLocalSearch.Request()
@@ -140,8 +147,33 @@ class LocationSearchService: ObservableObject {
             print("[Search] query \"\(entry.query)\" tag=\(entry.tag) — POI filter: \(skipFilter ? "OFF" : "ON")")
             #endif
 
-            do {
-                let response = try await MKLocalSearch(request: request).start()
+            // Try up to 2 attempts per query — retry once on throttle with backoff.
+            var response: MKLocalSearch.Response?
+            for attempt in 1...2 {
+                do {
+                    response = try await MKLocalSearch(request: request).start()
+                    break
+                } catch {
+                    let nsErr = error as NSError
+                    let isThrottled = nsErr.domain == MKErrorDomain && nsErr.code == MKError.loadingThrottled.rawValue
+                    if isThrottled && attempt == 1 {
+                        #if DEBUG
+                        print("[Search] query \"\(entry.query)\": ⚠️ THROTTLED — retrying after 1s")
+                        #endif
+                        try? await Task.sleep(for: .seconds(1))
+                        continue
+                    }
+                    #if DEBUG
+                    if isThrottled {
+                        print("[Search] query \"\(entry.query)\": ⚠️ THROTTLED (retry failed)")
+                    } else {
+                        print("[Search] query \"\(entry.query)\": ❌ error \(error.localizedDescription)")
+                    }
+                    #endif
+                }
+            }
+
+            if let response {
                 var addedCount = 0
                 for item in response.mapItems {
                     let key = (item.name ?? "").lowercased()
@@ -151,15 +183,6 @@ class LocationSearchService: ObservableObject {
                 }
                 #if DEBUG
                 print("[Search] query \"\(entry.query)\": \(response.mapItems.count) raw, \(addedCount) new → \(results.count) total")
-                #endif
-            } catch {
-                #if DEBUG
-                let nsErr = error as NSError
-                if nsErr.domain == MKErrorDomain, nsErr.code == MKError.loadingThrottled.rawValue {
-                    print("[Search] query \"\(entry.query)\": ⚠️ THROTTLED")
-                } else {
-                    print("[Search] query \"\(entry.query)\": ❌ error \(error.localizedDescription)")
-                }
                 #endif
             }
         }

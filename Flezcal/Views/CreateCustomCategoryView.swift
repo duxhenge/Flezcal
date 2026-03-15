@@ -54,8 +54,8 @@ struct CreateCustomCategoryView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(.cyan)
 
-                        Text("Trending Flezcals work just like Top 50 Flezcals — search for spots, add ratings, verify locations, and track offerings. "
-                            + "Popular trending Flezcals may be promoted to the Top 50 with unique icons.")
+                        Text("Trending \(AppBranding.namePlural) work just like Top 50 \(AppBranding.namePlural) — search for spots, add ratings, verify locations, and track offerings. "
+                            + "Popular trending \(AppBranding.namePlural) may be promoted to the Top 50 with unique icons.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -207,7 +207,7 @@ struct CreateCustomCategoryView: View {
 
                             // Contextual help text
                             if similarCategories.contains(where: { picksService.isSelected($0) }) {
-                                Text("You already have a Flezcal that covers this. Tap it to continue, or keep typing to create your own.")
+                                Text("You already have a \(AppBranding.name) that covers this. Tap it to continue, or keep typing to create your own.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
@@ -240,10 +240,10 @@ struct CreateCustomCategoryView: View {
                                 )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("All trending Flezcals use the worm icon")
+                                Text("All trending \(AppBranding.namePlural) use the worm icon")
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                Text("If your category becomes popular, it may be promoted to a Top 50 Flezcal with its own unique icon.")
+                                Text("If your category becomes popular, it may be promoted to a Top 50 \(AppBranding.name) with its own unique icon.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -284,7 +284,7 @@ struct CreateCustomCategoryView: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                         } else {
-                            Label("Create & Add to My Flezcals", systemImage: "plus.circle.fill")
+                            Label("Create & Add to My \(AppBranding.namePlural)", systemImage: "plus.circle.fill")
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -302,7 +302,7 @@ struct CreateCustomCategoryView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Trending Flezcal")
+            .navigationTitle("Trending \(AppBranding.name)")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 // Fetch popular custom categories so we can suggest similar ones
@@ -514,7 +514,7 @@ struct CreateCustomCategoryView: View {
 
         // If the name itself matches, no extra explanation needed
         if catName.hasPrefix(lower) || catName.contains(lower) {
-            return "Top 50 Flezcal"
+            return "Top 50 \(AppBranding.name)"
         }
 
         // Find the matching keyword to explain the connection
@@ -558,7 +558,7 @@ struct CreateCustomCategoryView: View {
                     generator.notificationOccurred(.success)
                     dismiss()
                 } else {
-                    saveError = "You have too many Flezcals selected. Remove one first to make room."
+                    saveError = "You have too many \(AppBranding.namePlural) selected. Remove one first to make room."
                 }
             } else {
                 isSaving = false
@@ -593,7 +593,7 @@ struct CreateCustomCategoryView: View {
                     generator.notificationOccurred(.success)
                     showSuccess = true
                 } else {
-                    saveError = "You have too many Flezcals selected. Remove one first to make room."
+                    saveError = "You have too many \(AppBranding.namePlural) selected. Remove one first to make room."
                 }
             } else {
                 isSaving = false

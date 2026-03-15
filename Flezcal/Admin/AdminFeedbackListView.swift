@@ -163,7 +163,7 @@ struct AdminFeedbackDetailView: View {
             }
 
             if !feedback.selectedCategories.isEmpty {
-                Section("Active Flezcal Picks") {
+                Section("Active \(AppBranding.name) Picks") {
                     ForEach(feedback.selectedCategories, id: \.self) { pick in
                         Text(pick)
                             .font(.subheadline)

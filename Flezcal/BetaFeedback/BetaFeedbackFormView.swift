@@ -145,7 +145,7 @@ struct BetaFeedbackFormView: View {
             Text("Thank you!")
                 .font(.title2)
                 .fontWeight(.bold)
-            Text("Your feedback helps make Flezcal better.")
+            Text("Your feedback helps make \(AppBranding.name) better.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

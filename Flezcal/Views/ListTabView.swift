@@ -350,6 +350,12 @@ private struct ExplorePanel: View {
     /// True while the batch pre-screen is actively scanning homepages.
     @State private var isPreScreening = false
 
+    /// Tracks the last SearchTaskID that actually triggered a fetch.
+    /// SwiftUI re-fires .task(id:) on tab switch (cancels on disappear,
+    /// re-starts on appear). This guard prevents re-fetching when the
+    /// task ID hasn't actually changed — only the view visibility did.
+    @State private var lastFetchedTaskID: SearchTaskID? = nil
+
     /// The coordinate to use for searches. Custom location if set, otherwise GPS.
     private var effectiveLocation: CLLocationCoordinate2D? {
         customLocation?.coordinate ?? currentLocation()
@@ -417,7 +423,7 @@ private struct ExplorePanel: View {
                             .foregroundStyle(.secondary)
                         Text("No results found")
                             .font(.headline)
-                        Text("Try a different location or adjust your Flezcals.")
+                        Text("Try a different location or adjust your \(AppBranding.namePlural).")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -444,7 +450,7 @@ private struct ExplorePanel: View {
                                     ProgressView()
                                         .controlSize(.small)
                                     Text(isMultiSearch
-                                         ? "Checking menus for your Flezcals…"
+                                         ? "Checking menus for your \(AppBranding.namePlural)…"
                                          : "Checking menus for \(singleCategory!)…")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
@@ -458,7 +464,7 @@ private struct ExplorePanel: View {
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                         Text(isMultiSearch
-                                             ? "No Flezcal matches found on menus nearby"
+                                             ? "No \(AppBranding.name) matches found on menus nearby"
                                              : "No \(singleCategory!) found on menus nearby")
                                             .font(.subheadline)
                                             .fontWeight(.medium)
@@ -479,7 +485,7 @@ private struct ExplorePanel: View {
                                             .font(.subheadline)
                                             .foregroundStyle(.green)
                                         Text(isMultiSearch
-                                             ? "\(matchedCount) possible Flezcal spot\(matchedCount == 1 ? "" : "s")"
+                                             ? "\(matchedCount) possible \(AppBranding.name) spot\(matchedCount == 1 ? "" : "s")"
                                              : "\(matchedCount) possible \(singleCategory!) spot\(matchedCount == 1 ? "" : "s")")
                                             .font(.subheadline)
                                             .fontWeight(.medium)
@@ -545,18 +551,54 @@ private struct ExplorePanel: View {
                 userPicks: searchScopedPicks
             )
         }
+        // ── SEARCH STABILITY CONTRACT — PROTECTED ──────────────────
+        // SwiftUI re-fires .task(id:) on tab switch (cancel on disappear,
+        // restart on appear). Two guards prevent unwanted re-searches:
+        // 1. lastFetchedTaskID — skips if the task ID hasn't changed
+        // 2. Store has results — skips if suggestions are already populated
+        // See SearchResultStore.fetchAndPreScreen doc for the full contract.
         .task(id: SearchTaskID(
             activeFilterIDs: Set(activeFilterPicks.map(\.id)),
             customLocation: customLocation,
             mapTermsVersion: mapTermsVersion,
             refreshVersion: refreshVersion
         )) {
+            let currentTaskID = SearchTaskID(
+                activeFilterIDs: Set(activeFilterPicks.map(\.id)),
+                customLocation: customLocation,
+                mapTermsVersion: mapTermsVersion,
+                refreshVersion: refreshVersion
+            )
+
             // No active picks — clear results and stop
             guard !activeFilterPicks.isEmpty else {
                 searchResultStore.cancelInFlight()
                 searchResultStore.suggestions = []
                 searchResultStore.fullPool = []
                 searchResultStore.preScreenComplete = false
+                isSearchActive = false
+                lastFetchedTaskID = currentTaskID
+                return
+            }
+
+            // ── Tab-switch guard ──────────────────────────────────────
+            // SwiftUI re-fires .task(id:) when the view re-appears (cancels
+            // on disappear, re-starts on appear). Skip if the task ID hasn't
+            // actually changed — only the view visibility did.
+            // Also skip if the store already has results — the search was already
+            // done (by the Map tab boot fetch or a previous Explore fetch).
+            if currentTaskID == lastFetchedTaskID {
+                #if DEBUG
+                print("[Explore] .task skipped — same SearchTaskID as last fetch (tab switch re-fire)")
+                #endif
+                isSearchActive = false
+                return
+            }
+            if !searchResultStore.suggestions.isEmpty {
+                #if DEBUG
+                print("[Explore] .task skipped — store already has \(searchResultStore.suggestions.count) results (no re-fetch)")
+                #endif
+                lastFetchedTaskID = currentTaskID
                 isSearchActive = false
                 return
             }
@@ -576,6 +618,7 @@ private struct ExplorePanel: View {
             // fetch guard prevents duplicates when the user later switches to Map.
             if customLocation != nil {
                 isSearchActive = true
+                lastFetchedTaskID = currentTaskID
                 let span = MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
                 let region = MKCoordinateRegion(center: center, span: span)
                 searchResultStore.fetchAndPreScreen(
@@ -585,6 +628,7 @@ private struct ExplorePanel: View {
                     websiteChecker: websiteChecker
                 )
             } else {
+                lastFetchedTaskID = currentTaskID
                 isSearchActive = false
             }
         }
@@ -688,6 +732,221 @@ private struct ExplorePanel: View {
 
 }
 
+// MARK: - Location Search Bar (extracted for render isolation)
+
+/// Owns `@StateObject locationCompleter` so that `@Published` updates
+/// only re-render this small view — not the entire ListTabView body.
+private struct LocationSearchBarView: View {
+    @Binding var isEditingSearch: Bool
+    @Binding var locationInputText: String
+    @Binding var customLocation: CustomSearchLocation?
+    @Binding var isResolvingLocation: Bool
+    @Binding var isLocationSearchPending: Bool
+    @FocusState private var isSearchFieldFocused: Bool
+
+    let showExploreSearch: Bool
+    let currentLocation: () -> CLLocationCoordinate2D?
+    let onShowVoiceSearch: () -> Void
+    let onShowOnMap: () -> Void
+    let searchResultStore: SearchResultStore
+
+    @StateObject private var locationCompleter = LocationCompleterService()
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: isEditingSearch ? "magnifyingglass" : (customLocation != nil ? "location.circle.fill" : "location.circle"))
+                    .foregroundStyle(customLocation != nil && !isEditingSearch ? .blue : .secondary)
+                    .font(.subheadline)
+
+                if isEditingSearch {
+                    TextField("City, restaurant, or place…", text: $locationInputText)
+                        .textFieldStyle(.plain)
+                        .font(.subheadline)
+                        .autocorrectionDisabled()
+                        .focused($isSearchFieldFocused)
+                        .submitLabel(.search)
+                        .onSubmit {
+                            if let first = locationCompleter.mergedSuggestions.first {
+                                resolveAndSelect(first)
+                            }
+                        }
+                        .onChange(of: locationInputText) { _, newValue in
+                            locationCompleter.updateQuery(
+                                newValue,
+                                userLocation: customLocation?.coordinate ?? currentLocation()
+                            )
+                        }
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                isSearchFieldFocused = true
+                            }
+                        }
+
+                    if isResolvingLocation {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Button {
+                        isEditingSearch = false
+                        isSearchFieldFocused = false
+                        locationInputText = ""
+                        locationCompleter.cancel()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let custom = customLocation {
+                    Button {
+                        isEditingSearch = true
+                        locationInputText = ""
+                    } label: {
+                        Text("Near: \(custom.name)")
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        customLocation = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                    }
+                    .accessibilityLabel("Clear location, use current location")
+                } else {
+                    Button {
+                        isEditingSearch = true
+                        locationInputText = ""
+                    } label: {
+                        Text("Near: Current Location")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            // Voice search mic button (feature-flagged)
+            if !isEditingSearch && FeatureFlagService.shared.voiceSearchEnabled {
+                Button(action: onShowVoiceSearch) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.orange)
+                        .frame(width: 40, height: 40)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .accessibilityLabel("Voice search")
+                .accessibilityHint("Search for food categories or spots by speaking")
+            }
+
+            // "Show on Map" — switches to Map tab with the same search results.
+            if !isEditingSearch && showExploreSearch {
+                Button(action: onShowOnMap) {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.orange)
+                        .frame(width: 40, height: 40)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .accessibilityLabel("Show on map")
+                .accessibilityHint("Switches to the map centered on the current search area")
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        // Dropdown floats over content below — doesn't push the layout.
+        .overlay(alignment: .top) {
+            let merged = locationCompleter.mergedSuggestions
+            if isEditingSearch && !merged.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(merged) { suggestion in
+                        Button {
+                            resolveAndSelect(suggestion)
+                        } label: {
+                            HStack {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.subheadline)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(suggestion.title)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    if !suggestion.subtitle.isEmpty {
+                                        Text(suggestion.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .padding(.leading, 36)
+                    }
+                }
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                .padding(.horizontal)
+                .padding(.top, 48)
+                .transition(.opacity)
+            }
+        }
+        .zIndex(1)
+    }
+
+    /// Resolves a suggestion to a coordinate and sets it as the custom location.
+    private func resolveAndSelect(_ suggestion: LocationSuggestion) {
+        switch suggestion {
+        case .completer(let completion):
+            isResolvingLocation = true
+            Task {
+                if let location = await locationCompleter.resolve(completion) {
+                    applyLocation(location)
+                }
+                isResolvingLocation = false
+            }
+        case .business(let mapItem):
+            let location = locationCompleter.resolveMapItem(mapItem)
+            applyLocation(location)
+        }
+    }
+
+    /// Common cleanup after resolving any suggestion to a location.
+    private func applyLocation(_ location: CustomSearchLocation) {
+        searchResultStore.suggestions = []
+        searchResultStore.fullPool = []
+        searchResultStore.preScreenComplete = false
+        isLocationSearchPending = true
+
+        customLocation = location
+        isEditingSearch = false
+        isSearchFieldFocused = false
+        locationInputText = ""
+        locationCompleter.cancel()
+    }
+}
+
 // MARK: - List Tab View
 
 struct ListTabView: View {
@@ -756,10 +1015,8 @@ struct ListTabView: View {
     // Custom search location — shared between Explore and Verified tabs
     @State private var customLocation: CustomSearchLocation? = nil
     @State private var locationInputText = ""
-    @StateObject private var locationCompleter = LocationCompleterService()
     @State private var isResolvingLocation = false
     @State private var isEditingSearch = false
-    @FocusState private var isSearchFieldFocused: Bool
 
     // Voice search
     @State private var showVoiceSearch = false
@@ -1006,7 +1263,6 @@ struct ListTabView: View {
 
         case .spotName(let name):
             locationInputText = name
-            locationCompleter.updateQuery(name)
             isEditingSearch = true
             showVoiceBanner(spotName: name)
 
@@ -1327,7 +1583,7 @@ struct ListTabView: View {
                 }
                 Button("No", role: .cancel) { }
             } message: {
-                Text("Do you want to see all user verified spots for all 50 Flezcals in your search area?")
+                Text("Do you want to see all user verified spots for all 50 \(AppBranding.namePlural) in your search area?")
             }
             .onChange(of: pendingSpotsLocation) { _, newLocation in
                 guard let location = newLocation else { return }
@@ -1570,210 +1826,38 @@ struct ListTabView: View {
 
     // MARK: - Location bar (shared between tabs)
 
-    /// Unified search bar — accepts cities, POIs, restaurants, universities,
-    /// or any place. Selecting a result sets it as the search center and triggers
-    /// a category browse for the user's active Flezcals near that place.
-    @ViewBuilder
+    /// Thin wrapper that forwards to `LocationSearchBarView` — the extracted
+    /// child view owns `@StateObject locationCompleter` so its `@Published`
+    /// updates only re-render the search bar, not the entire ListTabView.
     private var unifiedSearchBar: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: isEditingSearch ? "magnifyingglass" : (customLocation != nil ? "location.circle.fill" : "location.circle"))
-                        .foregroundStyle(customLocation != nil && !isEditingSearch ? .blue : .secondary)
-                        .font(.subheadline)
-
-                    if isEditingSearch {
-                        TextField("City, restaurant, or place…", text: $locationInputText)
-                            .textFieldStyle(.plain)
-                            .font(.subheadline)
-                            .autocorrectionDisabled()
-                            .focused($isSearchFieldFocused)
-                            .submitLabel(.search)
-                            .onSubmit {
-                                if let first = locationCompleter.suggestions.first {
-                                    resolveAndSelect(first)
-                                }
-                            }
-                            .onChange(of: locationInputText) { _, newValue in
-                                locationCompleter.updateQuery(newValue)
-                            }
-                            .onAppear {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    isSearchFieldFocused = true
-                                }
-                            }
-
-                        if isResolvingLocation {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-
-                        Button {
-                            isEditingSearch = false
-                            isSearchFieldFocused = false
-                            locationInputText = ""
-                            locationCompleter.cancel()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if let custom = customLocation {
-                        Button {
-                            isEditingSearch = true
-                            locationInputText = ""
-                        } label: {
-                            Text("Near: \(custom.name)")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            customLocation = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                                .font(.subheadline)
-                        }
-                        .accessibilityLabel("Clear location, use current location")
-                    } else {
-                        Button {
-                            isEditingSearch = true
-                            locationInputText = ""
-                        } label: {
-                            Text("Near: Current Location")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        Spacer()
-                    }
+        LocationSearchBarView(
+            isEditingSearch: $isEditingSearch,
+            locationInputText: $locationInputText,
+            customLocation: $customLocation,
+            isResolvingLocation: $isResolvingLocation,
+            isLocationSearchPending: $isLocationSearchPending,
+            showExploreSearch: showExploreSearch,
+            currentLocation: currentLocation,
+            onShowVoiceSearch: { showVoiceSearch = true },
+            onShowOnMap: {
+                let center = customLocation?.coordinate
+                    ?? locationManager.userLocation
+                    ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
+                var info: [String: Any] = [
+                    "latitude": center.latitude,
+                    "longitude": center.longitude
+                ]
+                if customLocation != nil && !searchResultStore.suggestions.isEmpty {
+                    info["suggestions"] = searchResultStore.suggestions
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                // Voice search mic button (feature-flagged)
-                if !isEditingSearch && FeatureFlagService.shared.voiceSearchEnabled {
-                    Button { showVoiceSearch = true } label: {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.orange)
-                            .frame(width: 40, height: 40)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .accessibilityLabel("Voice search")
-                    .accessibilityHint("Search for food categories or spots by speaking")
-                }
-
-                // "Show on Map" — switches to Map tab with the same search results.
-                if !isEditingSearch && showExploreSearch {
-                    Button {
-                        let center = customLocation?.coordinate
-                            ?? locationManager.userLocation
-                            ?? CLLocationCoordinate2D(latitude: 42.3876, longitude: -71.0995)
-                        var info: [String: Any] = [
-                            "latitude": center.latitude,
-                            "longitude": center.longitude
-                        ]
-                        if !searchResultStore.suggestions.isEmpty {
-                            info["suggestions"] = searchResultStore.suggestions
-                        }
-                        NotificationCenter.default.post(
-                            name: .showAreaOnMap,
-                            object: nil,
-                            userInfo: info
-                        )
-                    } label: {
-                        Image(systemName: "map.fill")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.orange)
-                            .frame(width: 40, height: 40)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .accessibilityLabel("Show on map")
-                    .accessibilityHint("Switches to the map centered on the current search area")
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-
-            // ── Autocomplete dropdown ──────────────────────────────────
-            if isEditingSearch && !locationCompleter.suggestions.isEmpty {
-                let pickEmojis = activePicks.map(\.emoji).joined(separator: " ")
-                VStack(spacing: 0) {
-                    ForEach(locationCompleter.suggestions.prefix(5), id: \.self) { completion in
-                        Button {
-                            resolveAndSelect(completion)
-                        } label: {
-                            HStack {
-                                Image(systemName: "mappin.circle.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.subheadline)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(completion.title)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    if !completion.subtitle.isEmpty {
-                                        Text(completion.subtitle)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    if !pickEmojis.isEmpty {
-                                        Text(pickEmojis)
-                                            .font(.caption2)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                        }
-                        .buttonStyle(.plain)
-
-                        Divider()
-                            .padding(.leading, 36)
-                    }
-                }
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(.horizontal)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-    }
-
-    // MARK: - Custom location resolution
-
-    /// Resolves a completer suggestion to a coordinate and sets it as the custom location.
-    private func resolveAndSelect(_ completion: MKLocalSearchCompletion) {
-        isResolvingLocation = true
-        Task {
-            if let location = await locationCompleter.resolve(completion) {
-                // Clear stale results and show spinner immediately —
-                // don't wait for .task(id:) to detect the SearchTaskID change.
-                searchResultStore.suggestions = []
-                searchResultStore.fullPool = []
-                searchResultStore.preScreenComplete = false
-                isLocationSearchPending = true
-
-                customLocation = location
-                isEditingSearch = false
-                isSearchFieldFocused = false
-                locationInputText = ""
-                locationCompleter.cancel()
-            }
-            isResolvingLocation = false
-        }
+                NotificationCenter.default.post(
+                    name: .showAreaOnMap,
+                    object: nil,
+                    userInfo: info
+                )
+            },
+            searchResultStore: searchResultStore
+        )
     }
 
 

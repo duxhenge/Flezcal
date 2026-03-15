@@ -11,7 +11,7 @@ final class FeatureFlagService: ObservableObject {
     // MARK: - Published flags
 
     @Published var betaFeedbackEnabled = false
-    @Published var betaFeedbackPromptText = "How's your Flezcal experience? Share your thoughts!"
+    @Published var betaFeedbackPromptText = "How's your \(AppBranding.name) experience? Share your thoughts!"
 
     /// When true, all 50 categories are selectable. When false, only launch defaults are active.
     /// Fail-closed default: true (matches Constants.FeatureFlags.broadSearchEnabled).

@@ -154,7 +154,7 @@ struct AdminFeatureFlagsView: View {
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Trending Flezcal Emoji")
+                        Text("Trending \(AppBranding.name) Emoji")
                             .font(.headline)
                         Text("Default icon for all custom/trending categories")
                             .font(.caption)
@@ -198,7 +198,7 @@ struct AdminFeatureFlagsView: View {
             } header: {
                 Text("Display")
             } footer: {
-                Text("Changes apply to all trending Flezcals across the app in real-time.")
+                Text("Changes apply to all trending \(AppBranding.namePlural) across the app in real-time.")
             }
 
             // MARK: - Error

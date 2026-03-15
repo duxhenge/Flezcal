@@ -160,7 +160,7 @@ struct RatingFlowView: View {
     private var confirmView: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Philosophy header
-            Text("We hold our Flezcals to a high standard. Let's make sure this one earns it.")
+            Text("We hold our \(AppBranding.namePlural) to a high standard. Let's make sure this one earns it.")
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)

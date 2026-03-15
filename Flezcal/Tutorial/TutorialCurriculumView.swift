@@ -36,7 +36,7 @@ struct TutorialCurriculumView: View {
                             .font(.system(size: 48))
                             .foregroundStyle(.orange)
 
-                        Text("Learn Flezcal")
+                        Text("Learn \(AppBranding.name)")
                             .font(.title2)
                             .fontWeight(.bold)
 

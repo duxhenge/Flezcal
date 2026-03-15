@@ -140,7 +140,7 @@ extension Tutorial {
 
     static let setupFlezcals = Tutorial(
         id: .setupFlezcals,
-        title: "Setting Up Your Flezcals",
+        title: "Setting Up Your \(AppBranding.namePlural)",
         subtitle: "Pick the foods and drinks you care about.",
         icon: "heart.circle.fill",
         color: .orange,
@@ -152,7 +152,7 @@ extension Tutorial {
             .spotlight(
                 "pickSubtitle",
                 title: "Your Home Base",
-                body: "Flezcals are your cravings. The community helps you find the best.",
+                body: "\(AppBranding.namePlural) are your cravings. The community helps you find the best.",
                 arrowEdge: .bottom,
                 requiredTab: AppTab.myPicks,
                 shape: .rect(cornerRadius: 12)
@@ -160,14 +160,14 @@ extension Tutorial {
             .spotlight(
                 "editButton_first",
                 title: "Fine-Tune Search Terms",
-                body: "Tap to customize the search terms for any Flezcal.",
+                body: "Tap to customize the search terms for any \(AppBranding.name).",
                 arrowEdge: .top,
                 shape: .circle
             ),
             .spotlight(
                 "customizeButton",
                 title: "Swap or Add Categories",
-                body: "60+ categories available. Pick up to 3 active Flezcals.",
+                body: "60+ categories available. Pick up to 3 active \(AppBranding.namePlural).",
                 arrowEdge: .bottom,
                 shape: .rect(cornerRadius: 16)
             ),
@@ -194,7 +194,7 @@ extension Tutorial {
             .screenshot(
                 "tutorial_spots_customize",
                 title: "Customize Your Search Terms",
-                body: "Tap \"Customize Spot Search\" to refine terms for each Flezcal.",
+                body: "Tap \"Customize Spot Search\" to refine terms for each \(AppBranding.name).",
                 cropRegion: CGRect(x: 0, y: 0.15, width: 1, height: 0.18)
             ),
             .screenshot(
@@ -224,14 +224,14 @@ extension Tutorial {
     static let mapExplore = Tutorial(
         id: .mapExplore,
         title: "The Map",
-        subtitle: "Your Flezcals, live on a map.",
+        subtitle: "Your \(AppBranding.namePlural), live on a map.",
         icon: "map.fill",
         color: .green,
         steps: [
             .spotlight(
                 "mapView",
                 title: "Your Discovery Map",
-                body: "Pins appear automatically for your active Flezcals.",
+                body: "Pins appear automatically for your active \(AppBranding.namePlural).",
                 arrowEdge: .top,
                 requiredTab: AppTab.explore,
                 shape: .rect(cornerRadius: 0)
@@ -244,7 +244,7 @@ extension Tutorial {
             ),
             .spotlight(
                 "filterPills",
-                title: "Filter to One Flezcal",
+                title: "Filter to One \(AppBranding.name)",
                 body: "Tap a pill to isolate one category on the map.",
                 arrowEdge: .top,
                 shape: .rect(cornerRadius: 20)
@@ -252,7 +252,7 @@ extension Tutorial {
             .screenshot(
                 "tutorial_ghost_pin_sheet",
                 title: "Tap Any Pin",
-                body: "The app scans the website and shows which Flezcals match.",
+                body: "The app scans the website and shows which \(AppBranding.namePlural) match.",
                 cropRegion: CGRect(x: 0, y: 0.38, width: 1, height: 0.45)
             ),
             .screenshot(
@@ -277,7 +277,7 @@ extension Tutorial {
             .screenshot(
                 "tutorial_spot_sheet",
                 title: "Spot a Green Checkmark",
-                body: "Green means a web search found a match for your Flezcal.",
+                body: "Green means a web search found a match for your \(AppBranding.name).",
                 cropRegion: CGRect(x: 0, y: 0.38, width: 1, height: 0.35)
             ),
             .screenshot(
@@ -294,8 +294,8 @@ extension Tutorial {
             ),
             .screenshot(
                 "tutorial_pick_category",
-                title: "Pick the Flezcal Category",
-                body: "Choose which Flezcal this spot offers.",
+                title: "Pick the \(AppBranding.name) Category",
+                body: "Choose which \(AppBranding.name) this spot offers.",
                 cropRegion: CGRect(x: 0, y: 0.04, width: 1, height: 0.45)
             ),
             .screenshot(
@@ -320,7 +320,7 @@ extension Tutorial {
             .screenshot(
                 "tutorial_rate_prompt",
                 title: "Find the Rate Button",
-                body: "On any spot, tap \"Add your rating\" under a Flezcal.",
+                body: "On any spot, tap \"Add your rating\" under a \(AppBranding.name).",
                 requiredTab: AppTab.spots,
                 cropRegion: CGRect(x: 0, y: 0.28, width: 1, height: 0.3)
             ),

@@ -27,7 +27,7 @@ enum CrashReporter {
     /// Records a non-fatal error from a string message (when no Error is available).
     static func log(_ message: String, context: String? = nil) {
         let nsError = NSError(
-            domain: "com.flezcal.app",
+            domain: AppConstants.bundleID,
             code: 0,
             userInfo: [NSLocalizedDescriptionKey: message]
         )

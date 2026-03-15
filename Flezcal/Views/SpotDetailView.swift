@@ -147,7 +147,7 @@ struct SpotDetailView: View {
                                             Image(systemName: "plus.circle.fill")
                                                 .font(.body)
                                                 .foregroundStyle(.orange)
-                                            Text("Add a Flezcal")
+                                            Text("Add a \(AppBranding.name)")
                                                 .font(.subheadline)
                                                 .fontWeight(.medium)
                                                 .foregroundStyle(.orange)
@@ -163,14 +163,14 @@ struct SpotDetailView: View {
                             .padding(.horizontal, 14)
                             .background(Color(.systemGray6).opacity(0.6))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .alert("Flezcal Icons", isPresented: $showFlezcalHelp) {
+                            .alert("\(AppBranding.name) Icons", isPresented: $showFlezcalHelp) {
                                 Button("Got it", role: .cancel) {}
                             } message: {
                                 Text("""
-                                ⭐  Rate this Flezcal (1–5 🍮)
+                                ⭐  Rate this \(AppBranding.name) (1–5 🍮)
                                 ⊘  Report "not here" — helps the community know if a spot no longer offers this
                                 ✏️  Edit your existing rating
-                                ✕  Remove this Flezcal (only if you added it)
+                                ✕  Remove this \(AppBranding.name) (only if you added it)
                                 """)
                             }
                         }
@@ -617,7 +617,7 @@ struct SpotDetailView: View {
             if !liveSpot.isCommunityVerified {
                 // ── Amber: awaiting first real check-in ──
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Curated listing — not yet visited by a Flezcal member",
+                    Label("Curated listing — not yet visited by a \(AppBranding.name) member",
                           systemImage: "clock.badge.questionmark")
                         .font(.caption)
                         .fontWeight(.medium)
@@ -750,7 +750,7 @@ struct SpotDetailView: View {
         let displayName = authService.displayName
         let body = "I'd like to claim \(spot.name) as the owner/manager. My username is \(displayName)."
             .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let mailtoString = "mailto:support@flezcal.app?subject=\(subject)&body=\(body)"
+        let mailtoString = "mailto:\(AppConstants.supportEmail)?subject=\(subject)&body=\(body)"
 
         return HStack {
             Spacer()
@@ -1018,7 +1018,7 @@ private struct AddFlezcalFlow: View {
                     Text("\(spot.name) already has \(cat.displayName).")
                 }
             }
-            .alert("Add Flezcal", isPresented: $showCategoryConfirmation) {
+            .alert("Add \(AppBranding.name)", isPresented: $showCategoryConfirmation) {
                 Button("Add") {
                     if let category = pendingCategory {
                         selectedFlezcal = category
@@ -1038,7 +1038,7 @@ private struct AddFlezcalFlow: View {
                 if isSaving {
                     ZStack {
                         Color.black.opacity(0.2).ignoresSafeArea()
-                        ProgressView("Adding Flezcal...")
+                        ProgressView("Adding \(AppBranding.name)...")
                             .padding(24)
                             .background(.ultraThinMaterial)
                             .clipShape(RoundedRectangle(cornerRadius: 12))

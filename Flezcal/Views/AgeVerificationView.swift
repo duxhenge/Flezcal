@@ -15,16 +15,16 @@ struct AgeVerificationView: View {
                 .frame(width: 100, height: 100)
                 .clipShape(RoundedRectangle(cornerRadius: 22))
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                .accessibilityLabel("Flezcal app icon")
+                .accessibilityLabel("\(AppBranding.name) app icon")
 
             // App name
-            Text("Flezcal")
+            Text(AppBranding.name)
                 .font(.largeTitle.bold())
                 .foregroundStyle(.orange)
 
             if denied {
                 // Denial state — allow going back in case of accidental tap
-                Text("You must be at least 21 years old to use Flezcal.")
+                Text("You must be at least 21 years old to use \(AppBranding.name).")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

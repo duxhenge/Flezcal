@@ -71,7 +71,7 @@ struct WelcomeView: View {
                         // What is Flezcal?
                         if !content.tagline.isEmpty {
                             VStack(spacing: 8) {
-                                Text("What is Flezcal?")
+                                Text("What is \(AppBranding.name)?")
                                     .font(.headline)
                                     .fontWeight(.bold)
 
@@ -110,8 +110,8 @@ struct WelcomeView: View {
                             headline: "Own a Spot?",
                             message: "If you own or manage a place that serves great food or drinks, add your spot and update your offerings just like any other user, for free. "
                                 + "Want a verified badge, locked menu details, and a reservation link? Contact us about Owner Verification.",
-                            linkText: "Contact us at contact@flezcal.app",
-                            linkURL: "mailto:contact@flezcal.app"
+                            linkText: "Contact us at \(AppBranding.contactEmail)",
+                            linkURL: "mailto:\(AppBranding.contactEmail)"
                         )
                         .padding(.horizontal, 24)
 
@@ -301,27 +301,27 @@ private struct WelcomeShapeCard: View {
                 .frame(height: 44)
                 .accessibilityHidden(true)
 
-            Text("Shape Flezcal")
+            Text("Shape \(AppBranding.name)")
                 .font(.headline)
                 .fontWeight(.bold)
 
-            Text("Flezcal grows with its community. The categories you search for, the spots you add, the ratings you leave, all of it shapes what comes next. Have an idea? We're listening.")
+            Text("\(AppBranding.name) grows with its community. The categories you search for, the spots you add, the ratings you leave, all of it shapes what comes next. Have an idea? We're listening.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Email link
-            Link(destination: URL(string: "mailto:contact@flezcal.app")!) {
+            Link(destination: URL(string: "mailto:\(AppBranding.contactEmail)")!) {
                 HStack(spacing: 6) {
                     Image(systemName: "envelope.fill")
                         .font(.caption)
-                    Text("Tell us at contact@flezcal.app")
+                    Text("Tell us at \(AppBranding.contactEmail)")
                         .font(.footnote)
                 }
                 .foregroundStyle(.orange)
             }
-            .accessibilityLabel("Email contact at contact@flezcal.app")
+            .accessibilityLabel("Email contact at \(AppBranding.contactEmail)")
             .padding(.top, 4)
         }
         .padding(.vertical, 20)

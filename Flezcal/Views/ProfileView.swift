@@ -137,6 +137,7 @@ struct SignedInProfileView: View {
     @EnvironmentObject var spotService: SpotService
     @StateObject private var reviewService = ReviewService()
     @StateObject private var verificationService = VerificationService()
+    @Environment(\.horizontalSizeClass) private var sizeClass
     var onShowWhatsNew: (() -> Void)? = nil
     var onShowTutorials: (() -> Void)? = nil
     @State private var showSignOutConfirmation = false
@@ -544,48 +545,97 @@ struct SignedInProfileView: View {
     /// Group 2: 5-column score breakdown showing all scoring activities
     @ViewBuilder
     private func scoreBreakdownRow(stats: ContributorStats) -> some View {
-        HStack(spacing: 0) {
-            ImpactStat(
-                icon: "mappin.circle.fill",
-                value: stats.spotsAdded,
-                label: "Spots",
-                points: "+10 ea",
-                isHighValue: true
-            )
-            Spacer()
-            ImpactStat(
-                icon: "tag.fill",
-                value: stats.categoriesIdentified,
-                label: "Finds",
-                points: "+3 ea",
-                isHighValue: true
-            )
-            Spacer()
-            ImpactStat(
-                icon: "flame.fill",
-                value: stats.ratingsGiven,
-                label: "Ratings",
-                points: "+5 ea",
-                isHighValue: true
-            )
-            Spacer()
-            ImpactStat(
-                icon: "list.bullet",
-                value: stats.brandsLogged,
-                label: "Brands",
-                points: "+1 ea",
-                isHighValue: false
-            )
-            Spacer()
-            ImpactStat(
-                icon: "checkmark.circle.fill",
-                value: stats.verificationsGiven,
-                label: "Confirms",
-                points: "+1 ea",
-                isHighValue: false
-            )
+        if sizeClass == .compact {
+            VStack(spacing: 8) {
+                HStack(spacing: 0) {
+                    ImpactStat(
+                        icon: "mappin.circle.fill",
+                        value: stats.spotsAdded,
+                        label: "Spots",
+                        points: "+10 ea",
+                        isHighValue: true
+                    )
+                    Spacer()
+                    ImpactStat(
+                        icon: "tag.fill",
+                        value: stats.categoriesIdentified,
+                        label: "Finds",
+                        points: "+3 ea",
+                        isHighValue: true
+                    )
+                    Spacer()
+                    ImpactStat(
+                        icon: "flame.fill",
+                        value: stats.ratingsGiven,
+                        label: "Ratings",
+                        points: "+5 ea",
+                        isHighValue: true
+                    )
+                }
+                HStack(spacing: 0) {
+                    ImpactStat(
+                        icon: "list.bullet",
+                        value: stats.brandsLogged,
+                        label: "Brands",
+                        points: "+1 ea",
+                        isHighValue: false
+                    )
+                    Spacer()
+                    ImpactStat(
+                        icon: "checkmark.circle.fill",
+                        value: stats.verificationsGiven,
+                        label: "Confirms",
+                        points: "+1 ea",
+                        isHighValue: false
+                    )
+                    Spacer()
+                }
+            }
+            .padding(.vertical, 4)
+        } else {
+            HStack(spacing: 0) {
+                ImpactStat(
+                    icon: "mappin.circle.fill",
+                    value: stats.spotsAdded,
+                    label: "Spots",
+                    points: "+10 ea",
+                    isHighValue: true
+                )
+                Spacer()
+                ImpactStat(
+                    icon: "tag.fill",
+                    value: stats.categoriesIdentified,
+                    label: "Finds",
+                    points: "+3 ea",
+                    isHighValue: true
+                )
+                Spacer()
+                ImpactStat(
+                    icon: "flame.fill",
+                    value: stats.ratingsGiven,
+                    label: "Ratings",
+                    points: "+5 ea",
+                    isHighValue: true
+                )
+                Spacer()
+                ImpactStat(
+                    icon: "list.bullet",
+                    value: stats.brandsLogged,
+                    label: "Brands",
+                    points: "+1 ea",
+                    isHighValue: false
+                )
+                Spacer()
+                ImpactStat(
+                    icon: "checkmark.circle.fill",
+                    value: stats.verificationsGiven,
+                    label: "Confirms",
+                    points: "+1 ea",
+                    isHighValue: false
+                )
+            }
+            .padding(.vertical, 4)
         }
-        .padding(.vertical, 4)
     }
 
     /// Group 3: Top categories as colored capsule pills
@@ -697,6 +747,7 @@ private struct ImpactStat: View {
             Text("\(value)")
                 .font(.subheadline)
                 .fontWeight(.semibold)
+                .monospacedDigit()
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
